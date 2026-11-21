@@ -18,22 +18,36 @@ env:
   FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
 
 jobs:
-  postgres:
+  envs:
     runs-on: ubuntu-latest
-    environment: staging
+    outputs:
+      list: ${{ steps.l.outputs.list }}
+    steps:
+      - id: l
+        env:
+          ENVS: ${{ inputs.envs || 'staging prod' }}
+        run: |
+          for env in $ENVS; do case "$env" in staging|prod) ;; *) echo "unknown env $env"; exit 1 ;; esac; done
+          echo "list=$(jq -cn --arg e "$ENVS" '$e | split(" ") | map(select(. != ""))')" >> "$GITHUB_OUTPUT"
+
+  # EN-09 (#168): one job per environment, each with only that environment's Fly token.
+  postgres:
+    needs: envs
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: ${{ fromJson(needs.envs.outputs.list) }}
+    environment: ${{ matrix.env == 'prod' && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl auth docker
       - env:
-          ENVS: ${{ inputs.envs || 'staging prod' }}
+          ENV: ${{ matrix.env }}
         run: |
           docker build -t thirstr-postgres:16 infra/postgres
-          for env in $ENVS; do
-            case "$env" in staging|prod) ;; *) echo "unknown env $env"; exit 1 ;; esac
-            for tag in pg16-h3 pg16-h3-${GITHUB_SHA::7}; do
-              docker tag thirstr-postgres:16 registry.fly.io/thirstr-db-$env:$tag
-              docker push registry.fly.io/thirstr-db-$env:$tag
-            done
-            echo "thirstr-db-$env: $(docker inspect --format '{{index .RepoDigests 0}}' registry.fly.io/thirstr-db-$env:pg16-h3)" >> "$GITHUB_STEP_SUMMARY"
+          for tag in pg16-h3 pg16-h3-${GITHUB_SHA::7}; do
+            docker tag thirstr-postgres:16 registry.fly.io/thirstr-db-$ENV:$tag
+            docker push registry.fly.io/thirstr-db-$ENV:$tag
           done
+          echo "thirstr-db-$ENV: $(docker inspect --format '{{index .RepoDigests 0}}' registry.fly.io/thirstr-db-$ENV:pg16-h3)" >> "$GITHUB_STEP_SUMMARY"

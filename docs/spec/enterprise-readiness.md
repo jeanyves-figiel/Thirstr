@@ -36,7 +36,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 
 ### D. Security
 - **EN-08** (#167) Security program: annual external pen test (API + iOS + Android + MLS implementation review), bug bounty (private → public), SAST/DAST in CI (sobelow, semgrep, ZAP on staging), dependency patch SLAs (critical 48 h), SBOM already signed (cosign).
-- **EN-09** (#168) Secrets & keys: EU KMS for pepper (#27) and backup key, rotation schedule, short-lived deploy tokens, Fly org `thirstr` with SSO + 2FA, least-privilege tokens, break-glass account, quarterly access review.
+- **EN-09** (#168) Secrets & keys: EU KMS for pepper (#27) and backup key, rotation schedule, short-lived deploy tokens, Fly org `thirstr` with SSO + 2FA, least-privilege tokens, break-glass account, quarterly access review. 2026-11-21: KMS deferred to before open beta (€0 budget). Access runbook ✔ (`docs/runbooks/access.md`: rotation schedule, break-glass, quarterly review), per-environment 90-day deploy tokens ✔ (`scripts/ops/fly-ci-tokens.sh`, nightly expiry check), org move planned (`docs/runbooks/fly-org-move.md`).
 - Certificate pinning + app attestation (App Attest / Play Integrity) against bots and API scraping (spec security.md).
 
 ### E. Compliance

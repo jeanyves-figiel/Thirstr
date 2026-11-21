@@ -264,6 +264,23 @@ Connect: `wss://<api host>/socket/websocket?token=<access token>&vsn=2.0.0`, the
 
 Rate limits (beta defaults, per account): messages to new contacts 30/h (unverified: 0), taps 100/day, location updates 1/30 s, pin set 6/h, party create 3/day, report 20/day.
 
+
+### Help & support (F-22, #178)
+| Method | Path | Body → Response |
+|---|---|---|
+| POST | /help/votes | {article, lang, helpful, reason?, note? ≤ 200} → 204; no auth needed, no account stored; 30 / day per install |
+| POST | /support/requests | {topic, message (20–4 000), attachments?: [upload_id] ≤ 2, app_details?, reply_email?} → 201 {id, ref}; signed out: reply_email required; 3 open / 5 per 24 h; 429 `support_limit` |
+| POST | /support/uploads | {size ≤ 2 MB, sha256} → {id, upload_url} (presigned PUT, 15 min, JPEG only) |
+| GET | /support/requests · /support/requests/{id} | → list `[{id, ref, topic, status, last, updated_at, unread}]` · thread `{…, messages: [{from, body, attachments, at}]}` |
+| POST | /support/requests/{id}/messages · /solve | {body} → 201 · → 204 (reopen by message within 14 d) |
+| POST | /feedback | {type: idea\|off\|love, part?, text (10–1 000), app} → 202; scrubbed + queued (R-22.31–34); 5 / 24 h |
+| POST | /auth/recovery/claim | (signed in with any method) → {claim_id, challenge}; 409 `claim_active`; 429 |
+| POST | /auth/recovery/claim/{id}/selfie | {liveness_result (signed), match: {passed, model, threshold}, attestation} → {state, hold_ends_at}; 401 `recovery_check_failed` (attempts left) |
+| GET · DELETE | /auth/recovery/claim/{id} | → {state, hold_ends_at} · cancel own claim |
+| POST | /me/recovery/claims/{id}/cancel | from another device: {device_auth, liveness_result, match} → 204; refused without a passing selfie |
+| POST | /auth/recovery/claim/{id}/complete | → tokens + {signed_out, removed_methods}; only when state `ready` |
+Push types `support_reply`, `recovery_claim` use the generic payload (§ Push payloads).
+
 ## Push payloads
 Beta (no notification service extension yet): a **visible, generic** alert, identical for every event type:
 `{ "aps": { "alert": { "title": "Thirstr", "body": "New activity" }, "sound": "default", "mutable-content": 1 }, "t": "<opaque>" }`.

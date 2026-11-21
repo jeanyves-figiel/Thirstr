@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { analyzeFace, faceAvailable, type FaceReading } from '../../modules/thirstr-face';
+import { analyzeFace, faceAvailable, matchStills, selfieMatchAvailable, type FaceReading } from '../../modules/thirstr-face';
 import { api, ApiError, Me } from '../api/client';
 import { rand } from '../chat/bytes';
 import { t } from '../i18n/strings';
@@ -11,6 +11,7 @@ import { STEP_OF } from '../onboarding/flow';
 import { BigButton, StepShell } from '../onboarding/kit';
 import { color, font, radius, space, type } from '../theme/tokens';
 import { blind, type IssuerKey } from '../trust/blind';
+import { ownPhotoTargets, selfieOutcome, type SelfieOutcome } from '../trust/faceMatch';
 import { passes, type Step } from '../trust/liveness';
 import { Banner } from '../ui';
 
@@ -21,29 +22,50 @@ type Shot = { takePictureAsync: (o: object) => Promise<{ uri: string }> };
 const devSimulate = Platform.OS === 'web' && typeof location !== 'undefined' && location.hostname === 'localhost';
 const supported = (Platform.OS === 'ios' && faceAvailable) || devSimulate;
 
-/** One still → numbers; the frame file is deleted as soon as it is measured (R-03.5). */
-async function frame(cam: Shot): Promise<FaceReading> {
+async function drop(uri: string) {
   const { File } = await import('expo-file-system');
-  const { uri } = await cam.takePictureAsync({ quality: 0.2, skipProcessing: true, shutterSound: false });
   try {
-    return await analyzeFace(uri);
+    new File(uri).delete();
+  } catch {
+    /* already gone */
+  }
+}
+
+type Reading = FaceReading & { uri?: string };
+
+/**
+ * One still → numbers; the frame file is deleted as soon as it is measured (R-03.5). With `keep`, the
+ * still that passes stays on disk (cache, never uploaded) for the photo match and is returned as `uri`;
+ * the caller deletes it right after (R-03.2, #232).
+ */
+async function frame(cam: Shot, ok: (r: FaceReading) => boolean, keep: boolean): Promise<Reading> {
+  const { uri } = await cam.takePictureAsync({ quality: keep ? 0.6 : 0.2, skipProcessing: true, shutterSound: false });
+  let kept = false;
+  try {
+    const r = await analyzeFace(uri);
+    kept = keep && ok(r);
+    return kept ? { ...r, uri } : r;
   } finally {
-    try {
-      new File(uri).delete();
-    } catch {
-      /* already gone */
-    }
+    if (!kept) await drop(uri);
   }
 }
 
 /** #131: sample continuously until `ok` or the time is up (a fixed 3-frame window missed most moves). */
-async function until(cam: Shot, ok: (r: FaceReading) => boolean, ms: number): Promise<FaceReading | null> {
+async function until(cam: Shot, ok: (r: FaceReading) => boolean, ms: number, keep = false): Promise<Reading | null> {
   const end = Date.now() + ms;
   do {
-    const r = await frame(cam);
+    const r = await frame(cam, ok, keep);
     if (ok(r)) return r;
   } while (Date.now() < end);
   return null;
+}
+
+const frontal = (r: FaceReading) => r.faces >= 1 && Math.abs(r.yaw ?? 0) < 0.35;
+
+/** R-03.2 (#232): the two frontal stills vs own public photos (fresh URLs from /me), on this phone only. */
+async function photoMatch(stills: string[]): Promise<SelfieOutcome> {
+  const me = await api<Me>('GET', '/me');
+  return selfieOutcome(await matchStills(stills, ownPhotoTargets(me.profile?.photos)));
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -52,13 +74,15 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function VerifyScreen({ onDone }: { onDone: (me: Me) => void }) {
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<'intro' | 'camera' | 'failed' | 'unsupported'>('intro');
+  const [why, setWhy] = useState<'liveness' | 'nomatch'>('liveness');
   const [prompt, setPrompt] = useState<string>('');
   const [err, setErr] = useState<string | null>(null);
   const [left, setLeft] = useState<number | null>(null);
   const [perm, askPerm] = useCameraPermissions();
   const cam = useRef<Shot | null>(null);
 
-  const finish = async (ch: Challenge, passed: boolean) => {
+  const finish = async (ch: Challenge, passed: boolean, reason: 'liveness' | 'nomatch' = 'liveness') => {
+    setWhy(reason);
     const token = rand(32);
     const b = blind(token, ch.key, rand);
     const r = await api<{ signature?: string; passed?: boolean; attempts_left?: number }>('POST', '/verification/attest', { nonce: ch.nonce, passed, blinded: passed ? b.blinded : undefined });
@@ -74,6 +98,7 @@ export function VerifyScreen({ onDone }: { onDone: (me: Me) => void }) {
   const run = async () => {
     setErr(null);
     setBusy(true);
+    const stills: string[] = [];
     try {
       if (!supported) {
         setPhase('unsupported');
@@ -93,7 +118,8 @@ export function VerifyScreen({ onDone }: { onDone: (me: Me) => void }) {
       setPrompt(t.verify.steps.look);
       await wait(800);
       // Baseline: a face looking at the camera. None found → ask again, no try is spent (#131).
-      const base = await until(cam.current!, (r) => r.faces >= 1 && Math.abs(r.yaw ?? 0) < 0.35, 5000);
+      const base = await until(cam.current!, frontal, 5000, selfieMatchAvailable);
+      if (base?.uri) stills.push(base.uri);
       if (!base) {
         setPrompt('');
         setPhase('intro');
@@ -111,12 +137,33 @@ export function VerifyScreen({ onDone }: { onDone: (me: Me) => void }) {
         setPrompt('✓');
         await wait(500);
       }
+      if (ok && selfieMatchAvailable) {
+        // R-03.2 (#232): one more frontal still after the moves, then compare both with own photos.
+        setPrompt(t.verify.steps.look);
+        await wait(400);
+        const end = await until(cam.current!, frontal, 4000, true);
+        if (end?.uri) stills.push(end.uri);
+        setPrompt(t.verify.matching);
+        const out = end ? await photoMatch(stills) : 'noface';
+        if (out === 'noface' || out === 'offline') {
+          // Not the user's fault or not judgeable: the nonce is left to expire, no try is spent.
+          setPrompt('');
+          setPhase('intro');
+          setErr(out === 'offline' ? t.verify.offline : t.verify.noFace);
+          return;
+        }
+        setPrompt('');
+        await finish(ch, out === 'pass', out === 'nomatch' ? 'nomatch' : 'liveness');
+        return;
+      }
       setPrompt('');
       await finish(ch, ok);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : t.verify.error);
       setPhase('intro');
     } finally {
+      // R-03.5: selfie stills are deleted after the check, whatever happened.
+      await Promise.all(stills.map(drop));
       setBusy(false);
     }
   };
@@ -168,7 +215,7 @@ export function VerifyScreen({ onDone }: { onDone: (me: Me) => void }) {
           </View>
         ))}
       </View>
-      {phase === 'failed' ? <Banner text={left ? t.verify.failed(left) : t.verify.cooldown} tone="warn" /> : null}
+      {phase === 'failed' ? <Banner text={!left ? t.verify.cooldown : why === 'nomatch' ? t.verify.noMatch(left) : t.verify.failed(left)} tone="warn" /> : null}
       {phase === 'unsupported' ? <Banner text={t.verify.iosOnly} tone="warn" /> : null}
       {err ? <Banner text={err} tone="danger" /> : null}
     </StepShell>

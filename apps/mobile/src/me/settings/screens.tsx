@@ -26,6 +26,8 @@ import { type Prefs, prefs, setPrefs, type TranslateMode } from '../prefs';
 import { SignInEmailSheet } from '../SignInEmail';
 import { recoveryRowValue } from '../RecoveryScreen';
 import { Group, Page, Row, SegBlock, SwitchRow, useSettings } from './parts';
+import { bx } from '../../i18n/backup';
+import { useBackupSummary } from './ChatBackupScreen';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack?: () => void };
 const S = v3.settings;
@@ -106,8 +108,9 @@ export function PrivacySettings() {
 }
 
 // S-68 Chats & media (R-17.6, R-17.5, R-17.5b translation).
-export function ChatSettings() {
+export function ChatSettings({ navigation }: { navigation: Nav }) {
   const { me } = useSession();
+  const backup = useBackupSummary();
   const { st, put, err } = useSettings();
   const [pf, setPf] = useState<Prefs>(prefs());
   const [quick, setQuick] = useState<string[]>([]);
@@ -149,6 +152,9 @@ export function ChatSettings() {
           value={recentN ? String(recentN) : undefined}
           onPress={() => Recent.clear().then(() => toast(mx.cleared))}
         />
+      </Group>
+      <Group>
+        <Row testID="chat-backup" title={bx.title} value={backup} onPress={() => navigation.navigate('ChatBackupSettings')} />
       </Group>
       <Group label={S.messages}>
         <SegBlock testID="disappear" tone={tone} title={S.disappear} value={st.disappearing_default} options={(['24h', '7d', 'never'] as const).map((k) => [k, S.disOpts[k]])} onChange={(v) => put({ disappearing_default: v })} />

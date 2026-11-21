@@ -138,7 +138,7 @@ const fr: T = {
   clearRecentSub: 'Photos envoyées, gardées seulement sur ce téléphone pour les renvoyer vite',
   video: 'Vidéo',
   play: 'Lire la vidéo',
-  saverLoad: 'Touchez pour charger',
+  saverLoad: 'Touche pour charger',
   saverPhoto: (mb: string) => `Photo · ${mb}`,
   saverOn: 'Économiseur de données activé',
   countsPV: (p: number, v: number) => [p ? (p === 1 ? '1 photo' : `${p} photos`) : '', v ? (v === 1 ? '1 vidéo' : `${v} vidéos`) : ''].filter(Boolean).join(' · ') || '0 photo',

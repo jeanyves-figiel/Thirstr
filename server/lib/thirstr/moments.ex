@@ -16,7 +16,7 @@ defmodule Thirstr.Moments do
   """
   alias Thirstr.{Repo, Settings, Social, Storage}
   alias Thirstr.Accounts.Account
-  alias Thirstr.Moderation.{Classifier, Text}
+  alias Thirstr.Moderation.{Classifier, HashMatch, Text}
 
   @types ~w(image/jpeg image/png image/heic image/webp image/avif)
   @ttls [3600, 21_600, 86_400]
@@ -70,7 +70,8 @@ defmodule Thirstr.Moments do
          {:ok, opts} <- options(a, params),
          :ok <- under_live_cap(a),
          {:ok, _} <- day_limit(a),
-         {:ok, %{size: size}} when size > 0 and size <= @max_bytes <- Storage.head(m.key) do
+         {:ok, %{size: size}} when size > 0 and size <= @max_bytes <- Storage.head(m.key),
+         {:ok, hash_cols, thumb_ok} <- hash_gate(a, m, id) do
       {status, reason, score} =
         case Classifier.impl().classify(m.key, 1, "now") do
           {:review, s} -> {"review", nil, s}
@@ -79,7 +80,7 @@ defmodule Thirstr.Moments do
         end
 
       main_ok = Map.get(score || %{}, "main_ok", false) == true
-      thumb = if status == "live", do: checked_thumb(m.key)
+      thumb = if status == "live" and thumb_ok, do: checked_thumb(m.key)
 
       Repo.transaction(fn ->
         Repo.query!(
@@ -114,6 +115,11 @@ defmodule Thirstr.Moments do
         end)
       end)
 
+      Repo.query!(
+        "UPDATE moments SET hash_state = $2, hash_checked_at = $3, hash_provider = $4 WHERE id = $1",
+        [dump(id), hash_cols.hash_state, hash_cols.hash_checked_at, hash_cols.hash_provider]
+      )
+
       if status == "rejected" do
         Storage.delete_many([m.key, thumb_of(m.key)])
         Repo.query!("DELETE FROM moments WHERE id = $1", [dump(id)])
@@ -123,7 +129,33 @@ defmodule Thirstr.Moments do
       {:ok, Map.merge(mine_one(a, id) || %{id: id}, %{status: status, reject_reason: reason})}
     else
       {:ok, %{size: _}} -> {:error, {:validation, %{photo: ["missing or too large"]}}}
+      {:hash_hit, res} -> {:ok, res}
       {:error, _} = e -> e
+    end
+  end
+
+  # F-15 R-15.41–44 (#179): hash match before anything else. A hit answers like any rejection
+  # ("unusable", no tip-off) but keeps the matched file as evidence; a provider error keeps the
+  # Moment unshared so the phone can try again (fail-closed).
+  defp hash_gate(a, m, id) do
+    case HashMatch.gate(m.key, thumb_of(m.key)) do
+      {:ok, cols, thumb_ok} ->
+        {:ok, cols, thumb_ok}
+
+      {:retry, _} ->
+        {:error, {:unavailable, "Couldn't check this photo. Try again in a minute."}}
+
+      {:match, meta, key} ->
+        snap =
+          case Repo.get(Thirstr.Profiles.Profile, m.profile_id) do
+            nil -> %{}
+            p -> Thirstr.Profiles.snapshot(p, nil)
+          end
+
+        {:ok, _} = HashMatch.open_case(a, %{moment_id: id, key: key, snapshot: snap}, meta)
+        Storage.delete_many(Enum.reject([m.key, thumb_of(m.key)], &(&1 == key)))
+        Repo.query!("DELETE FROM moments WHERE id = $1", [dump(id)])
+        {:hash_hit, %{id: id, status: "rejected", reject_reason: "unusable"}}
     end
   end
 

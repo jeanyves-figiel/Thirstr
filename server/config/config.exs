@@ -25,6 +25,8 @@ config :thirstr, Oban,
      crontab: [
        {"*/15 * * * *", Thirstr.Jobs.ExpirySweep},
        {"* * * * *", Thirstr.Jobs.Minutely},
+       # F-15 R-15.43 (#179): photos whose hash check failed
+       {"*/2 * * * *", Thirstr.Jobs.HashRetry},
        # F-12 R-12.9: weekly OSM venue import (no-op unless :places osm_import is on)
        {"30 3 * * 1", Thirstr.Jobs.PlaceImport}
      ]}
@@ -49,6 +51,8 @@ config :thirstr, :auth,
   underage_flag_ttl_s: 30 * 24 * 3600
 
 config :thirstr, :photo_classifier, Thirstr.Moderation.DevClassifier
+# F-15 R-15.42 (#179): DEV/test match on `-hashhit` keys; runtime.exs picks the real provider.
+config :thirstr, :hash_match, Thirstr.Moderation.HashMatch.Dev
 config :thirstr, :ip_geo, Thirstr.Geo.StaticIpGeo
 
 # No account ids, no IPs in logs (security.md controls)

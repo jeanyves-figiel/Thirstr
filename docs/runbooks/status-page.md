@@ -3,7 +3,7 @@
 Spec: [`docs/spec/slos.md`](../spec/slos.md) › 6. Workflow `.github/workflows/status.yml`. Source `status/`. Data branch `status-data`.
 
 ## How it works
-- Every 5 min a GitHub Actions run probes prod from outside Fly (`status/probe.mjs`): sign-in (`POST /v1/auth/refresh` with a dummy token → 401), chat (`/v1/health` + WebSocket upgrade), Explore (`/v1/welcome`), photo storage (Tigris front door), website. Notifications come from Fly Prometheus when the optional repo secret `FLY_PROM_TOKEN` (read-only token) exists; otherwise that row is hidden.
+- Every 5 min a GitHub Actions run probes prod from outside Fly (`status/probe.mjs`): sign-in (`POST /v1/auth/refresh` with a dummy token → 401), chat (`/v1/health` + WebSocket handshake; 403 for an anonymous connect counts as up), Explore (`/v1/welcome`), photo storage (Tigris front door), website. Notifications come from Fly Prometheus when the optional repo secret `FLY_PROM_TOKEN` (read-only token) exists; otherwise that row is hidden.
 - Two failed checks in a row → component red, and (unless repo variable `STATUS_AUTO_INCIDENT=0`) an `incident` issue is opened automatically.
 - History (`daily.json`, `state.json`) and the page data (`status.json`, `feed.xml`) are committed to `status-data`, never to `main`, so the page never redeploys staging or resets the prod promotion window.
 - The page is plain HTML/JS, fonts from `web/site/fonts`, no cookies, no third-party requests.

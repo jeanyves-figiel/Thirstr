@@ -37,6 +37,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ### Fixed
 - **Status page didn't publish** (ops, #163): the Pages deploy step needs `actions: read` to find the uploaded site; added.
+- Status page: chat probe no longer reports "down" when the socket refuses the anonymous handshake (403 = reachable) (#163).
 - **Chat backup could mark every chat deleted** (app, #146, R-01.15): the daily run at app start could start before the chat list was loaded, so it saw no chats and wrote deletions for all of them (a later restore would bring nothing back). Runs now wait for the chat list; the Chats restore card also waits before judging "no chats yet". Staging only, never in prod.
 - **Video check back in the chat menu** (iPhone, #159, F-18 R-18.8): "Video check ‹name›" in chat ⋯ disappeared without a word while a check with that person was still open (waiting to be recorded or watched, up to 24 h), for an hour after a "Not now", and after 3 asks in a day. It now always stays in 1:1 chats: it reads "· in progress" while one is open and tapping it says why a new one can't start yet. The server kill switch `video_check` (EN-13) now actually controls it. Regression test added.
 - **Smoke tests sent real sign-in emails to `example.invalid`** (server, #163): reserved test domains (`.invalid`, `.test`, `.example`, `.localhost`) no longer reach Amazon SES, so deploy smoke tests cause no bounces; the endpoint still answers 202.

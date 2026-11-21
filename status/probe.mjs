@@ -13,6 +13,9 @@
 //      STATUS_AUTO_INCIDENT=1 to open an `incident` issue when a component goes down.
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import http from "node:http";
+import https from "node:https";
+import { randomBytes } from "node:crypto";
 
 const dir = process.argv[2] ?? "data";
 const doProbe = !process.argv.includes("--no-probe");
@@ -40,13 +43,22 @@ async function timed(fn, timeoutMs = 10_000) {
 }
 
 function wsUpgrade(url, signal) {
-  // Plain WebSocket handshake (Node 22 global WebSocket); open = server accepted the upgrade.
+  // Raw WebSocket handshake without a token. UserSocket rejects anonymous connects with 403,
+  // so 101 (accepted) or 403 (socket route answered, connect refused) both mean chat is reachable.
   return new Promise((resolve) => {
-    const ws = new WebSocket(url);
-    const done = (v) => { try { ws.close(); } catch {} resolve(v); };
-    ws.onopen = () => done(true);
-    ws.onerror = () => done(false);
-    signal.addEventListener("abort", () => done(false));
+    const u = new URL(url.replace(/^ws/, "http"));
+    const req = (u.protocol === "https:" ? https : http).request(u, {
+      headers: {
+        Connection: "Upgrade", Upgrade: "websocket", "Sec-WebSocket-Version": "13",
+        "Sec-WebSocket-Key": randomBytes(16).toString("base64"),
+      },
+      signal,
+    });
+    const done = (v) => { req.destroy(); resolve(v); };
+    req.on("upgrade", (_res, sock) => { sock.destroy(); done(true); });
+    req.on("response", (res) => { res.resume(); done(res.statusCode === 403); });
+    req.on("error", () => done(false));
+    req.end();
   });
 }
 

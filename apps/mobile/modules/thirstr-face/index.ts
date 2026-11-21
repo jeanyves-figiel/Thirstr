@@ -10,7 +10,17 @@ export type FaceReading = { faces: number; yaw?: number; pitch?: number; roll?: 
  */
 export type ClipMatch = { photoFaces: number; frames: number[] };
 
-type Native = { analyze(uri: string): Promise<FaceReading>; matchClip?(clipUri: string, photoUrls: string[]): Promise<ClipMatch> };
+/**
+ * F-03 R-03.2 (#232): selfie photo match. Like ClipMatch, per selfie still; `photoErrors` = own photos that
+ * could not be loaded (network). Computed on the phone; no image, crop or embedding leaves it.
+ */
+export type StillMatch = ClipMatch & { photoErrors: number };
+
+type Native = {
+  analyze(uri: string): Promise<FaceReading>;
+  matchClip?(clipUri: string, photoUrls: string[]): Promise<ClipMatch>;
+  matchStills?(stillUris: string[], photoUrls: string[]): Promise<StillMatch>;
+};
 
 const native = requireOptionalNativeModule<Native>('ThirstrFace');
 
@@ -19,3 +29,6 @@ export const analyzeFace = (uri: string): Promise<FaceReading> => (native ? nati
 export const faceMatchAvailable = !!native?.matchClip;
 export const matchClip = (clipUri: string, photoUrls: string[]): Promise<ClipMatch> =>
   native?.matchClip ? native.matchClip(clipUri, photoUrls) : Promise.reject(new Error('unavailable'));
+export const selfieMatchAvailable = !!native?.matchStills;
+export const matchStills = (stillUris: string[], photoUrls: string[]): Promise<StillMatch> =>
+  native?.matchStills ? native.matchStills(stillUris, photoUrls) : Promise.reject(new Error('unavailable'));

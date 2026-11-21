@@ -28,6 +28,7 @@ import * as P from './people';
 import { NoteSheet, NoteStrip } from '../profile/PrivateNote';
 import { findHits, Marked } from './find';
 import * as V from './vcheck';
+import { flag } from '../app/config';
 import { vcAvailable, VcAskSheet, VcBadge, VcRecorder, VcRow, VcViewer } from './VideoCheck';
 import { vcx } from '../i18n/vcheck';
 import * as Clipboard from 'expo-clipboard';
@@ -183,7 +184,19 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
 
   useEffect(() => {
     if (!cid) return;
-    E.messages(cid).then(setList);
+    let live = true;
+    (async () => {
+      // SR-15 (#155): a long chat not in memory paints its newest 50 first, then the rest.
+      if (!E.messagesCached(cid)) {
+        const head = await E.recentMessages(cid, 50).catch(() => null);
+        if (live && head) setList(head);
+      }
+      const all = await E.messages(cid);
+      if (live) setList(all);
+    })();
+    return () => {
+      live = false;
+    };
   }, [cid, tick]);
 
   // R-13.18: meetup prompt, matched on this phone only.
@@ -945,13 +958,19 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
                 </>
               ) : null}
               <SheetRow testID="menu-note" title={P.noteFor(conv.peer) ? ppl.editNote : ppl.addNote} onPress={() => { setMenu(false); setNoteOpen(true); }} />
-              {vcAvailable && (conv.iWrote || conv.theyWrote) && V.canAsk(conv.peer) ? (
+              {V.menuShown({ available: vcAvailable, on: flag('video_check'), group: !!group }) ? (
+                // #159: always listed in 1:1 chats; when a new ask isn't possible the row says why
+                // (it used to disappear while a check was open or after 3 a day).
                 <SheetRow
                   testID="menu-vcheck"
-                  title={vcx.menu(conv.name)}
+                  title={V.askBlock(conv.peer) === 'open' ? vcx.menuOpen(conv.name) : vcx.menu(conv.name)}
                   onPress={() => {
                     setMenu(false);
+                    const why = V.askBlock(conv.peer);
                     if (!me.verified) setProblem(vcx.verifyFirst);
+                    else if (why === 'open') setProblem(vcx.blockOpen(conv.name));
+                    else if (why === 'declined') setProblem(vcx.blockDeclined);
+                    else if (why === 'limit') setProblem(vcx.blockLimit);
                     else setVcAsk(true);
                   }}
                 />

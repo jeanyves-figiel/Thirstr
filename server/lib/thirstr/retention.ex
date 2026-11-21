@@ -23,7 +23,11 @@ defmodule Thirstr.Retention do
     {"moments_expiry", "moments", "expires_at < now() - interval '1 hour'"},
     {"safety_released_24h", "safety_msgs", "release_at < now() - interval '25 hours'"},
     {"franking_90d", "franking_tags", "created_at < now() - interval '91 days'"},
-    {"client_errors_30d", "client_errors", "last_seen < now() - interval '31 days'"}
+    {"client_errors_30d", "client_errors", "last_seen < now() - interval '31 days'"},
+    {"backup_segments_24h", "chat_backup_segments",
+     "NOT committed AND created_at < now() - interval '25 hours'"},
+    {"chat_backup_idle", "chat_backups", "updated_at < now() - interval '211 days'"},
+    {"transfer_2h", "device_transfers", "updated_at < now() - interval '2 hours 20 minutes'"}
   ]
 
   @queries for {rule, from, where} <- @rules,

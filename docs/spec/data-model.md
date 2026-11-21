@@ -133,9 +133,9 @@ Address/door code: E2EE message to accepted guests, never in DB.
 ### mls_send_keys (device_id, client_id, result jsonb, created_at; PK device_id + client_id) — R-07.18 idempotency, swept after 7 d
 ### mls_expired (to_device_id, group_id bytea, count, created_at) — R-07.22 swept-unread counts, deleted when reported to the device
 ### media_blobs (id uuid, account_id, storage_key, size, expires_at, created_at, once bool, fetched_by uuid null, fetched_at null) — E2EE ciphertext only; owner can delete. `once` = video check clip (R-18.12): bound to first fetcher, swept 10 min after first fetch
-### chat_backups (account_id pk, manifest bytea, bytes bigint, media_bytes bigint, updated_at, created_at) — CT; sealed with a key derived from the recovery phrase (F-01 R-01.15)
-### chat_backup_segments (id uuid, account_id, storage_key, size, sha256 bytea, committed bool, created_at) — CT; uncommitted or unlisted → deleted after 24 h
-### device_transfers (id uuid, account_id, from_device uuid, to_device uuid, state, bytes, last_chunk_at, created_at) + chunks under `blob/xfer/{id}/{n}` — CT; deleted on ack / cancel / 2 h after last chunk (F-01 R-01.14)
+### chat_backups (account_id pk, manifest bytea, bytes bigint, segments int, inserted_at, updated_at) — CT; sealed with a key derived from the recovery phrase (F-01 R-01.15)
+### chat_backup_segments (id uuid, account_id, storage_key, size, sha256 bytea, committed bool, created_at) — CT; uncommitted → swept after 24 h; dropped from the manifest → row deleted, object 24 h later
+### device_transfers (id uuid, account_id, from_device uuid, to_device uuid, state sending|done, estimate, bytes, sent, acked, total, updated_at, created_at) + device_transfer_chunks (transfer_id, n, size, ready) — objects under `blob/xfer/{id}/{n}` are CT; chunk deleted on ack, transfer on cancel, done or 2 h idle (F-01 R-01.14)
 ### devices.push_token / push_platform — APNs/FCM token per device (content-free pushes)
 ### trusted_contacts — **not stored server-side** beyond relay tokens (F-13).
 ### safety_relays (id uuid, account_id, rid_hash bytea unique, intro bytea, accepted_at, push jsonb {endpoint, keys}, created_at) — one per trusted contact; rid and key device-only
@@ -154,7 +154,8 @@ Address/door code: E2EE message to accepted guests, never in DB.
 | `presence:{cell_r8}` | Phoenix Presence | live |
 | `rl:{account}:{action}` | counters | window |
 | `ip:{hash}` | abuse counters | 24 h |
-| `dlink:{code}` | device-link state (account, state, claim hash, new platform) | 120 s |
+| `dlink:{code}` | device-link state (account, state, claim hash, new platform, both one-time `xfer_pub` keys) | 120 s |
+| `dlinkdone:{code}` | finished link → {account, new device} (R-01.14 transfer may start) | 2 h |
 | `pushq:{account}` | push throttle (1 per 20 s) | 20 s |
 
 ## Object storage
@@ -166,7 +167,7 @@ Address/door code: E2EE message to accepted guests, never in DB.
 ## Device-only (SQLCipher)
 Chats, private notes & tags, favorites, friends (F-07 R-07.32–36), trusted contacts list, health reminders, received media, albums keys, MLS state, recovery phrase (never stored, shown once).
 
-Beta store: one encrypted key-value table (`expo-sqlite` + SQLCipher, key in Keychain). Keys: `convs`, `msg` table (one row per message, R-07.21), `outbox` table (R-07.17), `pending` (undecrypted ciphertext ≤ 24 h, R-07.20), `grp:{group}` (MLS state), `g2c:{group}`, `kp:{sha256}` (private key packages), `kp:lastresort:{profile}`, `albums`, `grant:{conv}:{album}`, `note:{profile}`, `quick:custom`, `tr:{conv}␁{message id}` (on-device translation cache, F-07 R-07.30), `recent.media` (Sent recently index + per-file keys, F-08 R-08.14; ciphertext files in `Documents/recent/`), `media.opts` (last tray options), `cache:explore` (last Explore first page for the current settings, ≤ 60 cards, 24 h; SR-16), `cache:profile:{id}|{mode}|{trip}` (profiles you opened, 24 h, newest 200; SR-16), `backup.state` (chat backup cursor: last row seq, segment list, last run; F-01 R-01.15); chat backup key in the Keychain next to the vault key. Media message `media` and album items: `{blob, key, iv, mime, w?, h?}` (chat media also `size`, ciphertext bytes, #177); videos (`video/mp4`, `video/quicktime`) add `dur` (s). Temp video files: `Caches/vplay/` (only while the viewer is open). Wiped on sign-out and account delete. App preferences (AsyncStorage `thirstr.prefs`, not secret): units, haptics, media auto-delete, translate, `dataSaver` (`auto` | `always` | `off`, F-17 R-17.16). MapLibre's own tile cache (outside the store) is capped at 100 MB and cleared on sign-out, duress wipe and when Safe Mode turns on.
+Beta store: one encrypted key-value table (`expo-sqlite` + SQLCipher, key in Keychain). Keys: `convs`, `msg` table (one row per message, R-07.21), `outbox` table (R-07.17), `pending` (undecrypted ciphertext ≤ 24 h, R-07.20), `grp:{group}` (MLS state), `g2c:{group}`, `kp:{sha256}` (private key packages), `kp:lastresort:{profile}`, `albums`, `grant:{conv}:{album}`, `note:{profile}`, `quick:custom`, `tr:{conv}␁{message id}` (on-device translation cache, F-07 R-07.30), `recent.media` (Sent recently index + per-file keys, F-08 R-08.14; ciphertext files in `Documents/recent/`), `media.opts` (last tray options), `cache:explore` (last Explore first page for the current settings, ≤ 60 cards, 24 h; SR-16), `cache:profile:{id}|{mode}|{trip}` (profiles you opened, 24 h, newest 200; SR-16), `backup.state` (chat backup: segment list with SHA-256, message ids per chat already backed up, last run; F-01 R-01.15), `backup.prefs` ({on, cellular}); the chat backup key is derived from the vault key (Keychain) at each run. AsyncStorage `thirstr.restorePending` = restore asked on "You're back". Media message `media` and album items: `{blob, key, iv, mime, w?, h?}` (chat media also `size`, ciphertext bytes, #177); videos (`video/mp4`, `video/quicktime`) add `dur` (s). Temp video files: `Caches/vplay/` (only while the viewer is open). Wiped on sign-out and account delete. App preferences (AsyncStorage `thirstr.prefs`, not secret): units, haptics, media auto-delete, translate, `dataSaver` (`auto` | `always` | `off`, F-17 R-17.16). MapLibre's own tile cache (outside the store) is capped at 100 MB and cleared on sign-out, duress wipe and when Safe Mode turns on.
 
 ## Retention
 | Data | Retention |
@@ -178,6 +179,6 @@ Beta store: one encrypted key-value table (`expo-sqlite` + SQLCipher, key in Key
 | Reports | 1 y (legal), franked payload deleted after decision + 90 d |
 | Deleted account | hard delete ≤ 24 h; backups roll off ≤ 30 d |
 | History transfer chunks | ack, cancel or 2 h idle |
-| Chat backup | while on; 180 d without upload → reminder, deleted 30 d later |
+| Chat backup | while on; 210 d without upload → deleted |
 
 Enforcement is measured (EN-17): `Thirstr.Retention` counts rows past each deadline + grace and exports `thirstr_retention_overdue{rule}`; alert when > 0 for 1 h (`docs/runbooks/monitoring.md`). A new retention rule adds a probe there.

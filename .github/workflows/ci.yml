@@ -28,7 +28,7 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Migrations are expand-only (EN-12)
         run: python3 ../scripts/check-migrations.py
       - name: Postgres 16 + h3
@@ -37,11 +37,11 @@ jobs:
           docker build -t thirstr-postgres:16 infra/postgres
           docker run -d --name pg -p 5432:5432 -e POSTGRES_PASSWORD=postgres thirstr-postgres:16
           until docker exec pg pg_isready -U postgres; do sleep 1; done
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           otp-version: "27.1.2"
           elixir-version: "1.17.3"
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             server/deps
@@ -62,17 +62,18 @@ jobs:
       run:
         working-directory: core
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
+          toolchain: stable
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: core
       - run: cargo fmt --check
       - run: cargo clippy -- -D warnings
       - run: cargo test
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@25f51f6b1bf4e18876107cece836f4f77ac17c8c # v2.90.7
         with:
           tool: cargo-audit
       - run: cargo audit
@@ -83,8 +84,8 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -106,8 +107,8 @@ jobs:
       run:
         working-directory: apps/testbot
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -120,12 +121,12 @@ jobs:
   image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - id: month
         run: echo "dbip=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
       - name: Release image builds (not pushed)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: server/Dockerfile
@@ -137,22 +138,26 @@ jobs:
   infra:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Fly regions are EU only (D-03)
         run: ./scripts/check-fly-regions.sh
       - name: Compose file is valid
         run: docker compose -f docker-compose.yml config -q
+      - name: Alert rules valid, each has a runbook (EN-06)
+        run: python3 scripts/ops/oncall.py --check && python3 -m unittest scripts/ops/test_oncall.py
 
   changelog:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: CHANGELOG.md updated
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qx CHANGELOG.md; then
+          if git diff --name-only "origin/${BASE_REF}...HEAD" | grep -qx CHANGELOG.md; then
             echo "ChangeLog entry present"
           else
             echo "::error::Every change needs a CHANGELOG.md entry (owner rule)."
@@ -162,7 +167,7 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: gitleaks
@@ -170,16 +175,20 @@ jobs:
           docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect --source /repo --redact --no-banner
 
   # EN-08 (#167): SAST on TypeScript/React and workflows (OSS rules, no account, no upload).
-  # Report-only until the baseline (#244) is triaged: findings go to the job summary and the
-  # job stays green; then add --error back so new findings fail the PR.
+  # Blocking since the baseline was fixed (#244): any finding fails the PR. Justify a false
+  # positive inline with `# nosemgrep: <rule-id> <reason>`.
   semgrep:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: semgrep
         run: |
+          set +e
           docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.95.0 \
-            semgrep scan --metrics=off \
+            semgrep scan --metrics=off --error \
               --config p/typescript --config p/react --config p/github-actions \
-              --exclude node_modules --exclude dist 2>&1 | tee semgrep.txt
-          { echo '### Semgrep (report-only, #244)'; echo '```'; tail -n 60 semgrep.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+              --exclude node_modules --exclude dist > semgrep.txt 2>&1
+          rc=$?
+          cat semgrep.txt
+          { echo '### Semgrep'; echo '```'; tail -n 60 semgrep.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc

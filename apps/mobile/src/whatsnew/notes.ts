@@ -16,7 +16,7 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
-    id: 6,
+    id: 7,
     date: '2026-11-21',
     lines: [
       {
@@ -37,6 +37,32 @@ export const NOTES: Note[] = [
           en: ['Name and blur only', 'The page shows nothing else, no trackers.'],
           fr: ['Juste prénom et flou', 'Rien d’autre sur la page, sans traceur.'],
           de: ['Nur Name und Unschärfe', 'Die Seite zeigt sonst nichts, ohne Tracker.'],
+        },
+      },
+    ],
+  },
+  {
+    id: 6,
+    date: '2026-11-21',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'shield',
+        to: { route: 'Devices' },
+        text: {
+          en: ['Chats to a new phone', 'Link it, check the code, bring them all.'],
+          fr: ['Chats sur un nouveau tél', 'Associe-le, vérifie le code, transfère.'],
+          de: ['Chats aufs neue Handy', 'Verknüpfen, Code prüfen, mitnehmen.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'check',
+        to: { route: 'ChatBackupSettings' },
+        text: {
+          en: ['Chat backup', 'Opt-in, sealed by your 12 words.'],
+          fr: ['Sauvegarde des chats', 'Au choix, scellée par tes 12 mots.'],
+          de: ['Chat-Backup', 'Freiwillig, versiegelt mit 12 Wörtern.'],
         },
       },
     ],

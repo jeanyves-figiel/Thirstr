@@ -30,6 +30,8 @@ import { quickLevel } from '../explore/level';
 import { LensPreviewScreen } from '../me/LensPreviewScreen';
 import { SettingsScreen } from '../me/SettingsScreen';
 import { DataSaverSettings } from '../me/settings/DataSaverScreen';
+import { ChatBackupSettings, RestoreWordsScreen } from '../me/settings/ChatBackupScreen';
+import { backupIfDue as chatBackupIfDue } from '../chat/backup';
 import { AccountSettings, ChatSettings, DeleteAccount, NotificationSettings, PrivacySettings, SafetySettings } from '../me/settings/screens';
 import { TapsScreen } from '../me/TapsScreen';
 import { TripsScreen } from '../travel/TripsScreen';
@@ -259,7 +261,13 @@ function useAttestation() {
   React.useEffect(() => {
     ensureAttested();
     backupIfDue();
-    const s = AppState.addEventListener('change', (st) => (st === 'active' ? ensureAttested() : backupIfDue()));
+    chatBackupIfDue(); // R-01.15: daily, Wi-Fi unless allowed on mobile data
+    const s = AppState.addEventListener('change', (st) => {
+      if (st === 'active') {
+        ensureAttested();
+        chatBackupIfDue();
+      } else backupIfDue();
+    });
     return () => s.remove();
   }, []);
 }
@@ -402,6 +410,8 @@ export function Main() {
           <Stack.Screen name="PrivacySettings" component={PrivacySettings} options={sub} />
           <Stack.Screen name="ChatSettings" component={ChatSettings} options={sub} />
           <Stack.Screen name="DataSaverSettings" component={DataSaverSettings} options={sub} />
+          <Stack.Screen name="ChatBackupSettings" component={ChatBackupSettings as React.ComponentType} options={sub} />
+          <Stack.Screen name="RestoreWords" component={RestoreWordsScreen as React.ComponentType} options={{ headerShown: false }} />
           <Stack.Screen name="NotificationSettings" component={NotificationSettings} options={sub} />
           <Stack.Screen name="SafetySettings" component={SafetySettings as React.ComponentType} options={sub} />
           <Stack.Screen name="AccountSettings" component={AccountSettings as React.ComponentType} options={sub} />

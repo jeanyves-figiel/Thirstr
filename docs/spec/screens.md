@@ -24,7 +24,7 @@ Tab bar (4): **Explore** S-10 · **Tonight** S-13 · **Chats** S-40 · **Me** S-
 | S-03d | Here for [v2 Here for] | F-02 | 5 colour tiles | multi-select; Continue saves basics | none selected → CTA disabled |
 | S-04 | Location setup [v2 Location] | F-05 | live map preview, 4 options, privacy footer, Allow location | option changes preview; CTA → OS prompt | denied → city picker S-04b |
 | S-05 | Main photo [v2 Main photo] | F-02, F-15 | 4:5 frame, 4 extra slots, status line | camera/library; scan while checking | rejected → reason + tips |
-| S-06 | Verify [v2 Get verified] | F-03 | payoff intro, face oval, ring, prompt, pips, Later | auto-advance challenges | fail → retry/cooldown S-06b |
+| S-06 | Verify [v2 Get verified] | F-03 | payoff intro, face oval, ring, prompt, pips, Later | auto-advance challenges | fail → retry/cooldown S-06b; after the moves "Look at the camera" + "Checking against your photos…"; no match → S-06b with photo message (R-03.2, #232) |
 | S-07 | You're in [v2 You're in] | F-02 | profile card preview, See who's around | → S-10 | — |
 
 ## Explore

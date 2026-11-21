@@ -313,6 +313,9 @@ defmodule ThirstrWeb.SupportTest do
       %{"state" => "holding", "hold_ends_at" => ends} = claim(c)
       {:ok, t, _} = DateTime.from_iso8601(ends)
       assert DateTime.diff(t, DateTime.utc_now(), :hour) in 71..72
+
+      assert %{"claim" => %{"mine" => true, "state" => "holding"}} =
+               c |> recycle_authed() |> get("/v1/auth/recovery/claim") |> json_response(200)
     end
 
     test "a cancel from another device needs a passing selfie", %{conn: conn} do

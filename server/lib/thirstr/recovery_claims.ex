@@ -165,13 +165,19 @@ defmodule Thirstr.RecoveryClaims do
   end
 
   @doc "Active claim for the banner on other devices (S-84c other phone)."
-  def current(%Account{id: aid}) do
+  def current(%Account{id: aid}, device_id \\ nil) do
     case Repo.query!(
-           "SELECT id::text FROM recovery_claims WHERE account_id = $1 AND state IN ('holding','selfie_passed','ready') LIMIT 1",
+           "SELECT id::text, device_id::text FROM recovery_claims WHERE account_id = $1 AND state IN ('started','holding','selfie_passed','ready','conflict') LIMIT 1",
            [Nearby.dump(aid)]
          ).rows do
-      [[id]] -> view(id)
-      _ -> nil
+      [[id, dev]] ->
+        mine = not is_nil(device_id) and dev == device_id
+        v = Map.put(view(id), :mine, mine)
+        # other phones only hear about a claim once its selfie passed (R-22.23)
+        if mine or v.state in ~w(holding ready), do: v
+
+      _ ->
+        nil
     end
   end
 

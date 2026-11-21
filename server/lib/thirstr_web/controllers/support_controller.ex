@@ -50,7 +50,7 @@ defmodule ThirstrWeb.SupportController do
   end
 
   def claim_current(conn, _),
-    do: json(conn, %{claim: RecoveryClaims.current(conn.assigns.account)})
+    do: json(conn, %{claim: RecoveryClaims.current(conn.assigns.account, conn.assigns.device_id)})
 
   def claim_show(conn, %{"id" => id}),
     do: with({:ok, r} <- RecoveryClaims.show(conn.assigns.account, id), do: json(conn, r))

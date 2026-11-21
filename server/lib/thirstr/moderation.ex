@@ -110,8 +110,8 @@ defmodule Thirstr.Moderation do
     case Repo.query!(
            """
            UPDATE moderation_actions
-           SET appeal_state = $2, appeal_reason = $4, appeal_decided_at = now(), appeal_actor = $3,
-               reviewed_by_other = (actor IS DISTINCT FROM $3), seen = false
+           SET appeal_state = $2, appeal_reason = $4, appeal_decided_at = now(), appeal_actor = $3::text,
+               reviewed_by_other = (actor IS DISTINCT FROM $3::text), seen = false
            WHERE id = $1 AND appeal_state = 'open' RETURNING target_account::text, action
            """,
            [Ecto.UUID.dump!(action_id), decision, actor, reason]

@@ -186,7 +186,7 @@ export const de: Partialize<AppStrings> = {
     add: 'Foto hinzufügen',
     checking: 'Wird geprüft…',
     pending: 'In Prüfung',
-    rejected: { too_explicit: 'Zu explizit für diesen Platz', no_person: 'Wir müssen eine Person sehen' },
+    rejected: { too_explicit: 'Zu explizit für diesen Platz', no_person: 'Wir müssen eine Person sehen', unusable: 'Dieses Foto kann nicht verwendet werden' },
   },
   settings: {
     title: 'Einstellungen',
@@ -693,14 +693,6 @@ export const de: Partialize<AppStrings> = {
     proven: 'Bestätigt ✓',
     notProven: 'Noch nicht bestätigt',
     remove: 'Entfernen',
-  },
-  share: {
-    title: 'Teilen-Link',
-    hint: 'Ein Link und QR-Code für deine Bio in anderen Apps. Er zeigt nur dein verschwommenes Hauptfoto und deinen Namen.',
-    create: 'Link erstellen',
-    rotate: 'Neuer Link (der alte funktioniert nicht mehr)',
-    off: 'Link deaktivieren',
-    send: 'Teilen',
   },
   prefs: {
     app: 'App',

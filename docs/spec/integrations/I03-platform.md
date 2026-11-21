@@ -8,6 +8,7 @@
 | App Attest / Play Integrity | anti-bot | attestation blobs | F-15 R-15.2 |
 | MapLibre + self-hosted Protomaps tiles | maps | tile requests to our CDN (no user id) | no Google/Apple Maps SDK |
 | Self-hosted image classifier | photo moderation | public photos only | F-15 R-15.10 |
+| Microsoft PhotoDNA Cloud Service (#179) | known-CSAM hash match before publish | public image bytes only, no user id; not stored by Microsoft | F-15 R-15.40–46, [I-04](I04-hash-matching.md) |
 | Age-assurance vendor (zero retention) | fallback age check | per-session boolean | F-03 R-03.3; vendor DPA required |
 | App Store / Google Play | distribution, IAP (Plus, later) | store receipts | rating 17+/18+; public photos per F-15; explicit only in E2EE private content |
 | Email sender (EU, transactional) | magic links | email address in transit only | no tracking pixels/links |

@@ -34,7 +34,8 @@ export async function uploadEncrypted(bytes: Uint8Array, opts: { album?: boolean
   const key = rand(32);
   const iv = rand(12);
   const ct = gcm(key, iv).encrypt(bytes);
-  const r = await api<{ blob_id: string; put_url: string }>('POST', '/media/upload', { size: ct.length, ...opts });
+  // #271 scoped: only the uploader and the accounts it was sent to may fetch it.
+  const r = await api<{ blob_id: string; put_url: string }>('POST', '/media/upload', { size: ct.length, scoped: true, ...opts });
   const put = await fetch(r.put_url, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: ct as unknown as BodyInit });
   if (!put.ok) throw new Error('upload failed');
   return { blob: r.blob_id, key: toB64(key), iv: toB64(iv) };

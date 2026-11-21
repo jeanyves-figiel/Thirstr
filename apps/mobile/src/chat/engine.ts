@@ -243,6 +243,15 @@ const waiters = new Set<() => void>();
 /** Resolves once `start` has loaded the conversation list (jobs that read every chat wait for it). */
 export const loadedConvs = () => (loaded ? Promise.resolve() : new Promise<void>((r) => waiters.add(r)));
 
+/** #260 background launch: the chat list from the encrypted store only (no socket, no pull). */
+export async function loadConvsOnly() {
+  if (loaded) return;
+  convs = (await kv.get<Record<string, Conv>>('convs')) ?? {};
+  loaded = true;
+  waiters.forEach((r) => r());
+  waiters.clear();
+}
+
 /** Starts the engine for the signed-in account: key packages, realtime, first pull. */
 export async function start(account: Me) {
   me = account;
@@ -1201,10 +1210,17 @@ export async function send(cid: string, p: Payload, opts: { silent?: boolean; lh
   // Written before any network call: survives kill, reboot and token refresh. FIFO by `created`.
   lastCreated ||= Math.max(0, ...(await items()).map((i) => i.created));
   lastCreated = Math.max(Date.now(), lastCreated + 1);
-  await putItem({ id, cid, t: p.t, plain: toB64(plain), tag: toB64(tag), visible: !opts.silent, created: lastCreated, tries: 0, next: 0, lh: opts.lh });
+  await putItem({ id, cid, t: p.t, plain: toB64(plain), tag: toB64(tag), visible: !opts.silent, created: lastCreated, tries: 0, next: 0, blobs: blobsOf(p), lh: opts.lh });
   const r = await drainConv(cid, id);
   if (r instanceof Error) throw r;
   return msg;
+}
+
+/** #271 (F-08 R-08.18): blob ids a payload hands to its recipients (photo/video, album grant). */
+export function blobsOf(p: Payload): string[] | undefined {
+  if (p.t === 'media') return [p.media.blob];
+  if (p.t === 'album.grant') return p.items.map((i) => i.blob).slice(0, 200);
+  return undefined;
 }
 
 // ------------------------------------------------------------------ outbox (R-07.17–R-07.19)
@@ -1222,6 +1238,8 @@ type Item = {
   next: number;
   /** Gave up after 24 h: shown as Not sent, waits for Retry. */
   dead?: boolean;
+  /** #271: media blobs this message carries; the server lets its recipients (only) fetch them. */
+  blobs?: string[];
   /** #206: the 1:1 group was rebuilt once for a stale device. */
   rebuilt?: boolean;
   /** I-01 R-I01.23: per-sender link hash (device-only key), sent next to the ciphertext. */
@@ -1313,6 +1331,7 @@ async function attempt(it: Item): Promise<'ok' | 'retry' | Error> {
             group_id: toB64(fromHex(gid)),
             franking_tag: it.tag,
             context: c.ctx,
+            blobs: it.blobs?.length ? it.blobs : undefined,
             lh: it.lh,
             envelopes: to.map((m) => ({ to_profile_id: m.p, to_device_id: m.d, kind: 'app', ciphertext: wire })),
           },

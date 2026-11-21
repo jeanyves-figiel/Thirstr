@@ -1,6 +1,6 @@
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { api, ApiError } from '../api/client';
@@ -15,7 +15,7 @@ import { LENSES } from '../profile/lens';
 import { contacts } from '../safety/safety';
 import { color, font, modeColor, radius, space, touch, type } from '../theme/tokens';
 import type { Notice } from '../trust/NoticesScreen';
-import { afterSheet, Banner, Button, ErrorText, Icon, Photo, Sheet, VerifiedTick } from '../ui';
+import { Banner, Button, ErrorText, Icon, Photo, VerifiedTick } from '../ui';
 import { loadTrips, Plane, rangeLabel } from '../travel/travel';
 import { pe } from '../i18n/profileEdit';
 import { quickWins } from '../profile/quickWins';
@@ -25,7 +25,7 @@ import * as Moments from '../moments/api';
 import { RingAvatar } from '../moments/Ring';
 import { NowSheet } from './NowSheet';
 import { prefs, setPrefs } from './prefs';
-import { Qr } from './Qr';
+import { ShareSheet } from './share/ShareSheet';
 import { SignInEmailSheet } from './SignInEmail';
 
 type Nav = { navigate: (s: string, p?: object) => void };
@@ -304,7 +304,7 @@ export function MeScreen({ navigation }: { navigation: Nav }) {
       <NowSheet visible={now} onClose={() => setNow(false)} />
       <LocationSheet visible={loc} onClose={() => setLoc(false)} onLocked={() => { setLoc(false); navigation.navigate('Verify'); }} />
       <SignInEmailSheet visible={emailSheet} onClose={() => setEmailSheet(false)} />
-      {p ? <QrSheet visible={qr} profileId={p.id} onClose={() => setQr(false)} /> : null}
+      {p ? <ShareSheet visible={qr} profileId={p.id} name={p.display_name} photos={p.photos} onClose={() => setQr(false)} /> : null}
     </View>
   );
 }
@@ -397,31 +397,3 @@ function Ring({ pct, c, size = 92 }: { pct: number; c: string; size?: number }) 
   );
 }
 
-// I-02 share link as a QR, from the Me header (#102). Creating the link is the same as in Edit profile.
-function QrSheet({ visible, profileId, onClose }: { visible: boolean; profileId: string; onClose: () => void }) {
-  const [share, setShare] = useState<{ url: string } | null | undefined>(undefined);
-  const load = useCallback(() => api<{ share: { url: string } | null }>('GET', `/me/profiles/${profileId}/share`).then((r) => setShare(r.share), () => setShare(null)), [profileId]);
-  useEffect(() => {
-    if (visible) load();
-  }, [visible, load]);
-  return (
-    <Sheet visible={visible} onClose={onClose} title={tx.share.title} closeLabel={tx.common.close}>
-      <Text style={{ ...type.meta, color: color.fgSecondary }}>{tx.share.hint}</Text>
-      {share ? (
-        <View style={{ alignItems: 'center', gap: space.m }}>
-          <Qr value={share.url} size={200} />
-          <Button
-            title={tx.share.send}
-            onPress={() => {
-              // #124: system share sheet only after this sheet is gone (iOS freeze otherwise).
-              onClose();
-              afterSheet(() => Share.share({ message: share.url }).catch(() => {}));
-            }}
-          />
-        </View>
-      ) : share === null ? (
-        <Button kind="secondary" title={tx.share.create} onPress={() => api('POST', `/me/profiles/${profileId}/share`).then(load, () => {})} />
-      ) : null}
-    </Sheet>
-  );
-}

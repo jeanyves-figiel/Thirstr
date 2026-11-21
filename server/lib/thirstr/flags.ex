@@ -20,6 +20,11 @@ defmodule Thirstr.Flags do
     "parties" => true,
     "translate" => true,
     "web_push" => true,
+    # #270 server-side switch: off = verification issues without device proof (kill switch if
+    # attestation breaks for real users). Only matters where VERIFICATION_REQUIRE_ATTEST is on.
+    "verification_attest" => true,
+    # F-15 R-15.43 (#179): server-side kill switch for the pre-publish hash match (owner outage decision only)
+    "hash_match" => true,
     # I-01 R-I01.30 (#17): OnlyFans / JustFor.Fans surfaces. Before a store submission ops lists the
     # build under review in `off_builds` (%{"ios" => [512]}) so only that build hides them.
     "adult_links" => true

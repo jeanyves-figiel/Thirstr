@@ -16,7 +16,7 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
-    id: 7,
+    id: 8,
     date: '2026-11-21',
     lines: [
       {
@@ -37,6 +37,32 @@ export const NOTES: Note[] = [
           en: ['Linked accounts ✓', 'Prove your X, Bluesky or OnlyFans.'],
           fr: ['Comptes liés ✓', 'Prouve ton X, Bluesky ou OnlyFans.'],
           de: ['Verknüpfte Konten ✓', 'Bestätige X, Bluesky oder OnlyFans.'],
+        },
+      },
+    ],
+  },
+  {
+    id: 7,
+    date: '2026-11-21',
+    lines: [
+      {
+        tone: 'hookup',
+        glyph: 'spark',
+        to: tab('Me'),
+        text: {
+          en: ['Share your profile', 'Link and QR for your bio, from Me.'],
+          fr: ['Partage ton profil', 'Lien et QR pour ta bio, depuis Moi.'],
+          de: ['Teile dein Profil', 'Link und QR für deine Bio, unter Ich.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'shield',
+        to: tab('Me'),
+        text: {
+          en: ['Name and blur only', 'The page shows nothing else, no trackers.'],
+          fr: ['Juste prénom et flou', 'Rien d’autre sur la page, sans traceur.'],
+          de: ['Nur Name und Unschärfe', 'Die Seite zeigt sonst nichts, ohne Tracker.'],
         },
       },
     ],

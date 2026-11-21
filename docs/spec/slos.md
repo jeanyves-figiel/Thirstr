@@ -69,7 +69,7 @@ Mockup approved for build: [status page mockup](https://claude.ai/artifact/FWvUN
 | Component (page label) | External probe (from GitHub) | Degraded when | Down when |
 |---|---|---|---|
 | Sign-in and accounts | `POST /v1/auth/refresh` with a dummy token (router, rate limit, sessions table; never sends mail) | > 2 s | not 401/422 / timeout 10 s |
-| Chat | `GET /v1/health` + `wss://api.thirstr.fun/socket/websocket?vsn=2.0.0` upgrade (101) | > 2 s | no 101 / timeout |
+| Chat | `GET /v1/health` + `wss://api.thirstr.fun/socket/websocket?vsn=2.0.0` handshake without token: 101 or 403 (socket route answered) | > 2 s | other status / timeout |
 | Explore and map | `GET /v1/welcome` (public counts, `"cells"` present) | > 2 s | error / timeout |
 | Photos and albums | `HEAD` on the photo storage front door (Tigris S3 endpoint, any answer < 500) | > 3 s | ≥ 500 / timeout |
 | Notifications | not probeable from outside: Prometheus `thirstr_push_send_count` retry share over 15 min, only with the optional read-only repo secret `FLY_PROM_TOKEN`; without it the row is hidden | retry share > 5 % | > 50 % |

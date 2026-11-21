@@ -67,6 +67,9 @@ Tab bar (4): **Explore** S-10 · **Tonight** S-13 · **Chats** S-40 · **Me** S-
 | S-46 | Video check recorder [#159] | F-18 R-18.10 | full screen front camera, face oval, move card on top, 3-2-1, REC timer, ring shutter (3–5 s), 🎤 chip, Retake / Send | record, retake, send | no camera access → Allow / Settings; capture on (iOS) → black card |
 | S-47 | Video check viewer [#159] | F-18 R-18.14–R-18.16 | full screen, blurred until held (A), progress bar, move card, diagonal name + time watermark; end: face-match line, "Did he do the move?" Yes / No, "The video is gone" | hold to play, confirm | capture on → black card; download failed → "Couldn't load. Ask again" |
 | S-50 | Report flow | F-15 | reasons, attach messages, note | submit → block offer | — |
+| S-50b | Report: illegal content [#170, spec, mockup pick pending] | F-15 R-15.23–R-15.26 | country, type, what's illegal (20–1 000), context, optional name + email, good-faith tick | Send → receipt sheet with reference | 422 inline |
+| S-86 | Notice detail: statement of reasons [#170, spec] | F-15 R-15.28, R-15.33 | What · Why · Facts · How we decided · What you can do; timeline after a review | Ask for a review → S-82 | — |
+| S-87 | Ask for a review [#170, spec] | F-15 R-15.30–R-15.32 | text ≤ 1 000; open 6 months | Send → S-81 timeline | 409 already asked |
 | S-51 | Check-in start sheet [v2, #112] | F-13 R-13.15 | bottom sheet: "Meeting ‹name›?", tiles 1 h / 2 h (default) / 3 h / Other with due times, contacts card + 2 toggles, Start · due HH:MM | start | no contacts → add contact first |
 | S-52 | Check-in due | F-13 | "All good?", I'm OK, +30 min | biometrics | duress path |
 | S-53 | Trusted contacts | F-13 | list, add, invite | add/remove | — |

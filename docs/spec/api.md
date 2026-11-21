@@ -54,7 +54,7 @@ Errors: `{ "error": { "code": "rate_limited", "message": "...", "retry_after": 3
 | POST | /devices/link/{code}/confirm | → 204 (after app lock / Face ID on the old device) |
 | GET | /devices/attest | → {attested, has_key, attested_at} for the calling device (#25) |
 | POST | /devices/attest/challenge | → {challenge (base64url, 43 chars), expires_in: 300}; single use, bound to the device; 20/h |
-| POST | /devices/attest | {key_id, attestation (base64), challenge} → {attested: true}; iOS App Attest, once per install. 422 `attestation_invalid` / `challenge` |
+| POST | /devices/attest | {key_id, attestation (base64), challenge} → {attested: true}; iOS App Attest, once per install. Android (#168): {platform: "android", token, challenge}, Play Integrity verdict with request hash = challenge, daily. 422 `attestation_invalid` / `challenge` |
 | POST | /devices/assert | {assertion (base64), challenge} → {attested: true}; at most daily. 409 `not_attested`, 422 `assertion_invalid` / `challenge` |
 | POST | /auth/device-link | no auth, 10/min/IP. {code, platform, xfer_pub?} → {claim, xfer_pub?} (old phone's key); {code, claim} → 202 {state} until confirmed, then Session |
 
@@ -77,7 +77,7 @@ Outside `/v1`: `GET /.well-known/apple-app-site-association` → `{webcredential
 
 ### Verification (F-03)
 | POST | /verification/challenge | → {nonce, steps: 3 of turn_left\|turn_right\|smile\|look_up (blink dropped, #131), expires_in: 300, key: {n: b64url, e, bits: 3072, hash: "SHA-384"}}. 403 during the 24 h cooldown (R-03.10) |
-| POST | /verification/attest | {nonce, passed: bool, blinded?: b64url} → {signature: b64url} when passed, else {passed: false, attempts_left}. Nonce single use (AC-03.3); 3 fails / 24 h → cooldown |
+| POST | /verification/attest | {nonce, passed: bool, blinded?: b64url, assertion? \| integrity_token?} → {signature: b64url} when passed, else {passed: false, attempts_left}. Nonce single use (AC-03.3); 3 fails / 24 h → cooldown. #270: on staging/prod a pass needs device proof over `"<nonce>.<blinded>"` (App Attest `assertion` or Play Integrity `integrity_token`), else 422 `attestation_required`; 3 issuances / device / 24 h (403) |
 | POST | /verification/redeem | {token: b64url 32–64 B, signature: b64url} → Me (verified, epoch + 1; onboarding `verify` → `done`). Signature check: `sᵉ mod n = MGF1-SHA-384(token) mod n`; sha256(token) stored once (spent) |
 Blind signature (R-03.4, Chaum RSA-FDH): client picks random `token` and `r`, sends `FDH(token)·rᵉ mod n`, unblinds `s = s'·r⁻¹ mod n`. The issuer key is generated once and kept in `server_keys`. Credentials lapse after 12 months (daily sweep, R-03.7).
 

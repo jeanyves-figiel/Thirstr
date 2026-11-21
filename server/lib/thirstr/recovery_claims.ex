@@ -89,7 +89,8 @@ defmodule Thirstr.RecoveryClaims do
         @nonce_ttl
       )
 
-      {:ok, %{nonce: nonce, steps: Enum.take(Enum.shuffle(~w(left right up blink smile)), 3)}}
+      {:ok,
+       %{nonce: nonce, steps: Enum.take(Enum.shuffle(~w(turn_left turn_right smile look_up)), 3)}}
     end
   end
 

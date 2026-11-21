@@ -30,6 +30,8 @@ export type Me = {
   hidden?: boolean;
   member_since?: string;
   has_email?: boolean;
+  /** F-22 (#178): Apple / Google sign-in linked. */
+  has_oidc?: boolean;
   created_at?: string;
   profile: null | MyProfile;
   profiles?: MyProfile[];

@@ -275,7 +275,7 @@ Rate limits (beta defaults, per account): messages to new contacts 30/h (unverif
 | POST | /support/requests/{id}/messages · /solve | {body} → 201 · → 204 (reopen by message within 14 d) |
 | POST | /feedback | {type: idea\|off\|love, part?, text (10–1 000), app} → 202; scrubbed + queued (R-22.31–34); 5 / 24 h |
 | POST | /auth/recovery/claim | {method: apple\|google\|passkey\|email} (signed in with it) → 201 {id, state: started\|holding\|conflict, hold_ends_at, attempts_left}; unverified → `holding` 72 h; 409 `claim_active`; 403 after 3 failed selfies (24 h); 3 claims / 30 d |
-| GET | /auth/recovery/claim · /auth/recovery/claim/{id} | → {claim: active claim or null} (banner on other phones) · claim (`ready` once the hold is over) |
+| GET | /auth/recovery/claim · /auth/recovery/claim/{id} | → {claim: active claim + `mine` (started on this phone) or null; other phones only see it once `holding`} (S-84 banner) · claim (`ready` once the hold is over) |
 | POST | /auth/recovery/claim/{id}/challenge | {purpose?: claim\|cancel} → {nonce, steps} (one use, 10 min) |
 | POST | /auth/recovery/claim/{id}/selfie | {nonce, passed} (claiming phone, F-03 liveness + on-device match) → {state: holding, hold_ends_at} (24 h if another phone was used in 14 d, else 1 h); 422 `recovery_check_failed` (tries left) |
 | POST | /auth/recovery/claim/{id}/cancel | {nonce (purpose cancel), passed: true} from another phone (after Face ID / passcode on it) → 204; 422 without a passing selfie |

@@ -346,7 +346,7 @@ defmodule ThirstrWeb.ModController do
     #{nav()}<h1>A-12 Case #{short_ref(c.id)}</h1>
     #{if c.state == "open", do: ~s(<p class="banner"><b>Known-image match.</b> Never published. Account quarantined; the uploader only saw "This photo can't be used".</p>), else: ""}
     <div style="display:flex;gap:16px;flex-wrap:wrap">
-      <div class="card">#{image}</div>
+      <div class="card" style="flex:0 0 auto;max-width:280px">#{image}</div>
       <div class="card" style="flex:1;min-width:260px">
         <p>Source <b>#{e(c.source)}</b> · provider #{e(c.provider || "—")} · match #{e(c.ref || "—")}</p>
         <p>SHA-256 <code>#{e(sha_hex(c.sha))}</code></p>

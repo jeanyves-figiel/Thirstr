@@ -10,6 +10,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 - **Active now sheet: two stops, same content** (app, #250, F-04 R-04.14, [mockup option B](https://claude.ai/artifact/4otVv3QabTP8n5jcsFcVwH)): the sheet over the Explore map now has only a low **strip** (title, then the Moments row with You first; most of the screen stays map) and **full**. Both show the same list (Moments row, hold hint, grid), so the You row no longer appears only at a middle stop. Tapping the handle toggles; a phone that had the old middle stop saved opens on the strip.
 
 ### Fixed
+- **Sign-in emails set up on Amazon SES Zurich** (ops, #26): `thirstr.fun` verified with DKIM and a `bounce.thirstr.fun` MAIL FROM in `eu-central-2`; staging SMTP secrets staged (least-privilege IAM user, sends only as `hello@thirstr.fun`). Runbook `docs/runbooks/email.md` updated.
 - **TestFlight builds fail at export since the Live Activity** (CI, #119): Xcode automatic signing can't register the new extension bundle ID `app.thirstr.safetylive`. The iOS workflow now registers extension bundle IDs through the App Store Connect API key before archiving (idempotent).
 - **Place chips readable over the map** (app, #250, F-04 R-04.20): Clubs, Saunas, Parties and Gyms chips that are off now have a solid background, so a party or venue marker under them no longer shows through (e.g. a "14:02" party behind Gyms).
 

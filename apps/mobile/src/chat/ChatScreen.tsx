@@ -36,7 +36,8 @@ import { toast } from '../ui/Toast';
 import { hitSlot, MsgRow, ReactionBar, useChatGestures, type Hold } from './MsgGestures';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void; setOptions: (o: object) => void };
-type Params = { cid?: string; profileId?: string; name?: string };
+/** #210 draft: text placed in the composer, not sent ("I'm in" on a Tonight plan). */
+type Params = { cid?: string; profileId?: string; name?: string; draft?: string };
 
 const REACTIONS = ['❤️', '🔥', '😂', '😮', '👍'];
 // F-19 G3: reaction bar geometry (5 emoji).
@@ -89,7 +90,7 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
   const { kb, bottom: navBottom } = useNavSpace();
   const [cid, setCid] = useState<string | null>(route.params.cid ?? null);
   const [list, setList] = useState<E.Msg[] | null>(null);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(route.params.draft ?? '');
   const [problem, setProblem] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   // F-19 G1 reply being written, G3 held message (reaction bar + actions).

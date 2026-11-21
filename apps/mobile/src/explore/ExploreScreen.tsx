@@ -16,6 +16,8 @@ import { colsAfterPinch, nearIds } from '../ui/gestureMath';
 import { settle } from '../ui/motion';
 import { setCols, useCols, type Cols } from './gridCols';
 import { SafetySheet, SheetRow } from '../trust/SafetySheet';
+import { clearMapFocus, useMapFocus } from './focus';
+import { useHiddenItems } from '../scene/hiddenItems';
 import { toast } from '../ui/Toast';
 import { color, radius, space, type } from '../theme/tokens';
 import { Banner, EmptyState, ErrorState, Icon, Loading, useAccent } from '../ui';
@@ -103,6 +105,15 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
     setSeenLook(look);
     if (look) setRecenter((n) => n + 1);
   }
+  // #210: "Map" on a Tonight party card centres here and shows the map (state-from-props, no effect).
+  const focus = useMapFocus();
+  const hiddenItems = useHiddenItems();
+  const [seenFocus, setSeenFocus] = useState(focus?.seq ?? 0);
+  if (focus && focus.seq !== seenFocus) {
+    setSeenFocus(focus.seq);
+    setRecenter((n) => n + 1);
+    setSnap('peek');
+  }
 
   useEffect(() => onDevicePosition(setDevice), []);
 
@@ -130,7 +141,12 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
     });
   }, []);
   const safe = me.safe_mode === 'on' || !!me.safe_mode_active;
-  const kinds = useMemo(() => (safe ? [] : activeKinds(layers, intents)), [safe, layers, intents]);
+  const focusOn = !!focus;
+  const kinds = useMemo(() => {
+    if (safe) return [];
+    const k = activeKinds(layers, intents);
+    return focusOn && !k.includes('parties') ? [...k, 'parties' as const] : k;
+  }, [safe, layers, intents, focusOn]);
   const onLayer = useCallback(
     (k: PlaceKind) =>
       setLayers((cur) => {
@@ -223,7 +239,16 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
     },
     [intents, filters, reloadPlaces, x],
   );
-  const shownPlaces = places.filter((p) => kinds.includes(placeKind(p)));
+  const shownPlaces = places.filter((p) => kinds.includes(placeKind(p)) && !hiddenItems.has(p.id));
+  // #210: select the focused party once its marker has loaded.
+  const [pickedFor, setPickedFor] = useState(0);
+  if (focus && pickedFor !== focus.seq) {
+    const fp = shownPlaces.find((p) => p.id === focus.placeId);
+    if (fp) {
+      setPickedFor(focus.seq);
+      setPlace(fp);
+    }
+  }
 
   async function more() {
     if (!next) return;
@@ -319,6 +344,7 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
     return null;
   })();
   const center: { lat: number; lng: number; zoom?: number } | null = (() => {
+    if (focus) return { lat: focus.lat, lng: focus.lng, zoom: 14 };
     if (look) return { lat: look.city.lat, lng: look.city.lng, zoom: 12 };
     if (dot) return dot;
     const r5 = me.location?.cell_r5;
@@ -355,8 +381,9 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   }, [quiet, intents]);
 
   async function locateMe() {
-    // R-20.14: Locate me returns home and ends Look around.
+    // R-20.14: Locate me returns home and ends Look around (and a #210 party focus).
     if (look) setLookAround(null);
+    clearMapFocus();
     const p = await locateDevice().catch(() => null);
     if (!p && !center) return setShowLocation(true);
     setRecenter((n) => n + 1);

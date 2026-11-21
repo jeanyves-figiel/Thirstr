@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Actions on Tonight cards** (app + server, #210, F-09 R-09.8, F-10 R-10.2a, [mockup](https://claude.ai/artifact/1YSABPxLq3S7pMxGoEwwbW)): plan cards get **I'm in** (opens the chat with the plan quoted and “I'm in 👋” ready to send), **Tap** and **Chat**; **⋯ or press and hold** opens Hide this plan, Hide, Block and Report; **swipe left** hides the plan with Undo. Party cards get **Request a seat** right on the card (then Requested, or You’re in which opens the party and its guest chat), **Map** (Explore map centred on the party's approximate area with its marker selected), house rules, a seat bar, and **⋯** for Hide this party and Report. Hidden plans and parties stay on this phone only (encrypted) until they end; a hidden party also leaves the map. Reports from Tonight are tagged `tonight` for moderators.
+
 ### Changed
 - **Chats redesign "Spotlight"** (app, #211, F-07 R-07.40–R-07.42, [mockup option A](https://claude.ai/artifact/RzKMnX67pWujoMPQDnRoD2)): Taps is now a full-width coral button above the tabs with the faces of your latest tappers, a pulsing flame, "3 new Taps" and "Marco, Leo and 1 more · 1 mutual". The end-to-end notice is a teal chip next to the title. Avatars get a ring by state (coral unread, violet friend), unread rows show their time in coral, Unread tab carries a count badge, "New" is now "Your move", and a chat whose peer is typing shows "typing…" with breathing dots. Animations run on the UI thread, stop when Chats is not on screen and respect Reduce Motion.
 

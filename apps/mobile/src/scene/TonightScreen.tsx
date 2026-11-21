@@ -6,8 +6,16 @@ import { useOptions } from '../api/options';
 import { useSession } from '../app/session';
 import { distanceLabel, opt, tx } from '../i18n/app';
 import { color, radius, space, type } from '../theme/tokens';
-import { Banner, Button, Chip, Chips, EmptyState, Icon, Loading, Photo, SectionLabel, Tag, useAccent, VerifiedTick } from '../ui';
+import { Banner, Button, Chip, Chips, EmptyState, Icon, Loading, Photo, SectionLabel, Sheet, useAccent, VerifiedTick } from '../ui';
 import { PlanSheet } from './PlanSheet';
+import { PartyCard, PlanCard } from './TonightCards';
+import { hideItem, unhideItem, useHiddenItems } from './hiddenItems';
+import { cellToLatLng } from 'h3-js';
+import { focusMap } from '../explore/focus';
+import { feel } from '../ui/haptics';
+import { toast } from '../ui/Toast';
+import { mod } from '../i18n/mod';
+import { SafetySheet, SheetRow } from '../trust/SafetySheet';
 import type { Club, MyPlan, Party, Plan, Post, Venue } from './types';
 import { ap } from '../i18n/addplace';
 import { day, time } from './types';
@@ -42,35 +50,7 @@ export function Who({ p, sub, onPress, right }: { p: Plan['profile']; sub?: stri
   );
 }
 
-export function PartyCard({ p, onPress }: { p: Party; onPress: () => void }) {
-  const accent = useAccent();
-  return (
-    <Pressable
-      testID={`party-${p.title}`}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={{
-        padding: space.l,
-        borderRadius: 22,
-        backgroundColor: color.bgRaised,
-        gap: space.s,
-        borderWidth: 2,
-        borderColor: accent,
-      }}
-    >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View style={{ paddingHorizontal: 10, height: 24, borderRadius: radius.pill, backgroundColor: accent, justifyContent: 'center' }}>
-          <Text style={{ ...type.caption, color: color.onAccent, textTransform: 'uppercase' }}>{tx.party.status[p.status]}</Text>
-        </View>
-        <Text style={{ ...type.caption, color: color.fgSecondary }}>{tx.party.seats(p.seats_taken, p.capacity)}</Text>
-      </View>
-      <Text style={{ ...type.title, fontSize: 24, lineHeight: 28, color: color.fgPrimary }}>{p.title}</Text>
-      <Text style={{ ...type.meta, color: color.fgSecondary }}>
-        {day(p.starts_at)}–{time(p.ends_at)} · {distanceLabel(p.distance)} · {p.host.display_name}
-      </Text>
-    </Pressable>
-  );
-}
+export { PartyCard };
 
 // S-13 Tonight (F-09). Sport mode shows the activities feed instead (R-09.10, F-11).
 export function TonightScreen({ navigation }: { navigation: Nav }) {
@@ -89,6 +69,10 @@ export function TonightScreen({ navigation }: { navigation: Nav }) {
   const [sheet, setSheet] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [tapped, setTapped] = useState<Set<string>>(new Set());
+  const [planMenu, setPlanMenu] = useState<Plan | null>(null);
+  const [partyMenu, setPartyMenu] = useState<Party | null>(null);
+  const hidden = useHiddenItems();
   const safeMode = me.safe_mode === 'on' || !!me.safe_mode_active;
   const sport = mode === 'sport';
 
@@ -130,7 +114,33 @@ export function TonightScreen({ navigation }: { navigation: Nav }) {
   const noLoc = !me.location?.level || me.location.level === 'hidden';
   // S-13 featured parties: mine (hosting / going / requested) first, then the open ones nearby.
   const rank = (p: Party) => (p.my_state === 'host' ? 0 : p.my_state === 'accepted' ? 1 : p.my_state === 'pending' ? 2 : 3);
-  const featured = parties.filter((p) => rank(p) < 3 || p.status === 'open' || p.status === 'live').sort((a, b) => rank(a) - rank(b));
+  const featured = parties.filter((p) => !hidden.has(p.id) && (rank(p) < 3 || p.status === 'open' || p.status === 'live')).sort((a, b) => rank(a) - rank(b));
+  const visiblePlans = (plans ?? []).filter((p) => !hidden.has(p.id));
+
+  // #210 card actions.
+  const chatWith = (p: Plan, draft?: string) => {
+    if (!me.verified) return toast(tx.explore.unverifiedMessage, { label: tx.me.verifyNow, on: () => navigation.navigate('Verify') });
+    navigation.navigate('Chat', { profileId: p.profile.id, name: p.profile.display_name, draft });
+  };
+  const tapPerson = (p: Plan) => {
+    setTapped((s) => new Set(s).add(p.profile.id));
+    api('POST', `/profiles/${p.profile.id}/tap`).then(
+      () => feel('success'),
+      (e) => {
+        setTapped((s) => {
+          const n = new Set(s);
+          n.delete(p.profile.id);
+          return n;
+        });
+        toast(e instanceof ApiError ? e.message : tx.common.error);
+      },
+    );
+  };
+  const showOnMap = (p: Party) => {
+    const [lat, lng] = cellToLatLng(p.area_cell);
+    focusMap({ lat, lng, placeId: p.id });
+    navigation.navigate('Explore');
+  };
 
   return (
     <View
@@ -264,7 +274,15 @@ export function TonightScreen({ navigation }: { navigation: Nav }) {
               <View style={{ gap: space.s }}>
                 <Text style={{ ...type.headline, color: color.fgPrimary }}>{tx.tonight.parties}</Text>
                 {featured.map((p) => (
-                  <PartyCard key={p.id} p={p} onPress={() => navigation.navigate('Party', { id: p.id })} />
+                  <PartyCard
+                    key={p.id}
+                    p={p}
+                    verified={me.verified}
+                    onOpen={() => navigation.navigate('Party', { id: p.id })}
+                    onMap={() => showOnMap(p)}
+                    onMenu={() => setPartyMenu(p)}
+                    onChanged={load}
+                  />
                 ))}
               </View>
             ) : null}
@@ -300,52 +318,19 @@ export function TonightScreen({ navigation }: { navigation: Nav }) {
             ) : null}
             {plans === null ? (
               <Loading />
-            ) : plans.length === 0 ? (
+            ) : visiblePlans.length === 0 ? (
               <EmptyState title={tx.tonight.empty} body={tx.tonight.emptyBody} />
             ) : (
-              plans.map((p) => (
-                <View
+              visiblePlans.map((p) => (
+                <PlanCard
                   key={p.id}
-                  style={{
-                    padding: space.l,
-                    borderRadius: 22,
-                    backgroundColor: color.bgRaised,
-                    gap: space.m,
-                  }}
-                >
-                  <Who
-                    p={p.profile}
-                    sub={distanceLabel(p.distance)}
-                    onPress={() => navigation.navigate('Profile', { id: p.profile.id })}
-                    right={
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() =>
-                          navigation.navigate('Chat', {
-                            profileId: p.profile.id,
-                            name: p.profile.display_name,
-                          })
-                        }
-                        accessibilityLabel={tx.explore.quick.message}
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 22,
-                          backgroundColor: accent,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Icon.Chat size={20} c={color.onAccent} />
-                      </Pressable>
-                    }
-                  />
-                  {p.text ? <Text style={{ ...type.body, fontSize: 17, lineHeight: 23, color: color.fgPrimary }}>{p.text}</Text> : null}
-                  <Chips>
-                    <Tag label={`${time(p.window_start)}–${time(p.window_end)}`} tone={color.fgSecondary} />
-                    <Tag label={tx.tonight.tags[p.tag]} tone={accent} />
-                  </Chips>
-                </View>
+                  p={p}
+                  tapped={tapped.has(p.profile.id)}
+                  onProfile={() => navigation.navigate('Profile', { id: p.profile.id })}
+                  onChat={(draft) => chatWith(p, draft)}
+                  onTap={() => tapPerson(p)}
+                  onMenu={() => setPlanMenu(p)}
+                />
               ))
             )}
           </>
@@ -422,6 +407,59 @@ export function TonightScreen({ navigation }: { navigation: Nav }) {
           </View>
         ) : null}
       </View>
+      <SafetySheet
+        visible={!!planMenu}
+        target={planMenu ? { id: planMenu.profile.id, name: planMenu.profile.display_name, age: planMenu.profile.age, sub: distanceLabel(planMenu.distance) } : null}
+        onClose={() => setPlanMenu(null)}
+        onReport={(t) => navigation.navigate('Report', { profileId: t.id, context: 'tonight' })}
+        onGone={() => load()}
+        onRestored={() => load()}
+        lead={
+          planMenu ? (
+            <SheetRow
+              last
+              testID="plan-hide"
+              title={tx.tonight.card.hidePlan}
+              onPress={() => {
+                const p = planMenu;
+                setPlanMenu(null);
+                hideItem(p.id, p.window_end);
+                toast(tx.tonight.card.planHidden, { label: mod.undo, on: () => unhideItem(p.id) });
+              }}
+            />
+          ) : null
+        }
+      />
+      <Sheet visible={!!partyMenu} onClose={() => setPartyMenu(null)} title={partyMenu?.title ?? ''} closeLabel={tx.common.close}>
+        {partyMenu ? (
+          <View style={{ borderRadius: radius.md, backgroundColor: color.bgRaised, overflow: 'hidden' }}>
+            <SheetRow
+              testID="party-hide"
+              title={tx.tonight.card.hideParty}
+              onPress={() => {
+                const p = partyMenu;
+                setPartyMenu(null);
+                hideItem(p.id, p.ends_at);
+                toast(tx.tonight.card.partyHidden, { label: mod.undo, on: () => unhideItem(p.id) });
+              }}
+            />
+            <SheetRow
+              last
+              danger
+              testID="party-report"
+              title={tx.party.report}
+              onPress={() => {
+                const p = partyMenu;
+                setPartyMenu(null);
+                api('POST', `/parties/${p.id}/report`, { reason: 'user' }).then(
+                  () => toast(tx.party.reported),
+                  (e) => toast(e instanceof ApiError ? e.message : tx.common.error),
+                );
+              }}
+            />
+          </View>
+        ) : null}
+      </Sheet>
       <PlanSheet
         visible={sheet}
         onClose={() => setSheet(false)}

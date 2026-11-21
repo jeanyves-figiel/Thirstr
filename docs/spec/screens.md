@@ -36,7 +36,7 @@ Tab bar (4): **Explore** S-10 · **Tonight** S-13 · **Chats** S-40 · **Me** S-
 | S-30 | Location sheet [Location, #190] | F-05 | Opened from Explore and S-67. Same **location control** as S-60 (segmented Hidden / City / Area / Exact, Hidden panel, Exact panel, city search when no position) + Hide me from guys who are hidden (R-05.6). No list of level cards, no Save: every tap applies | segment, chips, toggle | unverified: Hidden/Exact locked; no position → City offers city search ([mockup](https://claude.ai/artifact/TC8czvMyPo13hWdQKQFsTM)) |
 
 ## Tonight & Now
-| S-13 | Tonight [v2 Tonight] | F-09 | city · day caption, 34 pt title, time window chips, featured party card (art, spots badge, Request), plan rows (avatar ring in mode colour, Message), white "Post a plan" FAB | drag slider; tap card → S-20 | empty → "Be the first tonight" + FAB |
+| S-13 | Tonight [v2 Tonight] (card actions #210) | F-09 | city · day caption, 34 pt title, time window chips, featured party card (art, spots badge, Request), plan rows (avatar ring in mode colour, Message), white "Post a plan" FAB | drag slider; tap card → S-20 | empty → "Be the first tonight" + FAB |
 | S-13b | Post plan sheet | F-09 R-09.9 | live preview, What (5 icon choices), line, When (timeline scrubber), Who sees it (#189) | drag window, post | limit reached → message |
 | S-18 | Now sheet | F-09 | status options, text, TTL | set/end | — |
 

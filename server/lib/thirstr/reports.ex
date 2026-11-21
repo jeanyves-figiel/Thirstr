@@ -22,7 +22,7 @@ defmodule Thirstr.Reports do
     "spam_bot" => 5,
     "other" => 6
   }
-  @contexts ~w(profile chat photo party)
+  @contexts ~w(profile chat photo party tonight)
   @max_messages 20
 
   def reasons, do: @reasons

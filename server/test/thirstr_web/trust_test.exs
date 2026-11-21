@@ -74,6 +74,18 @@ defmodule ThirstrWeb.TrustTest do
       assert [%{"text" => "send money or else", "t" => "text"}] = franked["messages"]
     end
 
+    test "a Tonight plan can be reported (#210)", %{alice: a, bob: b} do
+      assert %{"attached" => 0} =
+               req(a, :post, "/v1/reports", %{
+                 profile_id: b.pid,
+                 reason: "spam_bot",
+                 context: "tonight"
+               })
+               |> json_response(201)
+
+      assert [["tonight"]] = Thirstr.Repo.query!("SELECT context FROM reports").rows
+    end
+
     test "can't attach a message sent to someone else", %{conn: conn, alice: a, bob: b} do
       c = onboarded(conn, basics: [display_name: "Carl"])
       c = Map.put(c, :dev, device_of(c))

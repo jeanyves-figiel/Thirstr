@@ -1,17 +1,16 @@
 // #189 Form controls (design-system.md › Form controls): timeline scrubber, guest stepper, icon choice, icon tiles.
 // One control per question instead of chip walls. Haptics follow the #187 tokens: tick per step, bump at a limit.
-import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, Text, View, type GestureResponderEvent, type HostInstance } from 'react-native';
-import { prefs } from '../me/prefs';
+import { Pressable, Text, View, type GestureResponderEvent, type HostInstance } from 'react-native';
+import { feel } from './haptics';
 import { hhmm, lenLabel, setEnd, slide, ticks, type Limits, type Win } from '../scene/timeWindow';
 import { color, font, radius, space, type } from '../theme/tokens';
 
-const on = () => Platform.OS !== 'web' && prefs().haptics;
+// Haptics through the app's one module (F-19 R-19.8): tick per step, tap at a limit, success on submit.
 export const haptic = {
-  tick: () => on() && Haptics.selectionAsync().catch(() => {}),
-  bump: () => on() && Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}),
-  success: () => on() && Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}),
+  tick: () => feel('tick'),
+  bump: () => feel('tap'),
+  success: () => feel('success'),
 };
 
 /** Uppercase section label with an optional value on the right. */

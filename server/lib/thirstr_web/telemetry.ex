@@ -106,7 +106,8 @@ defmodule ThirstrWeb.Telemetry do
     end
   end
 
-  @ms_buckets [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000]
+  # 300 and 500 are SLO thresholds (docs/spec/slos.md › SLO-3/4).
+  @ms_buckets [5, 10, 25, 50, 100, 250, 300, 500, 1000, 2500, 5000, 10_000]
 
   @doc "Metrics exported to Prometheus (SR-07). Alert rules: docs/runbooks/monitoring.md."
   def prometheus_metrics do

@@ -4,7 +4,9 @@
 # Fails if app machines run different digests (deploy in progress or drift).
 set -euo pipefail
 app="$1"
-curl -fsS -H "Authorization: Bearer ${FLY_API_TOKEN}" "https://api.machines.dev/v1/apps/${app}/machines" |
+# Deploy tokens (`FlyV1 fm2_…`, possibly several joined with ",") go as-is; older tokens as Bearer.
+auth="${FLY_API_TOKEN}"; [[ "$auth" == FlyV1\ * ]] || auth="Bearer $auth"
+curl -fsS -H "Authorization: ${auth}" "https://api.machines.dev/v1/apps/${app}/machines" |
   jq -e '
     [ .[] | select((.config.metadata.fly_process_group // "app") == "app")
           | select(.state != "destroyed" and .state != "destroying") ] as $ms

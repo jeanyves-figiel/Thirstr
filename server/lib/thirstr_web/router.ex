@@ -54,6 +54,11 @@ defmodule ThirstrWeb.Router do
     }
   end
 
+  # F-15 R-15.25: web notices, 5 per hashed IP per day
+  pipeline :notice_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "notice", limit: 5, window: 86_400
+  end
+
   pipeline :email_limit do
     plug ThirstrWeb.Plugs.RateLimit, bucket: "email", limit: 5, window: 3600
   end
@@ -137,6 +142,17 @@ defmodule ThirstrWeb.Router do
   scope "/p", ThirstrWeb do
     pipe_through [:share_page_limit, :page]
     get "/:slug", SharePageController, :page
+  end
+
+  # F-15 R-15.25 DSA notice form for non-users (no scripts, no cookies)
+  scope "/report", ThirstrWeb do
+    pipe_through [:share_page_limit, :page]
+    get "/", ReportPageController, :form
+  end
+
+  scope "/report", ThirstrWeb do
+    pipe_through [:notice_limit, :page]
+    post "/", ReportPageController, :submit
   end
 
   scope "/.well-known", ThirstrWeb do
@@ -317,6 +333,10 @@ defmodule ThirstrWeb.Router do
       get "/me/notices", TrustController, :notices
       post "/me/notices/seen", TrustController, :notices_seen
       post "/me/notices/:id/appeal", TrustController, :appeal
+      # R-15.27 / R-15.32 (#170): outcomes of my reports + notifier review
+      get "/me/reports", TrustController, :my_reports
+      post "/me/reports/seen", TrustController, :my_reports_seen
+      post "/me/reports/:id/review", TrustController, :review
       post "/profiles/:id/vouch", TrustController, :vouch
       delete "/profiles/:id/vouch", TrustController, :unvouch
 

@@ -86,5 +86,8 @@
   "legal_liab_h": "Liability",
   "legal_liab": "We check this site carefully but cannot guarantee that it is complete or up to date. We are not responsible for the content of external sites we link to.",
   "legal_odr_h": "Disputes",
-  "legal_odr": "We are not obliged and not willing to take part in dispute resolution before a consumer arbitration board."
+  "legal_odr": "We are not obliged and not willing to take part in dispute resolution before a consumer arbitration board.",
+  "legal_report_h": "Report illegal content",
+  "legal_report": "Anyone can report illegal content on Thirstr, also without the app: use our report form. Members can report from any profile or chat.",
+  "legal_report_btn": "Report form"
 }

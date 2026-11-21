@@ -35,6 +35,17 @@ defmodule ThirstrWeb.TrustController do
     with :ok <- Reports.appeal(conn.assigns.account, id, p), do: send_resp(conn, 204, "")
   end
 
+  def my_reports(conn, _), do: json(conn, Reports.mine(conn.assigns.account))
+
+  def my_reports_seen(conn, _) do
+    Reports.mine_seen(conn.assigns.account)
+    send_resp(conn, 204, "")
+  end
+
+  def review(conn, %{"id" => id} = p) do
+    with :ok <- Reports.review(conn.assigns.account, id, p), do: send_resp(conn, 204, "")
+  end
+
   def vouch(conn, %{"id" => id}) do
     with {:ok, r} <- Trust.vouch(conn.assigns.account, id), do: json(conn, r)
   end

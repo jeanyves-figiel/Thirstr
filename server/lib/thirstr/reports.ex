@@ -22,8 +22,23 @@ defmodule Thirstr.Reports do
     "spam_bot" => 5,
     "other" => 6
   }
-  @contexts ~w(profile chat photo party tonight)
+  @contexts ~w(profile chat photo party tonight moment)
   @max_messages 20
+  # R-15.24 DSA Art. 16 types; csam notifiers may stay anonymous (Art. 16(2)(c)).
+  @legal_types ~w(csam intimate_images threats hate_speech fraud impersonation ip other)
+  @legal_severity %{
+    "csam" => 1,
+    "intimate_images" => 2,
+    "threats" => 2,
+    "fraud" => 3,
+    "hate_speech" => 4,
+    "impersonation" => 5,
+    "ip" => 6,
+    "other" => 6
+  }
+  @decisions ~w(removed restricted suspended banned warned no_action)
+
+  def legal_types, do: @legal_types
 
   def reasons, do: @reasons
   def severity(reason), do: Map.fetch!(@severity, reason)
@@ -36,33 +51,98 @@ defmodule Thirstr.Reports do
 
     with :ok <- check(reason in @reasons, :reason, "pick a reason"),
          :ok <- check(context in @contexts, :context, "unknown context"),
+         {:ok, legal} <- legal(params, reason),
          {:ok, t} <- target(params["profile_id"]),
          :ok <- check(t.account_id != a.id, :profile_id, "you can't report yourself"),
          {:ok, franked} <- franked(a, t.id, params["messages"] || []) do
-      Repo.query!(
-        """
-        INSERT INTO reports (id, reporter_account, target_account, target_profile, reason, context, note,
-                             franked, severity, created_at)
-        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, now())
-        ON CONFLICT (reporter_account, target_account, reason) WHERE state = 'open' DO UPDATE
-          SET note = coalesce(EXCLUDED.note, reports.note),
-              franked = coalesce(EXCLUDED.franked, reports.franked)
-        """,
-        [
-          Nearby.dump(a.id),
-          Nearby.dump(t.account_id),
-          Nearby.dump(t.id),
-          reason,
-          context,
-          blank(note),
-          if(franked == [], do: nil, else: %{"messages" => franked}),
-          severity(reason)
-        ]
-      )
+      sev = min(severity(reason), legal[:severity] || 6)
+      # R-15.34: repeat misuse → lowest priority (child safety still first).
+      sev = if sev > 1 and deprioritised?(a.id), do: 6, else: sev
+
+      %{rows: [[ref]]} =
+        Repo.query!(
+          """
+          INSERT INTO reports (id, reporter_account, target_account, target_profile, reason, context, note,
+                               franked, severity, created_at, ref, illegal, legal_type, country,
+                               explanation, good_faith, channel)
+          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, now(), $9, $10, $11, $12, $13, $14, 'app')
+          ON CONFLICT (reporter_account, target_account, reason) WHERE state = 'open' DO UPDATE
+            SET note = coalesce(EXCLUDED.note, reports.note),
+                franked = coalesce(EXCLUDED.franked, reports.franked),
+                illegal = reports.illegal OR EXCLUDED.illegal,
+                legal_type = coalesce(EXCLUDED.legal_type, reports.legal_type),
+                country = coalesce(EXCLUDED.country, reports.country),
+                explanation = coalesce(EXCLUDED.explanation, reports.explanation),
+                good_faith = reports.good_faith OR EXCLUDED.good_faith,
+                severity = least(reports.severity, EXCLUDED.severity)
+          RETURNING ref
+          """,
+          [
+            Nearby.dump(a.id),
+            Nearby.dump(t.account_id),
+            Nearby.dump(t.id),
+            reason,
+            context,
+            blank(note),
+            if(franked == [], do: nil, else: %{"messages" => franked}),
+            sev,
+            new_ref(),
+            legal[:illegal] || false,
+            legal[:type],
+            legal[:country],
+            legal[:explanation],
+            legal[:good_faith] || false
+          ]
+        )
 
       escalate(t.account_id, reason)
-      {:ok, %{attached: length(franked)}}
+      {:ok, %{attached: length(franked), ref: ref}}
     end
+  end
+
+  # R-15.24: "It's illegal" (reason other + illegal) or any reason + "This may also be illegal".
+  defp legal(%{"illegal" => true} = p, _reason) do
+    explanation = String.trim(to_string(p["explanation"] || ""))
+    type = p["legal_type"]
+    country = p["country"] |> to_string() |> String.upcase()
+
+    cond do
+      type not in @legal_types ->
+        {:error, {:validation, %{legal_type: ["pick what kind of illegal content"]}}}
+
+      not Regex.match?(~r/^[A-Z]{2}$/, country) ->
+        {:error, {:validation, %{country: ["pick a country"]}}}
+
+      String.length(explanation) < 20 ->
+        {:error,
+         {:validation, %{explanation: ["say what is illegal about it (20 characters or more)"]}}}
+
+      p["good_faith"] != true ->
+        {:error, {:validation, %{good_faith: ["confirm the report is accurate and complete"]}}}
+
+      true ->
+        {:ok,
+         %{
+           illegal: true,
+           type: type,
+           country: country,
+           explanation: String.slice(explanation, 0, 1000),
+           good_faith: true,
+           severity: Map.fetch!(@legal_severity, type)
+         }}
+    end
+  end
+
+  defp legal(_, _), do: {:ok, %{}}
+
+  # Reference shown to the notifier (R-15.26): R-XXXX-XXXX, Crockford base32, no 0/O/1/I.
+  @alphabet ~c"23456789ABCDEFGHJKMNPQRSTVWXYZ"
+  def new_ref do
+    chars =
+      for <<b <- :crypto.strong_rand_bytes(8)>>, do: Enum.at(@alphabet, rem(b, length(@alphabet)))
+
+    {a, b} = Enum.split(chars, 4)
+    "R-" <> List.to_string(a) <> "-" <> List.to_string(b)
   end
 
   # Any non-deleted profile can be reported, including ones already hidden from the reporter.
@@ -160,7 +240,9 @@ defmodule Thirstr.Reports do
     rows =
       Repo.query!(
         """
-        SELECT id::text, action, reason, created_at, ends_at, appeal_state, seen
+        SELECT id::text, action, reason, created_at, ends_at, appeal_state, seen,
+               ground, law_ref, facts, detected_by, decided_by, appeal_until, appeal_text,
+               appeal_reason, appeal_decided_at, reviewed_by_other
         FROM moderation_actions WHERE target_account = $1 AND action = ANY($2)
         ORDER BY created_at DESC LIMIT 50
         """,
@@ -170,7 +252,25 @@ defmodule Thirstr.Reports do
 
     %{
       notices:
-        Enum.map(rows, fn [id, act, reason, at, ends, appeal, seen] ->
+        Enum.map(rows, fn [
+                            id,
+                            act,
+                            reason,
+                            at,
+                            ends,
+                            appeal,
+                            seen,
+                            ground,
+                            law,
+                            facts,
+                            det,
+                            dec,
+                            until,
+                            atext,
+                            areason,
+                            adecided,
+                            other
+                          ] ->
           %{
             id: id,
             action: act,
@@ -178,7 +278,18 @@ defmodule Thirstr.Reports do
             at: at,
             ends_at: ends,
             appeal: appeal,
-            seen: seen
+            seen: seen,
+            # Statement of reasons (DSA Art. 17, R-15.28)
+            ground: ground,
+            law_ref: law,
+            facts: facts,
+            detected_by: det,
+            decided_by: dec,
+            appeal_until: until,
+            appeal_text: atext,
+            appeal_reason: areason,
+            appeal_decided_at: adecided,
+            reviewed_by_other: other
           }
         end)
     }
@@ -202,16 +313,212 @@ defmodule Thirstr.Reports do
              """
              UPDATE moderation_actions SET appeal_state = 'open', appeal_text = $3
              WHERE id = $1 AND target_account = $2 AND appeal_state IS NULL AND action = ANY($4)
+               AND (appeal_until IS NULL OR appeal_until > now())
              """,
              [Nearby.dump(id), Nearby.dump(a.id), text, @visible]
            ).num_rows do
         1 -> :ok
-        _ -> {:error, {:conflict, "Already appealed"}}
+        _ -> {:error, {:conflict, "You already asked for a review, or the 6 months have passed"}}
       end
     else
       :error -> {:error, :not_found}
       e -> e
     end
+  end
+
+  # ------------------------------------------------------------------ outcomes for notifiers (DSA Art. 16(5), R-15.27)
+
+  @doc "GET /me/reports: the reporter's own reports with outcome. Never names the reported person."
+  def mine(%Account{} = a) do
+    rows =
+      Repo.query!(
+        """
+        SELECT id::text, ref, reason, context, illegal, legal_type, created_at, state, decision,
+               decided_at, automated, notifier_review_state, notifier_review_reason, notifier_seen
+        FROM reports WHERE reporter_account = $1
+        ORDER BY created_at DESC LIMIT 50
+        """,
+        [Nearby.dump(a.id)]
+      ).rows
+      |> Nearby.utc()
+
+    window = Thirstr.Moderation.appeal_window_s()
+
+    %{
+      reports:
+        Enum.map(rows, fn [
+                            id,
+                            ref,
+                            reason,
+                            ctx,
+                            illegal,
+                            lt,
+                            at,
+                            state,
+                            dec,
+                            decided,
+                            auto,
+                            rstate,
+                            rreason,
+                            seen
+                          ] ->
+          %{
+            id: id,
+            ref: ref,
+            reason: reason,
+            context: ctx,
+            illegal: illegal,
+            legal_type: lt,
+            at: at,
+            state: if(state == "open", do: "open", else: "decided"),
+            decision:
+              dec || (state == "dismissed" && "no_action") || (state == "actioned" && "removed") ||
+                nil,
+            decided_at: decided,
+            automated: auto,
+            review: rstate,
+            review_reason: rreason,
+            review_until:
+              if(decided && (dec == "no_action" or state == "dismissed"),
+                do: DateTime.add(decided, window, :second)
+              ),
+            seen: seen
+          }
+        end)
+    }
+  end
+
+  def mine_seen(%Account{} = a) do
+    Repo.query!("UPDATE reports SET notifier_seen = true WHERE reporter_account = $1", [
+      Nearby.dump(a.id)
+    ])
+
+    :ok
+  end
+
+  @doc "POST /me/reports/:id/review {text}: notifier asks for a review of a no-action decision (R-15.32)."
+  def review(%Account{} = a, id, params) do
+    text = String.slice(String.trim(to_string(params["text"] || "")), 0, 1000)
+
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         :ok <- check(text != "", :text, "tell us what we missed") do
+      case Repo.query!(
+             """
+             UPDATE reports SET notifier_review_state = 'open', notifier_review_text = $3, notifier_review_at = now()
+             WHERE id = $1 AND reporter_account = $2 AND notifier_review_state IS NULL
+               AND (decision = 'no_action' OR (decision IS NULL AND state = 'dismissed'))
+               AND coalesce(decided_at, resolved_at) > now() - make_interval(secs => $4)
+             """,
+             [Nearby.dump(id), Nearby.dump(a.id), text, Thirstr.Moderation.appeal_window_s()]
+           ).num_rows do
+        1 -> :ok
+        _ -> {:error, {:conflict, "A review isn't possible for this report"}}
+      end
+    else
+      :error -> {:error, :not_found}
+      e -> e
+    end
+  end
+
+  @doc """
+  Moderator decision on a report (console A-02 calls this for dismiss and every enforcement):
+  sets decision + decided_at, tells the reporter (content-free push or email for web notices)
+  and runs the misuse check (R-15.34). `decision` in removed | restricted | suspended | banned |
+  warned | no_action.
+  """
+  def decide(report_id, decision, opts \\ []) when decision in @decisions do
+    case Repo.query!(
+           """
+           UPDATE reports SET decision = $2, decided_at = now(), automated = $3, unfounded = $4,
+                              notifier_seen = (reporter_account IS NULL)
+           WHERE id = $1 RETURNING reporter_account::text, channel, notifier_contact_enc, ref
+           """,
+           [
+             Nearby.dump(report_id),
+             decision,
+             opts[:automated] == true,
+             decision == "no_action" and opts[:unfounded] == true
+           ]
+         ).rows do
+      [[reporter, channel, contact, ref]] ->
+        if reporter, do: Thirstr.Notify.event(reporter, "report.update", %{})
+
+        if channel == "web" and contact,
+          do: Thirstr.Reports.Web.outcome_email(contact, ref, decision)
+
+        if reporter && decision == "no_action",
+          do: misuse_check(reporter)
+
+        :ok
+
+      _ ->
+        {:error, :not_found}
+    end
+  end
+
+  @doc "Notifier review decision (R-15.32/R-15.33); `overturned` reopens the report for action."
+  def decide_review(report_id, decision, actor, reason) when decision in ~w(upheld overturned) do
+    reason = reason && String.slice(String.trim(to_string(reason)), 0, 300)
+
+    case Repo.query!(
+           """
+           UPDATE reports SET notifier_review_state = $2::text, notifier_review_reason = $3, notifier_seen = false,
+                              state = CASE WHEN $2::text = 'overturned' THEN 'open' ELSE state END,
+                              unfounded = CASE WHEN $2::text = 'overturned' THEN false ELSE unfounded END
+           WHERE id = $1 AND notifier_review_state = 'open' RETURNING reporter_account::text
+           """,
+           [Nearby.dump(report_id), decision, reason]
+         ).rows do
+      [[reporter]] ->
+        _ = actor
+        if reporter, do: Thirstr.Notify.event(reporter, "report.update", %{})
+        :ok
+
+      _ ->
+        {:error, :not_found}
+    end
+  end
+
+  # R-15.34: ≥ 5 reports in 30 d, ≥ 80 % no action, ≥ 3 judged manifestly unfounded → warning
+  # (reason report_misuse). Repeat within 90 d of a warning → reports deprioritised for 30 d.
+  defp misuse_check(reporter) do
+    [[total, none, unfounded]] =
+      Repo.query!(
+        """
+        SELECT count(*), count(*) FILTER (WHERE decision = 'no_action' OR state = 'dismissed'),
+               count(*) FILTER (WHERE unfounded)
+        FROM reports WHERE reporter_account = $1 AND created_at > now() - interval '30 days'
+        """,
+        [Nearby.dump(reporter)]
+      ).rows
+
+    warned_recently =
+      Repo.query!(
+        "SELECT 1 FROM moderation_actions WHERE target_account = $1 AND reason = 'report_misuse' AND created_at > now() - interval '30 days'",
+        [Nearby.dump(reporter)]
+      ).num_rows > 0
+
+    if total >= 5 and none * 5 >= total * 4 and unfounded >= 3 and not warned_recently do
+      Thirstr.Moderation.log_action(reporter, "warn", "report_misuse", "system", %{
+        facts: "#{unfounded} of your last #{total} reports were clearly unfounded."
+      })
+
+      Thirstr.Notify.event(reporter, "moderation.notice", %{})
+    end
+
+    :ok
+  end
+
+  @doc "R-15.34: reporters warned for misuse twice in 90 d get their reports at the lowest priority for 30 d."
+  def deprioritised?(reporter) do
+    Repo.query!(
+      """
+      SELECT count(*) >= 2 AND max(created_at) > now() - interval '30 days'
+      FROM moderation_actions WHERE target_account = $1 AND reason = 'report_misuse'
+        AND created_at > now() - interval '90 days'
+      """,
+      [Nearby.dump(reporter)]
+    ).rows == [[true]]
   end
 
   defp check(true, _f, _m), do: :ok

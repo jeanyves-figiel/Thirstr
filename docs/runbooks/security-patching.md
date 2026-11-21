@@ -9,7 +9,7 @@ Applies to every security finding in our code, dependencies, images and infra. F
 | `mix deps.audit` | Hex advisories | CI `server` + Nightly | yes |
 | `cargo audit` | RustSec advisories | CI `core` + Nightly | yes |
 | `npm audit --omit=dev --audit-level=high` | npm runtime deps | Nightly | nightly red |
-| semgrep (OSS rules) | TS/React + workflows SAST | CI `semgrep`, every PR | report-only until #244 baseline is clean |
+| semgrep (OSS rules) | TS/React + workflows SAST | CI `semgrep`, every PR | yes (`--error`, #244) |
 | gitleaks | secrets in git | CI `secrets`, every PR | yes |
 | ZAP baseline (passive) | headers, cookies, error/PII disclosure, vulnerable JS on **staging** | `ZAP staging` workflow: after each staging deploy, weekly Mon 03:30 UTC, manual | FAIL rules in `.zap/rules.tsv` → red run + issue |
 | AI pen test (staging only) | API, auth/session, WebAuthn, E2EE review, clients, IDOR, rate limits, anti-bot | on demand | findings → issues |
@@ -45,4 +45,4 @@ A finding that can't meet its SLA (no upstream fix, false positive, accepted ris
 `.zap/rules.tsv` sets each passive rule to `FAIL` (red run + issue), `WARN` (job summary only; default for unlisted rules), `INFO` or `IGNORE`. Start: FAIL for cookie flags, debug/application error disclosure, PII, hash and private IP disclosure, vulnerable JS libraries, weak auth. Promote a WARN rule to FAIL once staging is clean for it. Report artifact `zap-staging-report` (HTML/MD/JSON) is kept 30 days.
 
 ## 6. Review
-Monthly: open `security` issues vs. due dates, nightly failures, semgrep baseline progress (#244). Any missed SLA gets a line in the issue saying why.
+Monthly: open `security` issues vs. due dates, nightly failures. Any missed SLA gets a line in the issue saying why.

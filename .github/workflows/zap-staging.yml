@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Target is staging (never prod)
         run: |
           case "$TARGET" in
@@ -59,7 +59,7 @@ jobs:
           exit $code
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: zap-staging-report
           path: zap/report.*
@@ -68,9 +68,11 @@ jobs:
         if: failure() && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          ZAP_CODE: ${{ steps.zap.outputs.code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh label create security --color B60205 --description "Security finding (patch SLAs: docs/runbooks/security-patching.md)" --force
           title="ZAP baseline: FAIL findings on staging"
-          body="ZAP baseline (exit ${{ steps.zap.outputs.code }}) on $TARGET. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} (report artifact \`zap-staging-report\`). Triage per docs/runbooks/security-patching.md."
+          body="ZAP baseline (exit $ZAP_CODE) on $TARGET. Run: $RUN_URL (report artifact \`zap-staging-report\`). Triage per docs/runbooks/security-patching.md."
           n=$(gh issue list --state open --label security --search "\"$title\" in:title" --json number --jq '.[0].number')
           if [ -n "$n" ]; then gh issue comment "$n" --body "$body"; else gh issue create --title "$title" --label security --body "$body"; fi

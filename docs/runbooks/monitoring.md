@@ -23,7 +23,9 @@
 | `thirstr_client_session_count{platform}` | app starts (one ping per start, anonymous; EN-05) |
 | `thirstr_client_error_count{platform,fatal}` | app error reports; `fatal="true"` = crash (EN-05) |
 
-## Alert rules (Grafana → Alerting, contact point = owner email/phone)
+## Alert rules
+Paging runs from GitHub Actions to Pushover (EN-06): rules live in `infra/alerts/rules.json`, one runbook section each in `alerts.md`, setup in `on-call.md`. The table below is the original reference; `rules.json` wins where they differ. Backups stale is not paged yet (#276).
+
 | Alert | Rule | For | First steps |
 |---|---|---|---|
 | API errors | `sum(rate(phoenix_router_dispatch_stop_duration_count{status=~"5.."}[5m])) / sum(rate(phoenix_router_dispatch_stop_duration_count[5m])) > 0.02` | 5 m | `fly logs -a thirstr-api-prod`; last deploy? roll back with "Promote to production" (previous digest) |

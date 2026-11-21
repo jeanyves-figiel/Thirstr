@@ -22,7 +22,9 @@ defmodule Thirstr.Flags do
     "web_push" => true,
     # #270 server-side switch: off = verification issues without device proof (kill switch if
     # attestation breaks for real users). Only matters where VERIFICATION_REQUIRE_ATTEST is on.
-    "verification_attest" => true
+    "verification_attest" => true,
+    # F-15 R-15.43 (#179): server-side kill switch for the pre-publish hash match (owner outage decision only)
+    "hash_match" => true
   }
   @table :thirstr_flags
   @ttl_ms 30_000

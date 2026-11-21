@@ -213,11 +213,17 @@ defmodule Thirstr.Chat do
     with {:ok, _} <- own_profile(a, from),
          {:ok, cid} <- client_id(params["client_id"]),
          {:ok, group} <- decode_b64(params["group_id"], 64, :group_id),
-         {:ok, envs} <- validate_envelopes(envs) do
+         {:ok, envs} <- validate_envelopes(envs),
+         {:ok, blobs} <- blob_ids(params["blobs"]) do
       Repo.transaction(fn ->
         case claim_client_id(device_id, cid) do
-          {:repeat, res} -> {res, []}
-          :new -> store_all(a, device_id, from, group, envs, params, cid)
+          {:repeat, res} ->
+            {res, []}
+
+          :new ->
+            {res, events} = store_all(a, device_id, from, group, envs, params, cid)
+            grant_blobs(a, blobs, events)
+            {res, events}
         end
       end)
       |> case do
@@ -581,6 +587,8 @@ defmodule Thirstr.Chat do
   @once_max 3 * 1024 * 1024
   @once_ttl 86_400
   @once_refetch_s 600
+  # #271: signed GET for scoped chat/album blobs (a leaked URL stops working soon).
+  @scoped_get_s 900
 
   @doc """
   Upload slot for an encrypted blob (R-08.2). Chat media expiry ≤ 30 d; album items kept.
@@ -609,11 +617,11 @@ defmodule Thirstr.Chat do
              {:error, {:validation, %{size: ["1 B – 210 MB"]}}},
          true <- (is_integer(ttl) and ttl > 0) || {:error, {:validation, %{ttl_s: ["invalid"]}}},
          {:ok, _} <- Social.limit(a, "blob", 300, 3600) do
-      insert_blob(a, size, ttl, false)
+      insert_blob(a, size, ttl, false, params["scoped"] == true)
     end
   end
 
-  defp insert_blob(a, size, ttl, once) do
+  defp insert_blob(a, size, ttl, once, scoped \\ false) do
     id = Ecto.UUID.generate()
     key = "blob/#{id}"
     now = DateTime.utc_now()
@@ -625,6 +633,7 @@ defmodule Thirstr.Chat do
         storage_key: key,
         size: size,
         once: once,
+        scoped: scoped,
         expires_at: DateTime.add(now, ttl, :second),
         created_at: now
       }
@@ -641,16 +650,66 @@ defmodule Thirstr.Chat do
   """
   def blob_url(%Account{} = a, id) do
     with {:ok, _} <- Ecto.UUID.cast(id),
-         %{rows: [[key, once]]} <-
+         %{rows: [[key, once, scoped, allowed]]} <-
            Repo.query!(
-             "SELECT storage_key, once FROM media_blobs WHERE id = $1 AND expires_at > now()",
-             [dump(id)]
+             """
+             SELECT b.storage_key, b.once, b.scoped,
+                    b.account_id = $2 OR EXISTS (
+                      SELECT 1 FROM media_blob_grants g WHERE g.blob_id = b.id AND g.account_id = $2)
+             FROM media_blobs b WHERE b.id = $1 AND b.expires_at > now()
+             """,
+             [dump(id), dump(a.id)]
            ) do
-      if once, do: claim_once(a, id), else: {:ok, %{url: Storage.presigned_get(key)}}
+      cond do
+        once -> claim_once(a, id)
+        # #271: scoped blobs only for the uploader and the accounts it was sent to; short URL.
+        scoped and allowed -> {:ok, %{url: Storage.presigned_get(key, @scoped_get_s)}}
+        scoped -> {:error, :not_found}
+        # Blobs from app builds before #271 (no recipients declared): old behaviour until they expire.
+        true -> {:ok, %{url: Storage.presigned_get(key)}}
+      end
     else
       _ -> {:error, :not_found}
     end
   end
+
+  @max_grant_blobs 200
+
+  # #271: the recipients of a delivered message may fetch the blobs it carries. Only blobs the
+  # sender's account uploaded can be granted; unknown or foreign ids are ignored.
+  defp grant_blobs(_a, [], _events), do: :ok
+
+  defp grant_blobs(a, blobs, events) do
+    accounts = events |> Enum.map(fn {acc, _} -> dump(acc) end) |> Enum.uniq()
+
+    if accounts != [] do
+      Repo.query!(
+        """
+        INSERT INTO media_blob_grants (blob_id, account_id, created_at)
+        SELECT b.id, x.acc, now()
+        FROM media_blobs b CROSS JOIN unnest($2::uuid[]) AS x(acc)
+        WHERE b.id = ANY($1) AND b.account_id = $3 AND x.acc <> $3
+        ON CONFLICT DO NOTHING
+        """,
+        [blobs, accounts, dump(a.id)]
+      )
+    end
+
+    :ok
+  end
+
+  defp blob_ids(list) when is_list(list) do
+    ids =
+      for s <- Enum.take(list, @max_grant_blobs),
+          is_binary(s),
+          {:ok, u} <- [Ecto.UUID.cast(s)],
+          do: dump(u)
+
+    {:ok, Enum.uniq(ids)}
+  end
+
+  defp blob_ids(nil), do: {:ok, []}
+  defp blob_ids(_), do: {:error, {:validation, %{blobs: ["must be a list"]}}}
 
   defp claim_once(a, id) do
     case Repo.query!(

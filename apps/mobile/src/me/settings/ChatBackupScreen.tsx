@@ -138,6 +138,7 @@ export function RestoreCard() {
         if (!i) return;
         setInfo(i);
         const key = await vaultKey();
+        await E.loadedConvs(); // the chat list, before "no chats yet" is judged
         setNeedWords(!key);
         if (key && (await B.restorePending())) {
           setHidden(false);

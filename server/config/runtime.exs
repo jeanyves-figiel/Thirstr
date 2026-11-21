@@ -75,6 +75,13 @@ config :thirstr,
   # testing.md › Chat test bot: shared key for the bot service; unset = feature off (404).
   # Never honoured when DEPLOY_ENV is prod/production (Thirstr.TestBot.enabled?/0).
   testbot_key: System.get_env("TESTBOT_KEY"),
+  # EN-21 (#180) admin Costs & capacity: read-only Fly org token (R-AD.13); unset = Fly typed in.
+  # FLY_APP_NAME is set by Fly on every machine (thirstr-api-<env>); the DB app follows the naming.
+  fly_cost_token: System.get_env("FLY_COST_TOKEN"),
+  fly_org: env.("FLY_ORG", "personal"),
+  fly_api_app: env.("FLY_APP_NAME", "thirstr-api-prod"),
+  fly_db_app: String.replace(env.("FLY_APP_NAME", "thirstr-api-prod"), "-api-", "-db-"),
+  cost_alert_email: System.get_env("COST_ALERT_EMAIL"),
   webauthn: [
     origin: env.("WEBAUTHN_ORIGIN", app_url),
     rp_id: env.("WEBAUTHN_RP_ID", URI.parse(app_url).host),
@@ -105,6 +112,20 @@ end
 if System.get_env("CLASSIFIER_URL") not in [nil, ""] do
   config :thirstr, :photo_classifier, Thirstr.Moderation.NudeNetClassifier
   config :thirstr, :classifier_token, System.get_env("CLASSIFIER_TOKEN")
+end
+
+# F-15 R-15.42 (#179): pre-publish hash match. Staging/prod: noop until the PhotoDNA keys arrive.
+if config_env() == :prod or System.get_env("HASH_MATCH_PROVIDER") do
+  provider =
+    case System.get_env("HASH_MATCH_PROVIDER", "noop") do
+      "photodna" -> Thirstr.Moderation.HashMatch.PhotoDNA
+      "dev" -> Thirstr.Moderation.HashMatch.Dev
+      _ -> Thirstr.Moderation.HashMatch.Noop
+    end
+
+  config :thirstr, :hash_match, provider
+  config :thirstr, :photodna_key, System.get_env("PHOTODNA_KEY")
+  config :thirstr, :photodna_url, System.get_env("PHOTODNA_URL")
 end
 
 s3 = URI.parse(env.("S3_ENDPOINT", "http://localhost:9000"))

@@ -1,0 +1,71 @@
+# EN-06 (#165): on-call alerts. Every 5 min, outside Fly: evaluate infra/alerts/rules.json
+# (Fly Prometheus + HTTPS/TLS probes) and push to Pushover with a runbook link
+# (docs/runbooks/alerts.md). Inert until PUSHOVER_APP_TOKEN + PUSHOVER_USER_KEY exist.
+# Setup and rotation: docs/runbooks/on-call.md.
+name: On-call alerts
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      test_page:
+        description: Send a test push now
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - .github/workflows/oncall.yml
+      - scripts/ops/oncall.py
+      - infra/alerts/**
+      - docs/runbooks/alerts.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oncall-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      FLY_METRICS_TOKEN: ${{ secrets.FLY_METRICS_TOKEN || secrets.FLY_TOKEN }}
+      PUSHOVER_APP_TOKEN: ${{ secrets.PUSHOVER_APP_TOKEN }}
+      PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
+      PUSHOVER_ESCALATION_KEY: ${{ secrets.PUSHOVER_ESCALATION_KEY }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ops
+            infra/alerts
+            docs/runbooks
+      - name: Unit tests
+        run: python3 -m unittest scripts/ops/test_oncall.py
+      - name: Restore alert state
+        if: github.event_name != 'pull_request'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: oncall-state.json
+          key: oncall-state-${{ github.run_id }}
+          restore-keys: oncall-state-
+      - name: Evaluate (PR = dry run, nothing pushed)
+        id: eval
+        env:
+          EVENT: ${{ github.event_name }}
+          TEST_PAGE: ${{ inputs.test_page }}
+        run: |
+          args="--state oncall-state.json"
+          if [ "$EVENT" = "pull_request" ]; then args="$args --dry-run"; fi
+          if [ "$TEST_PAGE" = "true" ]; then args="$args --test-page"; fi
+          python3 scripts/ops/oncall.py $args
+      - name: Save alert state
+        if: steps.eval.outputs.changed == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: oncall-state.json
+          key: oncall-state-${{ github.run_id }}-${{ github.run_attempt }}

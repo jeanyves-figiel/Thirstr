@@ -77,7 +77,7 @@ class Srv {
   kps = new Map<string, { id: number; device_id: string; key_package: string }[]>();
   queue: Queued[] = [];
   keys = new Map<string, unknown>();
-  posts: { client_id?: string; envelopes: Env[] }[] = [];
+  posts: { client_id?: string; envelopes: Env[]; blobs?: string[] }[] = [];
   offline = false;
   dropResponses = 0;
   /** #206: the next app send to a 1:1 group is refused, as if a member device was deleted. */
@@ -283,6 +283,17 @@ describe('#206 stale device in a 1:1 group', () => {
     expect(welcomes).toHaveLength(2);
     const got = await bob.pull();
     expect(texts(got.map((p) => ({ p: p as { t: string; text?: string } })))).toContain('after reinstall');
+  }, 60000);
+});
+
+describe('#271 media blobs scoped to recipients', () => {
+  it('a photo message and an album grant list their blob ids; text lists none', async () => {
+    const { E, cid } = await open1to1();
+    await E.send(cid, { t: 'text', text: 'hello' });
+    await E.send(cid, { t: 'media', media: { blob: 'b1', key: 'k', iv: 'i', mime: 'image/jpeg' } });
+    await E.send(cid, { t: 'album.grant', album: 'a1', name: 'Gym', items: [{ blob: 'b2', key: 'k', iv: 'i', mime: 'image/jpeg' }, { blob: 'b3', key: 'k', iv: 'i', mime: 'video/mp4', dur: 4 }] });
+    const app = srv.posts.filter((p) => p.client_id && p.envelopes[0].kind === 'app');
+    expect(app.map((p) => p.blobs)).toEqual([undefined, ['b1'], ['b2', 'b3']]);
   }, 60000);
 });
 

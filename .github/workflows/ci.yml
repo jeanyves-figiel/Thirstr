@@ -143,6 +143,8 @@ jobs:
         run: ./scripts/check-fly-regions.sh
       - name: Compose file is valid
         run: docker compose -f docker-compose.yml config -q
+      - name: Alert rules valid, each has a runbook (EN-06)
+        run: python3 scripts/ops/oncall.py --check && python3 -m unittest scripts/ops/test_oncall.py
 
   changelog:
     if: github.event_name == 'pull_request'

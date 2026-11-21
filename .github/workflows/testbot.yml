@@ -28,12 +28,12 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
       IMAGE: registry.fly.io/thirstr-bot-staging
     steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master
       - run: flyctl auth docker
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: apps/testbot/Dockerfile
@@ -43,4 +43,6 @@ jobs:
           cache-from: type=gha,scope=testbot
           cache-to: type=gha,mode=max,scope=testbot
       - name: Deploy by digest
-        run: flyctl deploy --config infra/fly/testbot-staging.toml --app thirstr-bot-staging --image "${IMAGE}@${{ steps.push.outputs.digest }}" --wait-timeout 300
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: flyctl deploy --config infra/fly/testbot-staging.toml --app thirstr-bot-staging --image "${IMAGE}@${DIGEST}" --wait-timeout 300

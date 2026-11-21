@@ -16,7 +16,7 @@ Fast, private 1:1 and group messaging (party guest chats). E2EE, stored on devic
 - R-07.10 Unsolicited explicit media from someone you haven't replied to → blurred per Settings (blur/allow/block).
 - R-07.11 Franking: each message carries commitment; report sends plaintext + opening to moderation (F-15).
 - R-07.12 Delivery: online → realtime `message.new`; offline → content-free push; server deletes ciphertext on ack from all devices or after 30 d.
-- R-07.13 Multi-device: all devices in user's MLS leaf set; new device added only via F-01 R-01.6.
+- R-07.13 Multi-device: all devices in user's MLS leaf set; new device added only via F-01 R-01.6. A new device starts with no history (MLS gives no past messages); history comes from the old phone (F-01 R-01.14) or the opt-in chat backup (F-01 R-01.15).
 - R-07.14 Offline compose: queued, sent on reconnect; optimistic UI. Details: R-07.17–R-07.19.
 - R-07.15 Taps: separate "Taps" row at top of inbox; tap back = mutual → suggests "Say hi".
 

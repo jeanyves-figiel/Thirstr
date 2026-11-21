@@ -6,6 +6,10 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Specified
+- **Chat history on a new phone** (spec, #146, F-01 R-01.14–R-01.15, F-07 R-07.13): after linking a new phone, the old phone can move all chats (or the last 12 months), with photos and videos, end-to-end encrypted, checked by a 6-digit code on both screens. Optional **Chat backup** (off by default), sealed with a key only the recovery phrase unlocks, daily on Wi-Fi and power. API and data model added; build follows the mockup pick.
+- **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.
+
 ### Changed
 - **Active now sheet: two stops, same content** (app, #250, F-04 R-04.14, [mockup option B](https://claude.ai/artifact/4otVv3QabTP8n5jcsFcVwH)): the sheet over the Explore map now has only a low **strip** (title, then the Moments row with You first; most of the screen stays map) and **full**. Both show the same list (Moments row, hold hint, grid), so the You row no longer appears only at a middle stop. Tapping the handle toggles; a phone that had the old middle stop saved opens on the strip.
 

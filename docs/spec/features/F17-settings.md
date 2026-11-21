@@ -11,6 +11,14 @@ Full tree: [concept/profile-and-settings.md §3](../../concept/profile-and-setti
 - R-17.6 "Who can message me": everyone verified (default) · only people I tapped · only people matching my filters.
 - R-17.7 "Hide from": age ranges, accounts < 7 days, unverified (default on).
 - R-17.8 Destructive actions (delete account, panic wipe setup) require biometrics.
+- R-17.16 **Data saver** (#177, decided 2026-11-21): Settings › App › **Data saver**: **Auto on mobile data** (default) / **Always** / **Off**. Device-only (key `app.dataSaver`). Auto is active on cellular and on any network the OS marks as metered or low-data (iOS Low Data Mode, Android Data Saver); Always also on Wi-Fi. When active:
+  - Explore, grids, lists and Moments rings load the 480 px card copy (`-t`, SR-10) only; full photos load on open of a profile or viewer.
+  - No prefetch: next profiles, Moments ahead, map tiles beyond the visible area, album covers off-screen.
+  - Chat: photos ≤ 500 KB download on open of the chat; larger photos, videos and album items show a blurred placeholder with size and **Tap to load**. No video autoplay (Moments videos too).
+  - Videos you send on mobile data are transcoded at 720p (R-08.17 uses 1080p otherwise); photos keep full quality.
+  - Background jobs that move a lot wait for Wi-Fi: chat backup (R-01.15), media in history transfer asks first (R-01.14).
+  - Never affects: messages, receipts, safety (check-in, SOS), location updates, push.
+  - Settings row summary: "Auto · on now" / "Auto · off on Wi-Fi" / "Always" / "Off". Data saver active and a load was skipped → the placeholder says "Data saver" so the user knows why.
 - R-17.10 Structure (#102): Settings is a hub of 5 categories (Privacy & visibility, Chats & media, Notifications, Safety, Account) plus App and About inline. At most 2 levels deep; every category row shows a summary of its current values.
 - R-17.11 No label is used twice: lenses are "Show me in" (Me, F-06); surfaces are "Appear on" (Grid, Map, Tonight, Activities, Venues).
 - R-17.12 Location level (incl. Hidden's Stay hidden / Come back as, #114) and Now are set on Me (one tap); Settings links there, it does not duplicate them. Date check-in lives on Me; Safety settings hold Safe Mode, app lock, verification, blocked, notices.
@@ -23,10 +31,11 @@ Full tree: [concept/profile-and-settings.md §3](../../concept/profile-and-setti
   - Once: the phone stores the last seen note id (AsyncStorage `thirstr.whatsNewSeen`) when the card or sheet closes. Fresh install (no earlier app data, `thirstr.prefs` absent) shows nothing and stores the newest id.
   - Privacy and cost: notes ship inside the app; no request, no analytics, no "seen" event leaves the phone. No battery or data cost.
   - Settings › About › **What's new** (S-79): last 10 notes, newest first with a "New" pill, same lines, each opens its screen. Also found by Settings search.
-- R-17.9 App: language, units, theme: none (single Pop theme, see design-system.md), accent per mode (fixed palette), haptics, data saver (thumbnails only on cellular).
+- R-17.9 App: language, units, theme: none (single Pop theme, see design-system.md), accent per mode (fixed palette), haptics, data saver (R-17.16).
 
 ## Acceptance criteria
 - AC-17.1 Every setting in the tree has an API field or local key documented in data-model/api.
 - AC-17.3 Every setting reachable in ≤ 2 taps from Me (gear → category); search finds any setting by its label.
 - AC-17.4 (#238) After updating to a build with a new note the card shows exactly once (until closed); a fresh install and a fix-only build show nothing; nothing is sent to the server.
+- AC-17.5 (#177) With Data saver Auto on cellular, scrolling 100 Explore cards downloads only `-t` copies (no full photo, no prefetch); a 3 MB chat photo is not downloaded until tapped; on Wi-Fi everything loads as before.
 - AC-17.2 Changing a setting on device A reflects on device B ≤ 10 s.

@@ -6,6 +6,9 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Security
+- **CI workflows hardened, semgrep now blocks** (CI, #244, EN-08): all 15 third-party GitHub Actions pinned to full commit SHAs (same versions as before, version in a comment; `flyctl-actions@master` was the riskiest); Dependabot proposes grouped bumps monthly. Workflow inputs, `github.base_ref` and step outputs no longer go straight into shell `run:` scripts: they pass through quoted `env:` variables (promote-prod, places-import, deploy-staging, testbot, ci). `FLY_TOKEN` moved from workflow-level to job-level `env:`. The `semgrep` job runs with `--error`, so new findings fail the PR.
+
 ### Specified
 - **Chat history on a new phone** (spec, #146, F-01 R-01.14–R-01.15, F-07 R-07.13): after linking a new phone, the old phone can move all chats (or the last 12 months), with photos and videos, end-to-end encrypted, checked by a 6-digit code on both screens. Optional **Chat backup** (off by default), sealed with a key only the recovery phrase unlocks, daily on Wi-Fi and power. API and data model added; build follows the mockup pick.
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.

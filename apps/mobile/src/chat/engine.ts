@@ -47,6 +47,21 @@ export type AlbumItem = { blob: string; key: string; iv: string; mime: string; w
 
 export type Re = { id: string; n: string; s: string };
 
+/** I-01 R-I01.5–R-I01.9 (#17): a shared post, preview built on the sender's phone. */
+export type LinkPreview = {
+  t: 'link.preview';
+  url: string;
+  host: string;
+  platform: string;
+  title?: string;
+  text?: string;
+  author?: string;
+  labels?: string[];
+  thumb?: MediaRef;
+  /** The sender's own words, shown above the card. */
+  msg?: string;
+};
+
 /** Plaintext inside MLS application messages (R-07.4). */
 export type Payload =
   /** F-19 G1 (#187): `re` = the message this one replies to (id, sender name as the writer saw it, ≤ 80-char snippet). */
@@ -82,7 +97,8 @@ export type Payload =
   /** #247 R-07.47: friend location for the map, silent, never stored as a message. */
   | floc.FriendLoc
   /** F-18 R-18.8–R-18.16 (#159): video check, only inside the 1:1 E2EE chat. */
-  | vc.VcPayload;
+  | vc.VcPayload
+  | LinkPreview;
 
 export type Msg = {
   id: string;
@@ -724,6 +740,8 @@ export function preview(p: Payload): string {
       return '🎉 ' + p.title;
     case 'vcheck':
       return '◉ ' + vcx.preview;
+    case 'link.preview':
+      return p.msg || '🔗 ' + (p.author || p.title || p.host);
     default:
       return '';
   }
@@ -1117,7 +1135,7 @@ async function ensureGroup(c: Conv): Promise<string> {
  * optimistically (R-07.14). Resolves once the first attempt is done; offline it stays
  * "Sending" and is retried automatically. Throws only errors a retry can't fix.
  */
-export async function send(cid: string, p: Payload, opts: { silent?: boolean } = {}): Promise<Msg | null> {
+export async function send(cid: string, p: Payload, opts: { silent?: boolean; lh?: string } = {}): Promise<Msg | null> {
   const c = convs[cid];
   if (!c) throw new Error('no conversation');
   const id = hex(rand(12));
@@ -1142,7 +1160,7 @@ export async function send(cid: string, p: Payload, opts: { silent?: boolean } =
   // Written before any network call: survives kill, reboot and token refresh. FIFO by `created`.
   lastCreated ||= Math.max(0, ...(await items()).map((i) => i.created));
   lastCreated = Math.max(Date.now(), lastCreated + 1);
-  await putItem({ id, cid, t: p.t, plain: toB64(plain), tag: toB64(tag), visible: !opts.silent, created: lastCreated, tries: 0, next: 0 });
+  await putItem({ id, cid, t: p.t, plain: toB64(plain), tag: toB64(tag), visible: !opts.silent, created: lastCreated, tries: 0, next: 0, lh: opts.lh });
   const r = await drainConv(cid, id);
   if (r instanceof Error) throw r;
   return msg;
@@ -1165,6 +1183,8 @@ type Item = {
   dead?: boolean;
   /** #206: the 1:1 group was rebuilt once for a stale device. */
   rebuilt?: boolean;
+  /** I-01 R-I01.23: per-sender link hash (device-only key), sent next to the ciphertext. */
+  lh?: string;
   /** Sealed once; retries resend the same ciphertext (never re-encrypt). */
   sealed?: { gid: string; wire: string; to: mls.Member[] };
 };
@@ -1252,6 +1272,7 @@ async function attempt(it: Item): Promise<'ok' | 'retry' | Error> {
             group_id: toB64(fromHex(gid)),
             franking_tag: it.tag,
             context: c.ctx,
+            lh: it.lh,
             envelopes: to.map((m) => ({ to_profile_id: m.p, to_device_id: m.d, kind: 'app', ciphertext: wire })),
           },
           true,

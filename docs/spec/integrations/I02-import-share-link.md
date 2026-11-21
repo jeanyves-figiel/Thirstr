@@ -12,7 +12,7 @@ Purpose: put a way to reach you on Thirstr in your bio on other apps, a story or
 - R-I02.4a **Link previews** (iMessage, WhatsApp, Telegram…): Open Graph title "A Thirstr profile" and site name only: no name, description or `og:image`, so a preview never keeps the name or photo after the link dies.
 - R-I02.4b **Dead link**: unknown slug, link off or renewed, account paused, suspended, quarantined, banned or deleted → the same 404 page "This link isn't active" with "Get Thirstr". Nothing says which.
 - R-I02.4c **Rate limits** per IP: page 60/min, `GET /v1/share/{slug}` 30/min (bucket `share`); slug guesses can't enumerate.
-- R-I02.4d **Where in the app**: Me header QR button → **S-80 Share sheet**. Edit profile no longer has its own share block (one place). Sharing **someone else's** profile is removed (it shared a raw profile id, which led nowhere).
+- R-I02.4d **Where in the app**: Me header QR button → **S-86 Share sheet**. Edit profile no longer has its own share block (one place). Sharing **someone else's** profile is removed (it shared a raw profile id, which led nowhere).
 - R-I02.4e **Bio rules on other apps**: most hookup apps hide or forbid URLs and non-face photos in profiles, which we don't control. The sheet's **Copy** gives the bare form `thirstr.fun/p/{slug}` (no `https://`), which survives most link filters and can be typed. Users are responsible for each app's rules; we never post anywhere for them.
 
 ## Import from other apps (v1.1, spec now)

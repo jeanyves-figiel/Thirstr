@@ -1,4 +1,4 @@
-// S-80 Share sheet (I-02, #8, mockup https://claude.ai/artifact/PmAkuXFdHgSc8RNaP1cHyV).
+// S-86 Share sheet (I-02, #8, mockup https://claude.ai/artifact/PmAkuXFdHgSc8RNaP1cHyV).
 // The only place to create, share, renew or turn off the profile link.
 import * as Clipboard from 'expo-clipboard';
 import React, { useCallback, useEffect, useState } from 'react';

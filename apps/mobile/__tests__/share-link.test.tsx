@@ -1,4 +1,4 @@
-// #8 I-02 / S-80: Share sheet creates, copies the bare link, renews behind a confirm, and sends a phone-made preview.
+// #8 I-02 / S-86: Share sheet creates, copies the bare link, renews behind a confirm, and sends a phone-made preview.
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';

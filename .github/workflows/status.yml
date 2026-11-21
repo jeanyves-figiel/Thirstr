@@ -19,6 +19,7 @@ permissions:
   contents: write # push status-data
   issues: write # auto-open an incident when a component is down
   pages: write
+  actions: read # deploy-pages looks up the uploaded artifact
   id-token: write
 
 concurrency:

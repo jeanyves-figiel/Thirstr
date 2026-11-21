@@ -35,6 +35,14 @@ defmodule ThirstrWeb.Router do
     plug ThirstrWeb.Plugs.RateLimit, bucket: "dlink", limit: 10, window: 60
   end
 
+  pipeline :share_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "share", limit: 30, window: 60
+  end
+
+  pipeline :share_page_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "sharep", limit: 60, window: 60
+  end
+
   pipeline :page do
     plug :accepts, ["html"]
 
@@ -95,7 +103,18 @@ defmodule ThirstrWeb.Router do
   scope "/admin", ThirstrWeb do
     pipe_through [:admin, :admin_auth]
     post "/logout", AdminController, :logout
-    get "/", AdminController, :reports
+    # F-15 R-15.51–53 (#179, #286): one prioritised queue, CSAM cases, legal filings, wellbeing
+    get "/", ModController, :queue
+    get "/cases", ModController, :cases
+    get "/cases/:id", ModController, :case_detail
+    post "/cases/:id/decision", ModController, :case_decision
+    post "/cases/:id/view", ModController, :case_view
+    post "/cases/:id/filings", ModController, :add_filing
+    get "/cases/:id/pack", ModController, :pack
+    post "/photos/:id/escalate", ModController, :escalate_photo
+    post "/reveal", ModController, :reveal
+    get "/pause", ModController, :pause
+    get "/me", ModController, :my_day
     get "/reports/:id", AdminController, :report
     post "/reports/:id/action", AdminController, :report_action
     get "/photos", AdminController, :photos
@@ -117,7 +136,7 @@ defmodule ThirstrWeb.Router do
   # iOS passkeys / universal links (I-03). Apple fetches this without auth.
   # I-02 public profile share page (no scripts)
   scope "/p", ThirstrWeb do
-    pipe_through :page
+    pipe_through [:share_page_limit, :page]
     get "/:slug", SharePageController, :page
   end
 
@@ -355,7 +374,14 @@ defmodule ThirstrWeb.Router do
       delete "/me/linked-accounts/:id", AccountDataController, :remove_linked
       get "/me/profiles/:id/share", AccountDataController, :get_share
       post "/me/profiles/:id/share", AccountDataController, :share
+      patch "/me/profiles/:id/share", AccountDataController, :update_share
+      put "/me/profiles/:id/share/preview", AccountDataController, :share_preview
       delete "/me/profiles/:id/share", AccountDataController, :unshare
+    end
+
+    # I-02 R-I02.4c: in-app open of a share link, 30/min per IP
+    scope "/" do
+      pipe_through [:share_limit, :auth]
       get "/share/:slug", AccountDataController, :resolve
     end
 

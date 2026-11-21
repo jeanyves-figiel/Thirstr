@@ -185,7 +185,7 @@ export const fr: Partialize<AppStrings> = {
     add: 'Ajouter une photo',
     checking: 'Vérification…',
     pending: 'En cours d’examen',
-    rejected: { too_explicit: 'Trop explicite pour cet emplacement', no_person: 'On doit voir une personne' },
+    rejected: { too_explicit: 'Trop explicite pour cet emplacement', no_person: 'On doit voir une personne', unusable: 'Cette photo ne peut pas être utilisée' },
   },
   settings: {
     title: 'Réglages',
@@ -690,14 +690,6 @@ export const fr: Partialize<AppStrings> = {
     proven: 'Prouvé ✓',
     notProven: 'Pas encore prouvé',
     remove: 'Retirer',
-  },
-  share: {
-    title: 'Lien de partage',
-    hint: 'Un lien et un QR pour ta bio sur d’autres apps. Il montre seulement ta photo principale floutée et ton prénom.',
-    create: 'Créer le lien',
-    rotate: 'Nouveau lien (l’ancien cesse de marcher)',
-    off: 'Désactiver le lien',
-    send: 'Partager',
   },
   prefs: {
     app: 'App',

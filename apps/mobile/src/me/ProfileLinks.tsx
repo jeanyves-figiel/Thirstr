@@ -1,28 +1,25 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Share, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { api, ApiError } from '../api/client';
 import { tx } from '../i18n/app';
 import { color, space, type } from '../theme/tokens';
 import { Button, Chip, Chips, ErrorText, Field, ListRow, Section } from '../ui';
-import { Qr } from './Qr';
 
 type Linked = { id: string; platform: string; handle: string; visibility: string; verified: boolean; code?: string };
 const PLATFORMS = ['bluesky', 'x', 'onlyfans', 'jff', 'instagram'];
 const VIS = ['chats', 'verified', 'everyone'];
 
-// I-01 linked accounts + I-02 share link, inside Edit profile.
+// I-01 linked accounts, inside Edit profile. The I-02 share link lives in the Me Share sheet only (S-80, #8).
 export function ProfileLinks({ profileId }: { profileId: string }) {
   const [list, setList] = useState<Linked[]>([]);
   const [adding, setAdding] = useState(false);
   const [platform, setPlatform] = useState('bluesky');
   const [handle, setHandle] = useState('');
   const [vis, setVis] = useState('chats');
-  const [share, setShare] = useState<{ slug: string; url: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api<{ linked: Linked[] }>('GET', `/me/profiles/${profileId}/linked-accounts`).then((r) => setList(r.linked), () => {});
-    api<{ share: { slug: string; url: string } | null }>('GET', `/me/profiles/${profileId}/share`).then((r) => setShare(r.share), () => {});
   }, [profileId]);
   useEffect(load, [load]);
 
@@ -84,21 +81,6 @@ export function ProfileLinks({ profileId }: { profileId: string }) {
         <Button testID="linked-add" kind="secondary" title={tx.linked.add} onPress={() => setAdding(true)} />
       ) : null}
 
-      <Text style={{ ...type.headline, color: color.fgPrimary }}>{tx.share.title}</Text>
-      <Text style={{ ...type.meta, color: color.fgSecondary }}>{tx.share.hint}</Text>
-      {share ? (
-        <View style={{ alignItems: 'center', gap: space.m }}>
-          <Qr value={share.url} size={180} />
-          <Text testID="share-url" selectable style={{ ...type.body, color: color.trust }}>
-            {share.url}
-          </Text>
-          <Button title={tx.share.send} onPress={() => Share.share({ message: share.url }).catch(() => {})} />
-          <Button small kind="secondary" title={tx.share.rotate} onPress={() => run(() => api('POST', `/me/profiles/${profileId}/share`))} />
-          <Button small kind="ghost" title={tx.share.off} onPress={() => run(() => api('DELETE', `/me/profiles/${profileId}/share`))} />
-        </View>
-      ) : (
-        <Button testID="share-create" kind="secondary" title={tx.share.create} onPress={() => run(() => api('POST', `/me/profiles/${profileId}/share`))} />
-      )}
       <ErrorText text={err} />
     </View>
   );

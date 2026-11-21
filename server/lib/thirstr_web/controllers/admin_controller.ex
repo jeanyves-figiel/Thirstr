@@ -634,17 +634,19 @@ defmodule ThirstrWeb.AdminController do
   # sobelow_skip ["SQL.Query"]
   defp q(sql, params), do: (Repo.query!(sql, params).rows || []) |> Nearby.utc()
 
-  defp e(nil), do: ""
-  defp e(s), do: s |> to_string() |> Plug.HTML.html_escape()
+  @doc false
+  def e(nil), do: ""
+  def e(s), do: s |> to_string() |> Plug.HTML.html_escape()
 
   defp fmt_ms(n) when is_integer(n),
     do: n |> DateTime.from_unix!(:millisecond) |> DateTime.to_iso8601()
 
   defp fmt_ms(_), do: ""
 
-  defp nav do
+  @doc false
+  def nav do
     """
-    <nav><a href="/admin">Reports</a><a href="/admin/photos">Photos</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a>
+    <nav><a href="/admin">Reports</a><a href="/admin/photos">Photos</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a><a href="/admin/costs">Costs</a>
     <a href="/admin/appeals">Appeals</a><a href="/admin/audit">Audit</a>
     <form method="post" action="/admin/logout" style="display:inline"><input type="hidden" name="_csrf_token" value="#{get_csrf_token()}"><button>Sign out</button></form></nav>
     """
@@ -652,7 +654,8 @@ defmodule ThirstrWeb.AdminController do
 
   # All dynamic values are escaped with e/1 before they reach `body`.
   # sobelow_skip ["XSS.SendResp"]
-  defp page(conn, title, body) do
+  @doc false
+  def page(conn, title, body) do
     conn
     |> put_resp_content_type("text/html")
     |> put_resp_header("cache-control", "no-store")

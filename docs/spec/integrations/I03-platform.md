@@ -4,7 +4,7 @@
 |---|---|---|---|
 | APNs / FCM | wake-up push | opaque token only | content-free payloads (F-16) |
 | Passkeys (iCloud Keychain / Google Password Manager) | auth | WebAuthn public key | F-01 |
-| Sign in with Apple / Google | auth | id_token → hashed sub | F-01 R-01.2 |
+| Sign in with Apple / Google | auth | id_token → hashed sub (Google: `openid` only, PKCE, iOS client in GCP project `thirstr`; consent screen in Testing until published) | F-01 R-01.2 |
 | App Attest / Play Integrity | anti-bot | attestation blobs | F-15 R-15.2 |
 | MapLibre + self-hosted Protomaps tiles | maps | tile requests to our CDN (no user id) | no Google/Apple Maps SDK |
 | Self-hosted image classifier | photo moderation | public photos only | F-15 R-15.10 |

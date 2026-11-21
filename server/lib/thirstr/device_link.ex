@@ -11,6 +11,7 @@ defmodule Thirstr.DeviceLink do
   alias Thirstr.Accounts.{Account, Device}
 
   @ttl 120
+  @done_ttl 7200
   @alphabet ~c"0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
   def devices(%Account{} = a, current) do
@@ -41,16 +42,21 @@ defmodule Thirstr.DeviceLink do
     end
   end
 
-  def start(%Account{} = a) do
+  def start(%Account{} = a, params \\ %{}) do
     code = for _ <- 1..8, into: "", do: <<Enum.random(@alphabet)>>
-    Valkey.put_term(key(code), %{account: a.id, state: "pending"}, @ttl)
+    # R-01.14: one-time X25519 keys of both phones travel with the link (public halves only).
+    s = %{account: a.id, state: "pending", xfer_old: pub(params["xfer_pub"])}
+    Valkey.put_term(key(code), s, @ttl)
     {:ok, %{code: code, expires_in: @ttl}}
   end
 
   def status(%Account{} = a, code) do
     case get(code) do
-      %{account: id} = s when id == a.id -> {:ok, %{state: s.state, platform: s[:platform]}}
-      _ -> {:error, :not_found}
+      %{account: id} = s when id == a.id ->
+        {:ok, %{state: s.state, platform: s[:platform], xfer_pub: s[:xfer_new]}}
+
+      _ ->
+        {:error, :not_found}
     end
   end
 
@@ -75,6 +81,13 @@ defmodule Thirstr.DeviceLink do
           with %Account{status: st} = a when st in ~w(active paused quarantined suspended) <-
                  Accounts.get_account(id),
                {:ok, session} <- Accounts.start_session(a, s.platform) do
+            # R-01.14: the old phone addresses the history transfer to this device by link code.
+            Valkey.put_term(
+              "dlinkdone:" <> String.upcase(code),
+              %{account: id, device: session.device_id},
+              @done_ttl
+            )
+
             {:ok, session}
           else
             {:error, _} = e -> e
@@ -99,8 +112,18 @@ defmodule Thirstr.DeviceLink do
       %{state: "pending"} = s ->
         claim = Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false)
         platform = if p["platform"] in Device.platforms(), do: p["platform"], else: "web"
-        put(code, Map.merge(s, %{state: "claimed", claim: hash(claim), platform: platform}))
-        {:waiting, %{state: "claimed", claim: claim}}
+
+        put(
+          code,
+          Map.merge(s, %{
+            state: "claimed",
+            claim: hash(claim),
+            platform: platform,
+            xfer_new: pub(p["xfer_pub"])
+          })
+        )
+
+        {:waiting, %{state: "claimed", claim: claim, xfer_pub: s[:xfer_old]}}
 
       _ ->
         {:error, :not_found}
@@ -124,6 +147,32 @@ defmodule Thirstr.DeviceLink do
       _ -> :ok
     end
   end
+
+  @doc "R-01.14: the device a confirmed link created (2 h), for the history transfer."
+  def linked_device(%Account{id: aid}, code) when is_binary(code) do
+    case Valkey.command(["GET", "dlinkdone:" <> String.upcase(code)]) do
+      {:ok, bin} when is_binary(bin) ->
+        case Valkey.decode(bin) do
+          %{account: ^aid, device: d} -> {:ok, d}
+          _ -> {:error, :not_found}
+        end
+
+      _ ->
+        {:error, :not_ready}
+    end
+  end
+
+  def linked_device(_, _), do: {:error, :not_found}
+
+  # 32-byte X25519 public key, base64url; anything else is dropped.
+  defp pub(v) when is_binary(v) and byte_size(v) <= 64 do
+    case Base.url_decode64(v, padding: false) do
+      {:ok, <<_::binary-32>>} -> v
+      _ -> nil
+    end
+  end
+
+  defp pub(_), do: nil
 
   defp key(code), do: "dlink:" <> String.upcase(code)
   defp hash(s), do: :crypto.hash(:sha256, s)

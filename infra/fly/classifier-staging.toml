@@ -1,0 +1,37 @@
+# thirstr-classifier-staging: public-photo classifier (F-15 R-15.10, #26). NudeNet (MIT) on CPU.
+# Private only: no public IP; the API reaches it at http://thirstr-classifier-staging.flycast
+# (private IPv6, Fly proxy wakes it). Suspends when idle, resumes in < 1 s. EU only (D-03).
+# Secrets: CLASSIFIER_TOKEN (same value as on thirstr-api-staging). Runbook: docs/runbooks/classifier.md.
+app = "thirstr-classifier-staging"
+primary_region = "fra"
+kill_signal = "SIGTERM"
+
+[build]
+  dockerfile = "../classifier/Dockerfile"
+
+[env]
+  PORT = "8080"
+  # SSRF guard: only fetch photos from this env's bucket (presigned GETs).
+  ALLOWED_URL_PREFIXES = "https://fly.storage.tigris.dev/thirstr-public-staging/"
+
+[http_service]
+  internal_port = 8080
+  force_https = false
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 8
+    soft_limit = 4
+
+[[http_service.checks]]
+  grace_period = "30s"
+  interval = "60s"
+  method = "GET"
+  path = "/health"
+  timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

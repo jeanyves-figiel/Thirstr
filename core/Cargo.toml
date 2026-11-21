@@ -1,0 +1,13 @@
+[package]
+name = "thirstr_core"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+description = "Shared client core (ADR-0001): H3 cells, later MLS/OpenMLS, SQLCipher storage, media crypto; exposed to the app via UniFFI."
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[dependencies]
+h3o = "0.7"

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "ts-mls": ["./node_modules/ts-mls"],
+      "ts-mls/*": ["./node_modules/ts-mls/dist/src/*"],
+      "@noble/hashes/*": ["./node_modules/@noble/hashes/*"]
+    }
+  },
+  "include": ["src", "test", "types"]
+}

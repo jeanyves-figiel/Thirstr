@@ -1,0 +1,79 @@
+# ops.md › Trunk model step 5: manual "Promote to production". Same image digest as staging,
+# live on staging ≥ 30 min with green smoke, then owner approval (environment `production`).
+name: Promote to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: "Image digest (sha256:…) currently on staging. Empty = current staging image."
+        required: false
+      reason:
+        description: "What this change is (shown in the run)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-prod
+  cancel-in-progress: false
+
+env:
+  REPO: registry.fly.io/thirstr-api-staging
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }} # job-scoped (semgrep gha-workflow-env-secret)
+    environment: staging
+    outputs:
+      digest: ${{ steps.check.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - id: check
+        name: Digest is live on staging ≥ 30 min
+        env:
+          WANT_DIGEST: ${{ inputs.digest }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          live=$(./scripts/fly-live-image.sh thirstr-api-staging)
+          digest=$(echo "$live" | jq -r .digest); since=$(echo "$live" | jq -r .since)
+          want="${WANT_DIGEST:-$digest}"
+          [[ "$want" == "$digest" ]] || { echo "::error::$want is not the image live on staging ($digest)"; exit 1; }
+          age=$(( $(date +%s) - since ))
+          [[ $age -ge 1800 ]] || { echo "::error::staging rollout only ${age}s old; wait until 30 min"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Promoting $digest (live on staging ${age}s): ${REASON}"
+      - name: Staging smoke green
+        run: ./scripts/smoke.sh https://staging.thirstr.fun
+
+  deploy:
+    needs: verify
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }} # job-scoped (semgrep gha-workflow-env-secret)
+    runs-on: ubuntu-latest
+    environment:
+      name: production # required reviewer: owner (D-14)
+      url: https://api.thirstr.fun
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master
+      - id: prev
+        name: Remember current prod image for rollback
+        run: echo "image=$(./scripts/fly-live-image.sh thirstr-api-prod 2>/dev/null | jq -r '.image // empty')" >> "$GITHUB_OUTPUT"
+      - name: Deploy same image to prod
+        env:
+          DIGEST: ${{ needs.verify.outputs.digest }}
+        run: flyctl deploy --config infra/fly/api-prod.toml --app thirstr-api-prod --image "${REPO}@${DIGEST}" --wait-timeout 300
+      - name: Smoke
+        id: smoke
+        run: ./scripts/smoke.sh https://api.thirstr.fun
+      - name: Auto-rollback
+        if: failure() && steps.prev.outputs.image != ''
+        env:
+          PREV_IMAGE: ${{ steps.prev.outputs.image }}
+        run: |
+          flyctl deploy --config infra/fly/api-prod.toml --app thirstr-api-prod --image "${PREV_IMAGE}" --wait-timeout 300
+          ./scripts/smoke.sh https://api.thirstr.fun

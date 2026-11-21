@@ -1,0 +1,10 @@
+{
+  "name": "Thirstr trusted contact",
+  "short_name": "Thirstr",
+  "start_url": "/c/",
+  "scope": "/c/",
+  "display": "standalone",
+  "background_color": "#17142E",
+  "theme_color": "#17142E",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

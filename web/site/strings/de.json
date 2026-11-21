@@ -1,0 +1,90 @@
+{
+  "lang": "de",
+  "title": "Thirstr: Dates zuerst, Privatsphäre immer",
+  "description": "Die schwule App für Männer, die wissen, was sie heute Abend wollen. Karte zuerst, kostenlos, und du entscheidest, wer was sieht.",
+  "skip": "Zum Inhalt springen",
+  "hero_kicker": "Die App für Männer, die auf Männer stehen",
+  "hero_title": "Dates zuerst.<br><span class=\"t-trust\">Privatsphäre</span> immer.",
+  "hero_sub": "Thirstr zeigt dir live auf der Karte, wer gerade in der Nähe ist. Kostenlos, und du bestimmst genau, wer was sieht.",
+  "store_ios": "App Store",
+  "store_android": "Google Play",
+  "store_soon": "bald",
+  "beta": "Beta nur auf Einladung, jetzt in Zürich, Berlin und Paris.",
+  "modes_title": "Eine App, drei Stimmungen",
+  "mode_hookup": "Date",
+  "mode_hookup_text": "Das Heute-Abend-Board, genaue Pins, die von selbst ablaufen, verschwindende Chats und Partys mit Gästeliste.",
+  "mode_friends": "Freunde",
+  "mode_friends_text": "Chatten, Neue in der Stadt kennenlernen, einer Gruppe beitreten oder selbst einen Abend veranstalten.",
+  "mode_sport": "Sport",
+  "mode_sport_text": "Gym-Partner, Laufrunden und Spiele. Jugendfrei, nichts Explizites.",
+  "loc_title": "Dein Standort, deine Wahl",
+  "loc_sub": "Wähle, wie genau du angezeigt wirst. Jederzeit änderbar.",
+  "loc_hidden": "Versteckt",
+  "loc_hidden_text": "Stöbern, ohne gesehen zu werden. Nur für verifizierte Mitglieder.",
+  "loc_city": "Stadt",
+  "loc_city_text": "Nur die Stadt, in der du bist.",
+  "loc_area": "Umgebung",
+  "loc_area_text": "Etwa 200 m. Standard, und wird größer, wenn wenige Leute in der Nähe sind.",
+  "loc_exact": "Genau",
+  "loc_exact_text": "Pin auf Wunsch, der nach 30 Min. bis 4 Std. abläuft.",
+  "priv_title": "Privatsphäre ist das Produkt",
+  "priv_1": "Keine Werbung, keine Werbe-IDs, kein Verkauf deiner Daten. Niemals.",
+  "priv_2": "Private Alben und Chats sind Ende-zu-Ende-verschlüsselt.",
+  "priv_3": "Fotos prüft eine KI, nicht unser Team.",
+  "priv_4": "Konto löschen heißt: sofort weg.",
+  "priv_5": "Starker Bot-Schutz, damit du echte Menschen triffst.",
+  "priv_more": "Unsere Datenschutz-Übersicht lesen",
+  "free_title": "Kostenlos. Wirklich.",
+  "free_text": "Alles Wichtige ist kostenlos. Keine Bezahlschranke für die Grundfunktionen, kein Nachrichtenlimit.",
+  "all_title": "Für jeden Mann",
+  "all_text": "Cis, trans oder nicht-binär: Wenn du dich als Mann identifizierst, ist Thirstr für dich. Ab 18.",
+  "contact_title": "Schreib uns",
+  "contact_text": "Presse, Partnerschaften oder Lust auf eine Einladung? Schreib uns.",
+  "footer_privacy": "Datenschutz",
+  "footer_age": "Nur ab 18",
+  "lang_label": "Sprache",
+  "privacy_page_title": "Datenschutz-Übersicht",
+  "privacy_intro": "Hier steht in einfachen Worten, wie Thirstr mit deinen Daten umgeht. Die vollständige Datenschutzerklärung erscheint, bevor die App in den Stores verfügbar ist.",
+  "privacy_sections": [
+    [
+      "Was wir erheben",
+      "Die Basisdaten, die du uns gibst (Name, Geburtstag, Fotos, Profiltext), und deinen Standort in der Genauigkeit, die du wählst. Deinen genauen Standort speichern wir nie, außer du setzt einen genauen Pin, und der läuft von selbst ab."
+    ],
+    [
+      "Was wir nie tun",
+      "Keine Werbung, keine Werbe-IDs, keine Datenhändler, kein Verkauf oder Teilen deiner Daten für Marketing. Kein Tracking auf dieser Website: keine Cookies, keine Statistik, keine Anfragen an Dritte."
+    ],
+    [
+      "Verschlüsselung",
+      "Chats und private Alben sind Ende-zu-Ende-verschlüsselt. Unsere Server speichern nur Inhalte, die wir nicht lesen können."
+    ],
+    [
+      "Fotos",
+      "Öffentliche Fotos prüft eine KI anhand unserer Regeln. Unser Team schaut deine Fotos nicht durch; ein Mensch sieht ein Foto nur, wenn es gemeldet wird."
+    ],
+    [
+      "Wo deine Daten liegen",
+      "Ausschließlich auf Servern in der Europäischen Union."
+    ],
+    [
+      "Deine Kontrolle",
+      "Sichtbarkeit jederzeit ansehen und ändern, Konto pausieren, Daten exportieren oder alles löschen. Das Löschen passiert sofort."
+    ],
+    [
+      "Kontakt",
+      "Fragen zu deinen Daten: hello@thirstr.fun"
+    ]
+  ],
+  "back_home": "Zurück zur Startseite",
+  "nf_title": "Seite nicht gefunden",
+  "footer_legal": "Impressum",
+  "legal_page_title": "Impressum",
+  "legal_operator": "Betreiber",
+  "legal_contact": "Kontakt",
+  "legal_uid": "UID",
+  "legal_resp": "Verantwortlich für den Inhalt",
+  "legal_liab_h": "Haftung",
+  "legal_liab": "Wir prüfen diese Website sorgfältig, können aber keine Gewähr für Vollständigkeit und Aktualität übernehmen. Für Inhalte externer Links sind wir nicht verantwortlich.",
+  "legal_odr_h": "Streitbeilegung",
+  "legal_odr": "Wir sind nicht verpflichtet und nicht bereit, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen."
+}

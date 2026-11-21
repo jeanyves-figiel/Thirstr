@@ -1,0 +1,15 @@
+/* F-13 trusted-contact page */
+.tc{display:grid;gap:16px;margin:24px 0}
+.tc .card h2{font-size:24px}
+.tc .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
+.tc button{font:inherit;border:0;cursor:pointer}
+.tc .btn.ghost{background:transparent;color:var(--fg2);border:1px solid var(--line)}
+.msg{background:var(--raised);border-radius:var(--r-md);padding:18px 20px;border-left:6px solid var(--trust)}
+.msg.alert,.msg.panic{border-left-color:var(--hookup);background:#3a1f3a}
+.msg h3{margin:0 0 6px;font-size:18px}
+.msg.alert h3,.msg.panic h3{color:var(--hookup)}
+.msg p{margin:4px 0;color:var(--fg2)}
+.msg a{color:var(--trust)}
+.msg ul{margin:8px 0 0;padding-left:18px;color:var(--fg2)}
+.muted{color:var(--muted)}
+.hint{background:var(--overlay);border-radius:var(--r-md);padding:14px 16px;color:var(--fg2)}

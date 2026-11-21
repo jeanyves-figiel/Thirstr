@@ -1,0 +1,29 @@
+{
+  "name": "thirstr-testbot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Staging-only chat test bot: a real MLS client (testing.md › Chat test bot, #109)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/bot.mjs",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@noble/ciphers": "2.1.1",
+    "@noble/hashes": "2.0.1",
+    "h3-js": "4.5.0",
+    "phoenix": "1.7.21",
+    "ts-mls": "1.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/phoenix": "^1.6.8",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.9.0"
+  }
+}

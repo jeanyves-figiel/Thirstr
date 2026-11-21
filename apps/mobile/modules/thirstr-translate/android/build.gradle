@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.thirstr'
+version = '1.0.0'
+
+android {
+  namespace "app.thirstr.translate"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // F-07 R-07.25 (#107): on-device only. Language ID model is bundled in the APK;
+  // translation models (~30 MB per language) download from Google on an explicit tap.
+  implementation 'com.google.mlkit:language-id:17.0.6'
+  implementation 'com.google.mlkit:translate:17.0.3'
+}

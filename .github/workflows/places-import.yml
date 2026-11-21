@@ -1,0 +1,55 @@
+# F-12 R-12.9 (#113): start the OpenStreetMap venue import on staging or production now
+# (same job as admin console › Places › Import now, and the Monday 03:30 UTC cron), then wait
+# for it to finish and print the counts. The import runs on our server; nothing about users is sent.
+name: Places import
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to run it"
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: places-import-${{ inputs.target }}
+  cancel-in-progress: false
+
+env:
+  APP: ${{ inputs.target == 'production' && 'thirstr-api-prod' || 'thirstr-api-staging' }}
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    timeout-minutes: 50
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }} # job-scoped (semgrep gha-workflow-env-secret)
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master
+      - name: Queue import and wait
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          b64=$(base64 -w0 scripts/ops/places-import.exs)
+          remote() {
+            flyctl ssh console --app "$APP" -C "sh -c \"echo $b64 | base64 -d > /tmp/places-import.exs && /app/bin/thirstr rpc 'Code.eval_string(File.read!(~s(/tmp/places-import.exs)), action: ~s($1))'\""
+          }
+          before=$(remote status | tail -1); echo "before: $before"
+          out=$(remote start); echo "$out"
+          [[ "$out" == *queued*enabled=true* ]] || { echo "::error::could not queue the import, or PLACES_OSM_IMPORT is off"; exit 1; }
+          for i in $(seq 1 90); do
+            sleep 30
+            now=$(remote status | tail -1); echo "$now"
+            if [[ "$now" != "$before" && "$now" != *"finished=running"* && "$now" == import* ]]; then
+              echo "### Places import on ${TARGET}: $now" >> "$GITHUB_STEP_SUMMARY"
+              [[ "$now" == *"error=none"* ]] || echo "::warning::$now"
+              exit 0
+            fi
+          done
+          echo "::error::import did not finish in 45 min"; exit 1

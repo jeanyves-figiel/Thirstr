@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "thirstr-dev",
+      "credentials": [{ "accessKey": "thirstr", "secretKey": "thirstr-dev-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

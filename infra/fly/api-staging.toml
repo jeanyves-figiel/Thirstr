@@ -1,0 +1,54 @@
+# thirstr-api-staging (ops.md › Infra). EU regions only (D-03): CI rejects any other region.
+app = "thirstr-api-staging"
+primary_region = "fra"
+kill_signal = "SIGTERM"
+# SR-03: 30 s to drain requests/sockets and let Oban jobs finish (Oban grace 25 s).
+kill_timeout = 30
+
+[deploy]
+  release_command = "/app/bin/migrate"
+  strategy = "rolling"
+  max_unavailable = 1
+
+[env]
+  DEPLOY_ENV = "staging"
+  PHX_HOST = "staging.thirstr.fun"
+  APP_URL = "https://staging.thirstr.fun"
+  WEBAUTHN_ORIGIN = "https://staging.thirstr.fun"
+  WEBAUTHN_RP_ID = "staging.thirstr.fun"
+  PORT = "4000"
+  ECTO_IPV6 = "true"
+  WELCOME_DEFAULT_CITY = "Zurich"
+  S3_REGION = "auto"
+  # Google iOS OAuth client (public, not a secret): audience for Sign in with Google ID tokens (#25).
+  GOOGLE_CLIENT_IDS = "613900452555-cufeuuh30tsbea8j2rcv49s0d6vjspit.apps.googleusercontent.com"
+  # Apple Team ID (public, not a secret): enables /.well-known/apple-app-site-association
+  # for iOS passkeys (#31).
+  APPLE_TEAM_ID = "U7VAR53G86"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 10000
+    soft_limit = 8000
+
+[[http_service.checks]]
+  grace_period = "20s"
+  interval = "15s"
+  method = "GET"
+  path = "/v1/health"
+  timeout = "5s"
+
+# SR-07 (#147): Fly managed Prometheus scrapes the internal metrics port (not public).
+[metrics]
+  port = 9091
+  path = "/metrics"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

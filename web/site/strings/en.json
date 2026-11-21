@@ -1,0 +1,90 @@
+{
+  "lang": "en",
+  "title": "Thirstr: hookups first, privacy always",
+  "description": "The gay app for men who know what they want tonight. Map-first, free to use, and built so you decide who sees what.",
+  "skip": "Skip to content",
+  "hero_kicker": "The app for men into men",
+  "hero_title": "Hookups first.<br><span class=\"t-trust\">Privacy</span> always.",
+  "hero_sub": "Thirstr shows who's around right now on a live map. It's free to use, and you decide exactly who sees what.",
+  "store_ios": "App Store",
+  "store_android": "Google Play",
+  "store_soon": "soon",
+  "beta": "Invite-only beta now running in Zurich, Berlin and Paris.",
+  "modes_title": "One app, three moods",
+  "mode_hookup": "Hookup",
+  "mode_hookup_text": "The Tonight board, exact pins that expire on their own, disappearing chats and parties with a guest list.",
+  "mode_friends": "Friends",
+  "mode_friends_text": "Chat, meet people new in town, join a group or host your own night.",
+  "mode_sport": "Sport",
+  "mode_sport_text": "Gym buddies, runs and matches. Safe for work, nothing explicit.",
+  "loc_title": "Your location, your call",
+  "loc_sub": "Pick how precisely you show up. Change it any time.",
+  "loc_hidden": "Hidden",
+  "loc_hidden_text": "Browse without appearing. Verified members only.",
+  "loc_city": "City",
+  "loc_city_text": "Just the city you're in.",
+  "loc_area": "Area",
+  "loc_area_text": "About 200 m. The default, and it widens when few people are around.",
+  "loc_exact": "Exact",
+  "loc_exact_text": "Opt-in pin that expires after 30 min to 4 h.",
+  "priv_title": "Privacy is the product",
+  "priv_1": "No ads, no ad IDs, no selling your data. Ever.",
+  "priv_2": "Private albums and chats are end-to-end encrypted.",
+  "priv_3": "Photos are checked by AI, not browsed by staff.",
+  "priv_4": "Delete your account and it's gone at once.",
+  "priv_5": "Strong anti-bot checks, so you meet real people.",
+  "priv_more": "Read our privacy summary",
+  "free_title": "Free. Really.",
+  "free_text": "Everything you need is free to use. No paywall on the basics, no limit on who you can message.",
+  "all_title": "For every man",
+  "all_text": "Cis, trans and non-binary: if you identify as a man, Thirstr is for you. 18+ only.",
+  "contact_title": "Say hi",
+  "contact_text": "Press, partnerships, or want an invite? Write to us.",
+  "footer_privacy": "Privacy",
+  "footer_age": "18+ only",
+  "lang_label": "Language",
+  "privacy_page_title": "Privacy summary",
+  "privacy_intro": "This is a plain-language summary of how Thirstr handles your data. The full privacy policy will be published before the app is available in the stores.",
+  "privacy_sections": [
+    [
+      "What we collect",
+      "The basics you give us (name, birthday, photos, profile text) and your location at the precision you choose. We never store your exact position unless you drop an exact pin, and that expires on its own."
+    ],
+    [
+      "What we never do",
+      "No ads, no advertising IDs, no data brokers, no selling or sharing your data for marketing. No tracking on this website: no cookies, no analytics, no third-party requests."
+    ],
+    [
+      "Encryption",
+      "Chats and private albums are end-to-end encrypted. Our servers only hold content they cannot read."
+    ],
+    [
+      "Photos",
+      "Public photos are checked by AI for our photo rules. Staff do not browse your photos; a person only sees one when it is reported."
+    ],
+    [
+      "Where your data lives",
+      "Servers in the European Union only."
+    ],
+    [
+      "Your control",
+      "See and change your visibility at any time, pause your account, export your data, or delete everything. Deletion is immediate."
+    ],
+    [
+      "Contact",
+      "Questions about your data: hello@thirstr.fun"
+    ]
+  ],
+  "back_home": "Back to home",
+  "nf_title": "Page not found",
+  "footer_legal": "Legal notice",
+  "legal_page_title": "Legal notice",
+  "legal_operator": "Operator",
+  "legal_contact": "Contact",
+  "legal_uid": "Company ID",
+  "legal_resp": "Responsible for content",
+  "legal_liab_h": "Liability",
+  "legal_liab": "We check this site carefully but cannot guarantee that it is complete or up to date. We are not responsible for the content of external sites we link to.",
+  "legal_odr_h": "Disputes",
+  "legal_odr": "We are not obliged and not willing to take part in dispute resolution before a consumer arbitration board."
+}

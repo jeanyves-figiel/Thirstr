@@ -1,0 +1,21 @@
+# thirstr-bot-staging: chat test bots (testing.md › Chat test bots, #109, #200). Staging only, never prod.
+# No public service: it is a chat client of staging.thirstr.fun. MLS keys live on the volume.
+# Secret: TESTBOT_KEY (same value as on thirstr-api-staging).
+app = "thirstr-bot-staging"
+primary_region = "fra"
+kill_signal = "SIGTERM"
+
+[build]
+  dockerfile = "../../apps/testbot/Dockerfile"
+
+[env]
+  API_URL = "https://staging.thirstr.fun"
+  BOT_DATA_DIR = "/data"
+
+[mounts]
+  source = "botdata"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

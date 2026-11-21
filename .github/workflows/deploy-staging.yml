@@ -1,0 +1,76 @@
+# ops.md › Trunk model step 3: squash-merge to main → build signed image → deploy staging by digest → smoke.
+name: Deploy staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # cosign keyless signing
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  IMAGE: registry.fly.io/thirstr-api-staging
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }} # job-scoped (semgrep gha-workflow-env-secret)
+    environment: staging
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master
+      - run: flyctl auth docker
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      # #26: DB-IP City Lite is monthly; the month keys the cached `geo` stage.
+      - id: month
+        run: echo "dbip=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      - id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          build-args: |
+            RELEASE_SHA=${{ github.sha }}
+            DBIP_MONTH=${{ steps.month.outputs.dbip }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+          artifact-name: sbom-${{ github.sha }}.spdx.json
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+      - name: Sign image (keyless)
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+  deploy:
+    needs: build
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }} # job-scoped (semgrep gha-workflow-env-secret)
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.thirstr.fun
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master
+      - name: Deploy by digest
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: flyctl deploy --config infra/fly/api-staging.toml --app thirstr-api-staging --image "${IMAGE}@${DIGEST}" --wait-timeout 300
+      - name: Smoke
+        run: ./scripts/smoke.sh https://staging.thirstr.fun "${GITHUB_SHA}"

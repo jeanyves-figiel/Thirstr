@@ -1,0 +1,14 @@
+[
+  verbose: false,
+  private: false,
+  skip: true,
+  router: "lib/thirstr_web/router.ex",
+  exit: "low",
+  format: "txt",
+  out: "",
+  threshold: "low",
+  # TLS terminates at Fly proxy (force_https) / Caddy in DEV; app listens plain HTTP on 6PN.
+  ignore: ["Config.HTTPS"],
+  ignore_files: [],
+  version: false
+]

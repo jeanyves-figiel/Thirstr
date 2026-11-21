@@ -1,0 +1,119 @@
+# Launches a Release build of the app in an iPhone simulator and prints its startup logs
+# and a screen check, to debug launch problems without a phone (#90). Manual only.
+name: iOS simulator smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or branch to build
+        required: false
+        default: main
+
+permissions:
+  contents: read
+
+env:
+  EXPO_PUBLIC_API_URL: https://staging.thirstr.fun
+  EXPO_PUBLIC_ENV: staging
+
+jobs:
+  smoke:
+    runs-on: xcode-27  # GitHub image with release Xcode 27 / iOS 27 SDK, macOS 27, arm64 (#73)
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Newest release Xcode
+        working-directory: .
+        run: |
+          # Newest non-beta Xcode on the image (betas/RCs can't upload to the App Store, #73).
+          x=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE 'beta|_rc|release.?candidate' | sort -V | tail -1)
+          if [ -n "$x" ]; then sudo xcode-select -s "$x"; else echo "No Xcode_*.app, keeping image default"; fi
+          xcodebuild -version
+          sdk=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iOS SDK $sdk"
+          [ "${sdk%%.*}" -ge 27 ] || echo "::warning::iOS SDK $sdk < 27: App Store Connect rejects it from April 2027 (ITMS-90725, #73)"
+      - run: npm ci
+      - run: npx expo prebuild --platform ios --clean
+      - name: Build for simulator (Release)
+        run: |
+          xcodebuild build \
+            -workspace ios/Thirstr.xcworkspace -scheme Thirstr -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO \
+            > "$RUNNER_TEMP/build.log" 2>&1 && ok=0 || ok=$?
+          grep -nE "error:|\*\* BUILD" "$RUNNER_TEMP/build.log" | head -50
+          exit "$ok"
+      - name: Inspect app bundle
+        run: |
+          app=$(ls -d "$RUNNER_TEMP"/dd/Build/Products/Release-iphonesimulator/*.app | head -1)
+          echo "APP=$app" >> "$GITHUB_ENV"
+          ls -la "$app" | head -60
+          ls -la "$app/main.jsbundle" || echo "::error::main.jsbundle missing"
+          head -c 64 "$app/main.jsbundle" | xxd | head -4
+      - name: Launch in simulator
+        id: launch
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" "$APP"
+          xcrun simctl spawn "$udid" log stream --level debug --style compact \
+            --predicate 'process == "Thirstr"' > "$RUNNER_TEMP/app.log" 2>&1 &
+          logpid=$!
+          sleep 3
+          xcrun simctl launch "$udid" app.thirstr
+          sleep 40
+          xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/screen.png"
+          kill $logpid || true
+          echo "::group::Screen colours (top 8)"
+          python3 - "$RUNNER_TEMP/screen.png" <<'PY' || true
+          import sys, zlib, struct, collections
+          d = open(sys.argv[1], 'rb').read()
+          pos, idat, w = 8, b'', 0
+          while pos < len(d):
+              n = struct.unpack('>I', d[pos:pos+4])[0]; t = d[pos+4:pos+8]; c = d[pos+8:pos+8+n]
+              if t == b'IHDR': w, h, bd, ct = struct.unpack('>IIBB', c[:10])
+              if t == b'IDAT': idat += c
+              pos += 12 + n
+          raw = zlib.decompress(idat); bpp = 4 if ct == 6 else 3; stride = w*bpp
+          cnt = collections.Counter(); prev = bytearray(stride); i = 0
+          for y in range(h):
+              f = raw[i]; line = bytearray(raw[i+1:i+1+stride]); i += 1+stride
+              for x in range(stride):
+                  a = line[x-bpp] if x >= bpp else 0; b = prev[x]; cc = prev[x-bpp] if x >= bpp else 0
+                  if f == 1: line[x] = (line[x]+a) & 255
+                  elif f == 2: line[x] = (line[x]+b) & 255
+                  elif f == 3: line[x] = (line[x]+(a+b)//2) & 255
+                  elif f == 4:
+                      p = a+b-cc; pa, pb, pc = abs(p-a), abs(p-b), abs(p-cc)
+                      line[x] = (line[x]+(a if pa <= pb and pa <= pc else b if pb <= pc else cc)) & 255
+              prev = line
+              if y % 4 == 0:
+                  for x in range(0, w, 4): cnt['#%02x%02x%02x' % tuple(line[x*bpp:x*bpp+3])] += 1
+          tot = sum(cnt.values())
+          for k, v in cnt.most_common(8): print(k, f'{100*v/tot:.1f}%')
+          PY
+          echo "::endgroup::"
+          echo "::group::App log (errors, JS, React)"
+          grep -iE "error|exception|fatal|javascript|hermes|bundle|ReactNative|RCT|expo|warn" "$RUNNER_TEMP/app.log" | grep -viE "CoreAnalytics|BackBoard|UIKitCore.*keyboard" | head -300
+          echo "::endgroup::"
+          echo "Log lines: $(wc -l < "$RUNNER_TEMP/app.log")"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: sim-smoke
+          path: |
+            ${{ runner.temp }}/screen.png
+            ${{ runner.temp }}/app.log
+            ${{ runner.temp }}/build.log

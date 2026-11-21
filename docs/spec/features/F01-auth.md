@@ -1,0 +1,79 @@
+# F-01 Auth & account
+
+## Purpose
+Create and access an account with zero identity leakage: no phone, no password.
+
+## Scope
+Beta: passkey, Apple, Google, email magic link, device link by QR, recovery phrase, pause, delete, export. Later: encrypted cloud backup UI polish.
+
+## User stories
+- As a new user I create an account in one tap with Face ID.
+- As a user without passkey support I use Apple/Google/email.
+- As a user with a new phone I get back in with my synced passkey or by scanning a QR on my old phone.
+- As a user I can pause or delete my account instantly.
+
+## Rules
+- R-01.1 Passkey is the primary CTA. Apple/Google/Email secondary. **No phone number, no password, anywhere.**
+- R-01.2 OIDC: store only `SHA-256(provider‖sub‖server_pepper)`. Never email/name from the provider. Apple "Hide My Email" accepted. iOS (#25): Apple via the native sheet (no scopes); Google via authorization code + PKCE in the system browser with the iOS OAuth client (`openid` scope only, redirect `com.googleusercontent.apps.<id>:/oauthredirect`). Server accepts Google ID tokens with `iss` `https://accounts.google.com` or `accounts.google.com` and `aud` in `GOOGLE_CLIENT_IDS`.
+- R-01.3 Email magic link: email stored hashed; link valid 15 min, single use; response is always 202 (no account enumeration). An account made with Apple/Google/passkey can add a sign-in email later (`POST /me/email`, [RF-7](../required-fields.md)).
+- R-01.4 One account per verified human (enforced at F-03, not here).
+- R-01.5 Access token 15 min; refresh 30 d, bound to device key; rotate on use (re-use > 60 s after use revokes the device; within 60 s is a client race → 409, #116; the app runs one refresh at a time and signs out only on 401/403); revoke all on "Log out everywhere".
+- R-01.6 Device link: old device shows QR (expires 120 s) → new device scans → old device confirms with Face ID / Touch ID or the phone passcode (always asked when the phone has one, App lock on or not; #25) → MLS adds new device to the user's groups → optional chat history transfer (R-01.14).
+- R-01.7 **Recovery phrase + sealed backup** (#25, [mockup, option B picked 2026-11-21](https://claude.ai/artifact/Pg5CERwBK7harpHies1ZJ7)). Optional. 12 English BIP-39 words (128-bit entropy, checksum), made on the phone, shown once, never sent or stored anywhere by Thirstr.
+  - **Keys** (on the phone): `e = entropy(words)`; `HKDF-SHA256(e, salt "thirstr-recovery-v1")` → info `signin` = Ed25519 seed (sign-in key), info `vault` = AES-256-GCM key. Server stores only the Ed25519 public key (32 B, unique) and the sealed backup ciphertext. The phone keeps the vault key in the Keychain (`AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`) to update the backup; never the words or the sign-in key.
+  - **Where offered**: once on "You're verified" (card "Keep a way back in": Set up recovery phrase / Not now; Not now never shows it again) and always in Settings › Account › Sign-in › **Recovery phrase** (Off / On · since ‹date›).
+  - **Setup** (S-64a): intro (3 lines: only you have them; they work when nothing else does; they unlock your sealed backup; coral "Chats don't come back") → **Show my 12 words** asks Face ID / passcode (R-01.6 `deviceAuth`) → words in a 2 × 6 numbered mono grid, blurred until press-and-hold (blur back on release; screenshot → warning toast) + sun warning "Anyone with these words can sign in as you. Thirstr will never ask for them." → **I wrote them down** → check: 3 random positions, 4 word chips each (3 decoys from the list), wrong pick = shake + "Show the words again" → `PUT /me/recovery {public_key}` + first backup upload → "Recovery phrase on".
+  - **On** (Settings row opens): since ‹date›, last backup ‹time›, **Make new words** (Face ID; replaces the public key at once, re-seals the backup with the new key; old words stop working) and **Turn off** (Face ID; deletes key and backup).
+  - **Sealed backup**: JSON `{v: 1, albums, notes, favorites, friends}` (album list with item keys/blob ids, private notes, favorites, friends), AES-256-GCM with a random 96-bit IV, AAD `thirstr-vault-v1`. ≤ 1 MB (album item keys are ~100 B each). Uploaded at app start / foreground when its SHA-256 changed and the last upload is ≥ 1 h old (and right after setup). Never photos, never chats. Deleted with the key and with the account.
+  - **Sign in with the words** (S-02 login mode only): text link "Lost your phone? Use recovery phrase" → 12 fields (next on space / return; suggestion bar of up to 3 list words matching the prefix; Paste fills all; a field turns coral if not a list word) → **Sign in** enabled when the checksum is valid → `POST /auth/recovery/options` → sign `"thirstr-recovery:" ‖ challenge` → `POST /auth/recovery` → session for this phone; **every other device of the account is signed out** (they may be lost or stolen). Then the app downloads and opens the sealed backup (albums, notes, favorites, friends restored) and shows "You're back" (what came back, what didn't).
+  - **Limits**: 5 failed sign-ins per 10 min per IP and per install → 1 h wait (`rate_limited`). Unknown key and bad signature answer the same 401 `recovery_invalid`. Account status is kept (paused, quarantined, suspended sign in as today; banned/deleted → 403). The words can't make a new account.
+- R-01.8 Max 5 devices per account (revoked devices waiting for a resume don't count).
+- R-01.13 Device resume (SR-04, #144): a revoke by refresh re-use (R-01.5) keeps the device row and its queued chat messages for 7 d. Each sign-in returns `device_id` + `device_secret` (Keychain); the next sign-in of the same install sends them (`x-thirstr-device`, `x-thirstr-device-secret`) and, after the full sign-in, gets the same device back with a new secret. Not resumed in 7 d → device and queue deleted. "Log out" / "Log out everywhere" delete at once.
+- R-01.14 **Chat history to a new phone** (#146, decided 2026-11-21: phone-to-phone at device link; built 2026-11-21): right after R-01.6 the old phone shows "Bring your chats?" with **All chats** (default) / **Last 12 months** (each with chats, messages, size), switch **Photos and videos** (default on when the network is unmetered, off on mobile data, R-17.16), the 6-digit check code, **Codes match · Start** and **Not now**.
+  - **Key**: each phone makes a one-time X25519 key with the link (old phone: `POST /devices/link {xfer_pub}`; new phone: `POST /auth/device-link {code, platform, xfer_pub}`, the answer carries the old phone's key; the old phone reads the new one from `GET /devices/link/{code}`). Both derive `HKDF-SHA256(ECDH, salt "thirstr-xfer-v1", info "key")` → AES-256-GCM key. Both phones show the same code, `SHA-256(old pub ‖ new pub)` first 4 bytes mod 10⁶ as "123 456" (old phone: on the "wants to link" card; new phone: while it waits). Private keys live in memory only and are never stored; the server only relays ciphertext.
+  - **Stream**: the old phone reads its store chat by chat, newest first, and cuts chunks (≤ 3 MiB JSON before deflate; rows first, then media files in 2 MiB parts, base64), sealed with a random 96-bit IV, AAD `thirstr-xfer-v1|‹transfer id›|‹n›`, uploaded to `blob/xfer/{id}/{n}` and marked ready (the server checks the object size). The new phone polls `GET /devices/transfer/incoming` every 1.5 s while Chats is open, downloads ready chunks **in order**, commits each to its store, then acks (the server deletes the object at once). The old phone keeps at most 6 chunks unacknowledged (server cap 8). Rows keep their message `id`, so a retry or a later live copy is a no-op.
+  - **What moves**: messages (text, reactions, receipt state, media references), the conversation list with its settings, and received and sent media files this phone holds (re-sealed in the chunk) when Photos and videos is on. Not moved: MLS state (the new phone has its own leaf, R-07.13), view-once items, messages whose disappearing timer ends within 1 h (others keep their end time), unsent or failed messages, the franking plaintext (`raw`), translation cache, Explore / profile caches.
+  - **UI**: old phone (mockup board 2) "Moving your chats": percent, MB of MB, pieces n / N, **Pause** / **Cancel**; done → "All your chats are on the new phone". New phone (board 3): card at the top of Chats "Older messages still arriving" (chats, messages, photos and videos, progress bar), then "All your chats are here". The new phone is usable meanwhile; chats appear as they land.
+  - **Interruptions**: no background run. If the old phone's app closes or fails, **Try again** restarts from the start (same ids, nothing is doubled). Keys are lost when either app is killed; the transfer then ends and the old phone can only re-link. The new phone stops polling when Chats closes and picks up again when it reopens (within 2 h).
+  - **Limits**: one transfer at a time per account (a new one cancels the old); ≤ 20 GiB; 4.5 MiB per chunk; deleted 2 h after its last activity and once done (sweep every 15 min). The old phone keeps everything (it is a link, not a move).
+- R-01.15 **Chat backup** (#146, opt-in, decided 2026-11-21; built 2026-11-21): Settings › Chats & media › **Chat backup**: **Off** (default) / **On**. Needs the recovery phrase on (R-01.7); with the phrase off the screen offers "Set up recovery phrase" first.
+  - **Key**: `HKDF-SHA256(ikm vault key, salt "thirstr-chats-v1", info "chats")` → AES-256-GCM key, derived on the phone each run (the vault key is in the Keychain). The server stores ciphertext only; no one, Thirstr included, can open it without the 12 words.
+  - **Format**: append-only **segments** (≤ 4 MiB JSON before deflate, sealed with a random 96-bit IV, AAD `thirstr-chats-v1`) holding the message rows added since the last run plus **tombstones** (delete for me, chat delete, disappearing end) so a restore honours deletions; a sealed **manifest** (≤ 256 KiB) lists the segments in order with the SHA-256 of each ciphertext (order + integrity). The phone remembers which message ids are in the backup (`backup.state`). Compacted (everything rewritten as fresh segments) when tombstones > 30 % of rows or segments ≥ 200. Never backed up: view-once media, chats whose disappearing timer is 24 h or less, unsent messages, the franking plaintext (`raw`).
+  - **Options**: **Back up over mobile data** (default off). Quota 2 GiB per account (`quota` 422 when full). **Photos and videos** in the backup: follow-up #259; media messages are backed up as references (they load while their blob is still on the server, ≤ 30 d).
+  - **When**: once a day at app start / foreground, on Wi-Fi (or any network when mobile data is allowed); **Back up now** any time. OS background scheduling (iOS `BGProcessingTask`, Android WorkManager) is follow-up #260. Row shows "On · ‹last run›"; the screen shows "Last backup ‹time› · ‹size›".
+  - **Restore**: after a recovery sign-in (R-01.7) "You're back" lists **Your chat backup** (date, size) and its button is **Restore chats**; Chats then shows a card with progress (segments n of N) while the app is usable. Chats also offers the card when a backup exists, this phone holds the vault key and has no chats. Rows already on the phone win (same message id = no-op); a chat already on the phone keeps its state. On a phone signed in another way (passkey, email) with no chats, the card's **Restore chats** opens the S-65 word grid ("They unlock your chat backup. They never leave this phone."); the vault key derived from the words is kept in the Keychain only if it opens the manifest, else "These words don't open this backup." (#261).
+  - **Ends**: Off or recovery phrase off → backup and segments deleted at once; **Make new words** → old backup deleted at once (it was sealed with the old words), the next run uploads a fresh one; deleted with the account (≤ 24 h). Segments not listed by a new manifest are deleted 24 h later; uploads never committed are swept after 24 h. No upload for 210 d → deleted.
+- R-01.9 Pause: profiles hidden everywhere, chats kept, can resume anytime.
+- R-01.10 Delete: confirm with biometrics + type "DELETE"; hard delete server data ≤ 24 h; client wipes local DB immediately; MLS leave all groups.
+- R-01.11 Export (GDPR Art. 20, #25, [mockup](https://claude.ai/artifact/Pg5CERwBK7harpHies1ZJ7)): Settings › Account › Download my data. The phone packs **one .zip** and opens the share sheet: `data.json` (server archive from `GET /account/export` + device-only data: chats as text, private notes, favorites, friends, trusted-contact names, album index), `photos/<profile>-<slot>.jpg` (profile photos, fetched with the archive's 1 h URLs, which are then left out of `data.json`), `albums/<name>-<id>/<nnn>.<ext>` (private album photos and videos, decrypted on the phone with its keys). Built and kept on the phone only; the server never stores an archive, so nothing waits ≤ 24 h. Streamed to a cache file (one item in memory at a time; media stored, JSON deflated). Sheet "Packing your data" shows per-stage counts (Account and profile ✓, Profile photos n/N, Private albums n/N, Chats N) and Cancel (deletes the partial file). Item that can't be fetched → skipped, listed with `file: null`. Server limit 3 exports / 24 h. Web: same zip, downloaded.
+- R-01.12 18+ confirmation on sign-up (checkbox); verification later enforces age.
+
+## States
+`anonymous → registered (unverified) → verified → paused ↔ verified → deleted`; `quarantined`, `banned` set by F-15.
+
+## Interactions
+| Action | Result |
+|---|---|
+| Tap "Continue with passkey" | OS passkey sheet → success → F-02 Basics |
+| Cancel passkey sheet | Stay; show secondary options |
+| Tap "I already have an account" | OS passkey login sheet (+ other methods below) |
+| Email submit | "Check your inbox" screen; deep link opens app logged in |
+
+## Edge cases
+- Passkey created but network fails → retry silently 3×, then "Try again".
+- OIDC account later adds passkey → both work.
+- Device lost + no recovery phrase + no other device → email/OIDC login restores account (profiles, verification) but not chats.
+- Banned account tries to re-register → blocked at verification (credential reuse detection, F-03 R-03.6).
+
+## Privacy
+No PII stored. Auth logs keep hashed IP 24 h.
+
+## Acceptance criteria
+- AC-01.1 New user reaches Basics in ≤ 2 taps via passkey.
+- AC-01.2 No API or DB field contains a phone number or plaintext email.
+- AC-01.3 Email link endpoint returns 202 for unknown and known emails with identical timing (±50 ms).
+- AC-01.4 Deleting account removes all server rows within 24 h (verified by job).
+- AC-01.5 QR link expires after 120 s and is single-use.
+- AC-01.6 Recovery: no API field or table holds the words, the sign-in private key or the vault key; the backup is opaque ciphertext; a recovery sign-in signs out every other device.
+- AC-01.7 (#146) Transfer: a phone with 10 000 messages and 500 photos moves to a new phone with nothing lost or duplicated after a kill of either app mid-way and a resume; the server never holds a readable chunk; a wrong 6-digit code check is possible on both screens.
+- AC-01.8 (#146) Chat backup: off by default; restore after a recovery sign-in on a fresh phone brings back every backed-up message and none deleted before the last backup; no server field or object is readable without the words (`__tests__/chat-backup.test.ts`, `test/thirstr_web/chat_backup_test.exs`).

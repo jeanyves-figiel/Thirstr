@@ -1,0 +1,50 @@
+# DEV entrypoint: https://localhost:7443 (ops.md). Caddy's local CA signs localhost;
+# trust it once with `docker compose exec caddy caddy trust` or accept the browser warning.
+{
+	local_certs
+	admin off
+}
+
+https://localhost:7443 {
+	encode gzip
+	handle /v1/* {
+		reverse_proxy api:4000
+	}
+	handle /socket/* {
+		reverse_proxy api:4000
+	}
+	handle /mail* {
+		reverse_proxy mailpit:8025
+	}
+	handle /push* {
+		reverse_proxy mock-push:4100
+	}
+	handle /tiles/* {
+		uri strip_prefix /tiles
+		reverse_proxy tiles:8080
+	}
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(self), geolocation=(self), microphone=()"
+	}
+}
+
+# Marketing site (W-01) through Phoenix, like thirstr.fun in prod.
+https://localhost:7446 {
+	encode gzip
+	reverse_proxy api:4000
+}
+
+# S3 (SeaweedFS) for presigned photo PUT/GET from the browser.
+https://localhost:7444 {
+	reverse_proxy s3:9000 {
+		header_up Host {upstream_hostport}
+	}
+}

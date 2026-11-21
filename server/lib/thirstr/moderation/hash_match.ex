@@ -109,7 +109,7 @@ defmodule Thirstr.Moderation.HashMatch do
       """
       INSERT INTO csam_cases (id, source, provider, match_ref, target_account, photo_id, moment_id,
                               sha256, evidence_key, snapshot, hold_until)
-      VALUES ($1, 'hash', $2, $3, $4, $5, $6, $7, $8, $9, now() + interval '1 year')
+      VALUES ($1, $10, $2, $3, $4, $5, $6, $7, $8, $9, now() + interval '1 year')
       """,
       [
         Ecto.UUID.dump!(id),
@@ -120,7 +120,8 @@ defmodule Thirstr.Moderation.HashMatch do
         dump(attrs[:moment_id]),
         meta["sha256"],
         attrs[:key],
-        attrs[:snapshot] || %{}
+        attrs[:snapshot] || %{},
+        attrs[:source] || "hash"
       ]
     )
 

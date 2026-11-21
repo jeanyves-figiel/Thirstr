@@ -42,9 +42,9 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 - Certificate pinning + app attestation (App Attest / Play Integrity) against bots and API scraping (spec security.md).
 
 ### E. Compliance
-- **EN-10** (#169) Control set aligned with ISO 27001 / SOC 2 (policies, asset + vendor inventory with DPAs, access reviews, change management, evidence collected automatically). Certify only when a partner, investor or store asks; until then "aligned, not certified".
-- GDPR: DPIA for Art. 9 data (#9), records of processing, DSR tooling (export exists, delete ≤ 24 h), data retention proofs.
-- **EN-11** (#170) EU Digital Services Act: notice-and-action, statement of reasons, internal appeals (Art. 20), transparency report, point of contact; UK Online Safety Act + age assurance as markets open.
+- **EN-10** (#169) Control set aligned with ISO 27001 / SOC 2 (policies, asset + vendor inventory with DPAs, access reviews, change management, evidence collected automatically). Certify only when a partner, investor or store asks; until then "aligned, not certified". ◐ Draft control set: `docs/compliance/` (controls, inventories, procedures).
+- GDPR: DPIA for Art. 9 data (#9), records of processing, DSR tooling (export exists, delete ≤ 24 h), data retention proofs. ◐ Drafts in `docs/legal/` (not legal advice; lawyer review before open beta).
+- **EN-11** (#170) EU Digital Services Act: notice-and-action, statement of reasons, internal appeals (Art. 20), transparency report, point of contact; UK Online Safety Act + age assurance as markets open. ◐ Drafts: `docs/legal/dsa.md`, `transparency-report-template.md`, `age-assurance.md`; product flows F-15 R-15.23–R-15.36 (mockup pick pending).
 
 ### F. Release safety
 - Graceful deploys (SR-03).

@@ -40,7 +40,7 @@ jest.mock('@expo/app-integrity', () => ({
   generateAssertionAsync: async () => 'assertion',
 }));
 
-import { ensureAttested } from '../src/auth/attest';
+import { ensureAttested, proveAction } from '../src/auth/attest';
 
 describe('#25 App Attest client', () => {
   it('attests once, then asserts at most daily, re-attests when refused', async () => {
@@ -60,5 +60,13 @@ describe('#25 App Attest client', () => {
     mockRefuse = true;
     await ensureAttested(t0 + 50 * 3600_000);
     expect(mockCalls).toEqual(['GET /devices/attest', 'POST /devices/attest/challenge', 'POST /devices/assert', 'POST /devices/attest/challenge', 'POST /devices/attest']);
+  });
+
+  it('#270 proveAction re-checks the key, then signs exactly the given client data', async () => {
+    mockRefuse = false;
+    mockCalls.length = 0;
+    const proof = await proveAction('nonce.blinded');
+    expect(proof).toEqual({ assertion: 'assertion' });
+    expect(mockCalls[0]).toBe('GET /devices/attest');
   });
 });

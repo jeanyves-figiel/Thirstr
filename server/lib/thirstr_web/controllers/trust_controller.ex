@@ -12,7 +12,8 @@ defmodule ThirstrWeb.TrustController do
   end
 
   def verify_issue(conn, p) do
-    with {:ok, r} <- Verification.issue(conn.assigns.account, p), do: json(conn, r)
+    with {:ok, r} <- Verification.issue(conn.assigns.account, conn.assigns[:device_id], p),
+         do: json(conn, r)
   end
 
   def verify_redeem(conn, p) do

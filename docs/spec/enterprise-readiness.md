@@ -35,7 +35,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 - **EN-07** (#166) Incident process: severity levels, incident commander, comms templates (in-app banner, status page, email), GDPR 72 h breach notification flow (Art. 33/34), blameless post-mortems with tracked actions, yearly tabletop exercise. ✔ `docs/runbooks/incident-response.md`, register `docs/incidents/` (legal wording to confirm with counsel, #9).
 
 ### D. Security
-- **EN-08** (#167) Security program: annual external pen test (API + iOS + Android + MLS implementation review), bug bounty (private → public), SAST/DAST in CI (sobelow, semgrep, ZAP on staging), dependency patch SLAs (critical 48 h), SBOM already signed (cosign).
+- **EN-08** (#167) Security program: annual external pen test (API + iOS + Android + MLS implementation review), bug bounty (private → public), SAST/DAST in CI (sobelow, semgrep, ZAP on staging), dependency patch SLAs (critical 48 h), SBOM already signed (cosign). Free tooling only until public launch (owner 2026-11-21): ZAP baseline on staging ✔ (`.github/workflows/zap-staging.yml`), patch SLAs ✔ (`docs/runbooks/security-patching.md`), semgrep blocking after #244, AI pen test on staging; external pen test + bounty revisited before launch.
 - **EN-09** (#168) Secrets & keys: EU KMS for pepper (#27) and backup key, rotation schedule, short-lived deploy tokens, Fly org `thirstr` with SSO + 2FA, least-privilege tokens, break-glass account, quarterly access review.
 - Certificate pinning + app attestation (App Attest / Play Integrity) against bots and API scraping (spec security.md).
 

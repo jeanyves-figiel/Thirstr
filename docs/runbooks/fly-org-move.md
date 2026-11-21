@@ -15,7 +15,11 @@ Cost: €0 extra (same machines, volumes and traffic; billed to the new org). Fl
 ## Owner steps before (console, needs his login)
 1. Fly dashboard › account › **Security**: 2FA on (TOTP or passkey), recovery codes saved (`access.md` › Break-glass).
 2. Dashboard › **Create organization** `thirstr`, add a payment method. Owner is the only member.
-3. Tell the thread "org ready". Claude checks it with the API.
+3. Tell the thread "org ready".
+
+Who runs the move: the owner, on his laptop, with `scripts/ops/fly-org-move.sh <staging|prod>` (flyctl logged in as him). Claude's environment token is scoped to `personal` only and can't see `thirstr`, which is how it should stay. The script does the steps below in order and ends with the smoke test.
+
+Timing: moving restarts the staging API machines, which resets the "live on staging ≥ 30 min" clock of the prod promote. So staging moves right **after** a promote has finished, not shortly before one.
 
 ## Staging (any open merge window, ~15 min, no users affected)
 Order: stop API → move db, valkey, classifier, bot → move API → start.

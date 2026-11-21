@@ -6,6 +6,9 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Security
+- **Chat and album media only for the people it was sent to** (server + app + test bot, #271 pen test, F-08 R-08.18, AC-08.9): photos, videos and album items are now tied on the server to the accounts a message carrying them was delivered to. Anyone else gets "not found" even with the id, and download links expire after 15 min instead of up to 12 h. Media from older app builds keeps working until it expires.
+
 ### Specified
 - **Chat history on a new phone** (spec, #146, F-01 R-01.14–R-01.15, F-07 R-07.13): after linking a new phone, the old phone can move all chats (or the last 12 months), with photos and videos, end-to-end encrypted, checked by a 6-digit code on both screens. Optional **Chat backup** (off by default), sealed with a key only the recovery phrase unlocks, daily on Wi-Fi and power. API and data model added; build follows the mockup pick.
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.

@@ -175,6 +175,10 @@ export function messages(id: string): Promise<Msg[]> {
   return store.all<Msg>(id);
 }
 
+/** SR-15: newest `n` messages (first paint of a long chat), oldest first. */
+export const recentMessages = (id: string, n = 50): Promise<Msg[]> => store.recent<Msg>(id, n);
+export const messagesCached = (id: string) => store.cached(id);
+
 /** Changes one conversation's messages under its lock; `fn` returns rows to write / ids to delete. */
 function edit(cid: string, fn: (list: Msg[]) => { put?: Msg[]; del?: string[] } | void | Promise<{ put?: Msg[]; del?: string[] } | void>) {
   return store.lock('c:' + cid, async () => {
@@ -218,11 +222,19 @@ export const receiptsOn = (c: Conv) => me?.settings?.read_receipts !== false && 
 
 // ------------------------------------------------------------------ lifecycle
 
+let loaded = false;
+const waiters = new Set<() => void>();
+/** Resolves once `start` has loaded the conversation list (jobs that read every chat wait for it). */
+export const loadedConvs = () => (loaded ? Promise.resolve() : new Promise<void>((r) => waiters.add(r)));
+
 /** Starts the engine for the signed-in account: key packages, realtime, first pull. */
 export async function start(account: Me) {
   me = account;
   store.reset();
   convs = (await kv.get<Record<string, Conv>>('convs')) ?? {};
+  loaded = true;
+  waiters.forEach((r) => r());
+  waiters.clear();
   await people.loadPeople();
   await vc.loadVc();
   await migrateStars();
@@ -261,6 +273,7 @@ let sweepTimer: ReturnType<typeof setInterval> | null = null;
 let appSub: { remove: () => void } | null = null;
 
 export function stop() {
+  loaded = false;
   socket?.disconnect();
   socket = null;
   if (sweepTimer) clearInterval(sweepTimer);

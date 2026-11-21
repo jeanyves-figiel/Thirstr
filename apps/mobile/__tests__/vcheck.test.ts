@@ -141,3 +141,31 @@ describe('R-18.17 badge', () => {
     expect(V.get('r1')).toBeUndefined();
   });
 });
+
+describe('#159 regression: chat ⋯ entry never silently disappears', () => {
+  it('stays listed in 1:1 chats while a check is open, after a decline and at the daily limit', async () => {
+    const shown = { available: true, on: true, group: false };
+    expect(V.menuShown(shown)).toBe(true);
+    await V.apply('marco', req('r1'), true);
+    expect(V.askBlock('marco')).toBe('open');
+    expect(V.menuShown(shown)).toBe(true);
+    await V.apply('marco', { t: 'vcheck', op: 'decline', rid: 'r1' }, false);
+    expect(V.askBlock('marco')).toBe('declined');
+    expect(V.askBlock('marco', Date.now() + V.ASK_AGAIN_MS + 1000)).toBeNull();
+    for (const r of ['r2', 'r3']) {
+      await V.apply('marco', req(r), true);
+      await V.apply('marco', { t: 'vcheck', op: 'cancel', rid: r }, true);
+    }
+    expect(V.askBlock('marco', Date.now() + V.ASK_AGAIN_MS + 1000)).toBe('limit');
+  });
+  it('is hidden only by the server kill switch, in groups, or where the phone can’t play it safely', () => {
+    expect(V.menuShown({ available: true, on: false, group: false })).toBe(false);
+    expect(V.menuShown({ available: true, on: true, group: true })).toBe(false);
+    expect(V.menuShown({ available: false, on: true, group: false })).toBe(false);
+  });
+  it('ChatScreen gates the row with menuShown + the video_check flag, not canAsk', () => {
+    const src = require('fs').readFileSync('src/chat/ChatScreen.tsx', 'utf8') as string;
+    expect(src).toMatch(/V\.menuShown\(\{ available: vcAvailable, on: flag\('video_check'\)/);
+    expect(src).not.toMatch(/V\.canAsk\(conv\.peer\) \? \(\s*<SheetRow\s+testID="menu-vcheck"/);
+  });
+});

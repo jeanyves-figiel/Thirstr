@@ -7,7 +7,7 @@ defmodule Thirstr.Profiles do
   import Ecto.Query
   alias Thirstr.{Repo, Storage}
   alias Thirstr.Accounts.Account
-  alias Thirstr.Moderation.{Classifier, Text}
+  alias Thirstr.Moderation.{Classifier, HashMatch, Text}
   alias Thirstr.Profiles.{Fields, Photo, Profile}
 
   @photos_q from(ph in Photo, order_by: [ph.slot, desc: ph.inserted_at])
@@ -165,37 +165,114 @@ defmodule Thirstr.Profiles do
   @doc """
   R-02.7 / R-15.10: classify after upload. Slot 0 must be `ok_main`. Every photo carries
   `main_ok` (strict pass): only those show in Friends/Sport (R-06.3). Borderline → `pending`.
+  R-15.41 (#179): the hash match runs first; a hit never publishes (R-15.44), a provider error
+  keeps the photo `pending` until `Jobs.HashRetry` gets an answer (R-15.43).
   """
   def check_photo(%Account{} = a, profile_id, photo_id) do
     with {:ok, p} <- get_own(a, profile_id),
          %Photo{} = ph <-
            Repo.get_by(Photo, id: photo_id, profile_id: p.id) || {:error, :not_found},
          {:ok, %{size: size}} when size > 0 and size <= 15_000_000 <- Storage.head(ph.storage_key) do
-      {status, reason, score} =
-        case Classifier.impl().classify(ph.storage_key, ph.slot, "now") do
-          {:review, score} -> {"pending", nil, score}
-          {ok, score} when ok in [:ok_main, :ok_public] -> {Atom.to_string(ok), nil, score}
-          {:rejected, why, score} -> {"rejected", Atom.to_string(why), score}
-        end
-
-      ph =
-        ph
-        |> Ecto.Changeset.change(
-          status: status,
-          reject_reason: reason,
-          classifier_score: score,
-          review_state: if(status == "pending", do: "queued"),
-          thumb_key: if(status in ~w(ok_main ok_public), do: checked_thumb(ph, status))
-        )
-        |> Repo.update!()
-
-      if status in ~w(ok_main ok_public), do: replace_slot(p, ph)
-      {:ok, ph, p}
+      case HashMatch.gate(ph.storage_key, thumb_of(ph.storage_key)) do
+        {:match, meta, key} -> {:ok, hash_hit(a, p, ph, meta, key), p}
+        {:retry, meta} -> {:ok, hash_retry(ph, meta), p}
+        {:ok, cols, thumb_ok} -> {:ok, classify_photo(p, ph, cols, thumb_ok), p}
+      end
     else
       {:ok, %{size: _}} -> {:error, {:validation, %{photo: ["missing or too large"]}}}
       {:error, _} = e -> e
       nil -> {:error, :not_found}
     end
+  end
+
+  defp classify_photo(p, ph, hash_cols, thumb_ok) do
+    {status, reason, score} =
+      case Classifier.impl().classify(ph.storage_key, ph.slot, "now") do
+        {:review, score} -> {"pending", nil, score}
+        {ok, score} when ok in [:ok_main, :ok_public] -> {Atom.to_string(ok), nil, score}
+        {:rejected, why, score} -> {"rejected", Atom.to_string(why), score}
+      end
+
+    ph =
+      ph
+      |> Ecto.Changeset.change(
+        Map.merge(hash_cols, %{
+          status: status,
+          reject_reason: reason,
+          classifier_score: score,
+          review_state: if(status == "pending", do: "queued"),
+          thumb_key:
+            if(thumb_ok and status in ~w(ok_main ok_public), do: checked_thumb(ph, status))
+        })
+      )
+      |> Repo.update!()
+
+    if status in ~w(ok_main ok_public), do: replace_slot(p, ph)
+    ph
+  end
+
+  # R-15.44: never shown, no reason string (no tip-off), evidence kept, account quarantined.
+  defp hash_hit(a, p, ph, meta, key) do
+    ph =
+      ph
+      |> Ecto.Changeset.change(
+        Map.merge(HashMatch.columns(:match, meta), %{
+          status: "rejected",
+          reject_reason: "unusable",
+          review_state: "hash_hit",
+          thumb_key: nil
+        })
+      )
+      |> Repo.update!()
+
+    {:ok, _} =
+      HashMatch.open_case(
+        a,
+        %{photo_id: ph.id, key: key, snapshot: snapshot(p, ph.slot)},
+        meta
+      )
+
+    # Keep only the matched object as evidence.
+    Storage.delete_many(Enum.reject([ph.storage_key, thumb_of(ph.storage_key)], &(&1 == key)))
+    ph
+  end
+
+  defp hash_retry(ph, meta) do
+    ph
+    |> Ecto.Changeset.change(
+      Map.merge(HashMatch.columns(:retry, meta), %{status: "pending", review_state: nil})
+    )
+    |> Repo.update!()
+  end
+
+  @doc "Public profile at upload time for a case (R-15.47): what anyone could have seen."
+  def snapshot(%Profile{} = p, slot) do
+    %{
+      "profile_id" => p.id,
+      "display_name" => p.display_name,
+      "age" => p.age,
+      "bio" => (p.fields || %{})["bio"],
+      "slot" => slot
+    }
+  end
+
+  @doc "R-15.43: re-run the gate on photos whose hash check failed; after 30 min a person decides (A-03)."
+  def retry_hash_checks do
+    Repo.all(
+      from ph in Photo,
+        join: p in Profile,
+        on: p.id == ph.profile_id,
+        where: ph.hash_state == "retry" and is_nil(ph.review_state),
+        select: {ph, p.account_id},
+        limit: 200
+    )
+    |> Enum.each(fn {ph, aid} ->
+      with %Account{} = a <- Repo.get(Account, aid),
+           {:ok, %Photo{hash_state: "retry"} = ph2, _} <- check_photo(a, ph.profile_id, ph.id),
+           true <- DateTime.diff(DateTime.utc_now(), ph.inserted_at) > 30 * 60 do
+        ph2 |> Ecto.Changeset.change(review_state: "queued") |> Repo.update!()
+      end
+    end)
   end
 
   @doc "Moves a checked photo into its slot, dropping whatever was there before."

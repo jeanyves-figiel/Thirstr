@@ -50,7 +50,7 @@ defmodule Thirstr.Export do
     linked_accounts:
       "SELECT profile_id, platform, handle, visibility, verified_at, created_at FROM linked_accounts WHERE profile_id IN #{@mine}",
     share_links:
-      "SELECT profile_id, slug, created_at FROM profile_shares WHERE profile_id IN #{@mine}",
+      "SELECT profile_id, slug, created_at, show_photo FROM profile_shares WHERE profile_id IN #{@mine}",
     trusted_contacts:
       "SELECT id, accepted_at, created_at FROM safety_relays WHERE account_id = $1",
     devices:

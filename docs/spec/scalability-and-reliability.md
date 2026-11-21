@@ -107,7 +107,7 @@ Rule for every cache: inside the encrypted store or an AES-GCM file whose key is
 | P0 | SR-05 Chat photos kept on phone (encrypted) | #145 | ✔ 2026-11-21 |
 | P1 | SR-14 Sensitive data out of AsyncStorage; verify SQLCipher | #154 | ✔ 2026-11-21 |
 | P1 | SR-08 k-anonymity job writes only changes | #148 | ✔ 2026-11-21 |
-| P1 | SR-15 Phone chat store indexes + paging | #155 | ◐ indexed reads, memory cap (12 chats), list windowing done; per-chat SQL table with time index open (needed only for chats ≫ 10k messages) |
+| P1 | SR-15 Phone chat store indexes + paging | #155 | ◐ indexed reads, memory cap (12 chats), list windowing done; first paint of an uncached chat reads only its newest 50 rows, sorted in SQLite (2026-11-21); on-device timing of a 20k-message chat pending; per-chat SQL table with time index open (needed only for chats ≫ 10k messages) |
 | P1 | SR-10 Thumbnails + photo cache | #150 | ✔ 2026-11-21 (stable URLs, 480 px thumbnails) |
 | P1 | SR-09 Explore caching + no N+1 H3 | #149 | ✔ 2026-11-21 (page order cache 2 min, memoized H3 centroids) |
 | P1 | SR-11 Valkey failure fallback | #151 | ✔ 2026-11-21 |

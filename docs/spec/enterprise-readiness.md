@@ -48,7 +48,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 
 ### F. Release safety
 - Graceful deploys (SR-03).
-- **EN-12** (#171) Canary deploys: one machine gets the new image first, auto-rollback on error rate / latency / crash gates; expand-and-contract DB migrations only (CI lint blocks destructive migrations in the same release); migration dry run on a prod snapshot. CI lint ✔ (`scripts/check-migrations.py`, `docs/runbooks/migrations.md`); canary + dry run open.
+- **EN-12** (#171) Canary deploys: one machine gets the new image first, auto-rollback on error rate / latency / crash gates; expand-and-contract DB migrations only (CI lint blocks destructive migrations in the same release); migration dry run on a prod snapshot. CI lint ✔ (`scripts/check-migrations.py`, `docs/runbooks/migrations.md`); canary + dry run ✔ (`promote-prod.yml`, `scripts/ops/canary.sh`, `docs/runbooks/canary.md`).
 - **EN-13** (#172) Feature flags + kill switches: server-driven, per cohort/country/app version, no third-party tracking; every risky feature ships dark first. ✔ `GET /v1/config`, `docs/runbooks/flags.md`.
 - **EN-14** (#173) Mobile release safety: phased App Store / Play staged rollout, minimum supported version + forced-update screen, API versioning with 2 app versions supported, OTA config kill switches. Minimum build + forced update ✔; phased rollout and API versioning open.
 

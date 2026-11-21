@@ -229,10 +229,12 @@ Contact side (no account; `rid` from the link fragment; 60 req/min per IP):
 | PATCH | /me/linked-accounts/{id} | {visibility} → 204 |
 | POST | /me/linked-accounts/{id}/verify | → {verified} (Bluesky: code in public bio) |
 | DELETE | /me/linked-accounts/{id} | → 204 |
-| GET | /me/profiles/{id}/share | → {share: {slug, url} \| null} |
-| POST | /me/profiles/{id}/share | → {slug, url} (creates or rotates) |
+| GET | /me/profiles/{id}/share | → {share: {slug, url, short, show_photo, has_preview} \| null} |
+| POST | /me/profiles/{id}/share | → {slug, url, short, show_photo, has_preview} (creates or renews; renew keeps show_photo, clears preview) |
+| PATCH | /me/profiles/{id}/share | {show_photo} → share |
+| PUT | /me/profiles/{id}/share/preview | {photo_id, jpeg_b64} (≤ 2 KB, JPEG, ≤ 32 px each side; photo_id must be the ok_main photo) → 204 |
 | DELETE | /me/profiles/{id}/share | → 204 (link dead) |
-| GET | /share/{slug} | → {profile_id} (signed in; then GET /profiles/{id}) |
+| GET | /share/{slug} | → {profile_id} or 404 (signed in; blocked either way = 404; rate limit 30/min; then GET /profiles/{id}) |
 Public page `GET /p/{slug}` (HTML, no scripts) — I-02.
 | POST · DELETE | /profiles/{id}/vouch | vouch / withdraw. Verified, account ≥ 30 d (403, AC-18.1), ≥ 10 messages each way with that profile, ≤ 5 per 30 d. Profile view adds `vouches` (weighted, anonymous), `vouched`, `can_vouch` |
 

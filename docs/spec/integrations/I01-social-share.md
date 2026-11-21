@@ -1,6 +1,6 @@
 # I-01 Shared posts & linked accounts
 
-Issue #17. Owner decision 2026-11-21: **build all now, in closed beta** (D-23). Mockup: _pending pick_. Concept §5.
+Issue #17. Owner decision 2026-11-21: **build all now, in closed beta** (D-23). [Mockup](https://claude.ai/artifact/LHYfbUwpEpAQviEa98VhPr) (6 boards), waiting for the owner's OK. Concept §5.
 
 ## Purpose
 Guys already live on X, Bluesky, OnlyFans and JustFor.Fans. Two things should feel native in Thirstr:

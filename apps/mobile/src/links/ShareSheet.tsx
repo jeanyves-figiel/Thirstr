@@ -69,7 +69,7 @@ export function ShareSheetScreen({ route, navigation }: Props) {
         </Text>
         <View style={{ width: 44 }} />
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: space.l, paddingBottom: 140, gap: space.m }}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: space.l, paddingBottom: 140, gap: space.m }}>
         {!url ? (
           <Text style={{ ...type.body, color: color.fgSecondary }}>{lx.noLink}</Text>
         ) : fake ? (

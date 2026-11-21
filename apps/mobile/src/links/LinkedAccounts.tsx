@@ -362,6 +362,7 @@ export function LinkedAccountsScreen({
     const p = step.kind === "handle" ? step.p : null;
     return (
       <ScrollView
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: space.l, gap: space.l }}
       >
@@ -453,7 +454,7 @@ export function LinkedAccountsScreen({
     const l = list.find((x) => x.id === step.l.id) ?? step.l;
     const code = step.l.code ?? l.code;
     return (
-      <ScrollView contentContainerStyle={{ padding: space.l, gap: space.l }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: space.l, gap: space.l }}>
         <Text style={{ ...type.meta, color: color.fgSecondary }}>
           {lx.step(3)} · {PLATFORM_NAME[l.platform]} · @{l.handle}
         </Text>
@@ -591,7 +592,7 @@ export function LinkedAccountsScreen({
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: space.l, gap: space.l }}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: space.l, gap: space.l }}>
       <H>{lx.title}</H>
       <Text style={{ ...type.body, color: color.fgSecondary }}>{lx.hint}</Text>
       {list.length ? (

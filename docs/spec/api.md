@@ -35,6 +35,16 @@ Errors: `{ "error": { "code": "rate_limited", "message": "...", "retry_after": 3
 | PUT | /me/recovery | {public_key} → {on: true, …}; replaces the old key and deletes the old backup; 409 `key_in_use` |
 | DELETE | /me/recovery | → 204; deletes key and sealed backup |
 | GET · PUT | /me/recovery/vault | → {vault, updated_at} · {vault (base64 AES-256-GCM, ≤ 1 MB)} → {on, since, backup_at}; 404 none, 409 `recovery_off`; PUT 30/day |
+| GET | /me/backup | → {on, bytes, segments, media, updated_at, quota} (F-01 R-01.15, #146); 404 none |
+| POST | /me/backup/segments | {size (≤ 4.5 MiB), sha256} → {id, upload_url} (presigned PUT, 15 min); 409 `recovery_off`, 413 `quota`; 500 / day |
+| PUT | /me/backup/manifest | {manifest (base64 sealed, ≤ 256 KiB), segments: [id]} → {bytes, updated_at}; segments not listed are deleted after 24 h; 409 `segment_missing` |
+| GET | /me/backup/manifest | → {manifest, segments: [{id, size, url}]} (URLs 1 h) |
+| DELETE | /me/backup | → 204; deletes manifest and segments |
+| POST | /devices/transfer | {to_device_id, estimate_bytes} → {id} (old phone, after R-01.6; F-01 R-01.14); 409 `transfer_active`; ≤ 20 GiB |
+| POST | /devices/transfer/:id/chunks | {n, size (≤ 4.5 MiB)} → {upload_url} (15 min); then the new device gets `xfer.chunk {id, n, url}` on `device:<id>` |
+| GET | /devices/transfer/:id | → {state, chunks: [{n, url}], done} (new phone, resume after reconnect) |
+| POST | /devices/transfer/:id/ack | {n: [int]} → 204; deletes those chunks |
+| POST · DELETE | /devices/transfer/:id/done · /devices/transfer/:id | done (old phone, last chunk sent) · cancel (either phone): deletes all chunks |
 | GET | /me/devices | → {devices: [{id, platform, last_seen_day, current}]} |
 | DELETE | /me/devices/{id} | → 204 (signs that device out) |
 | POST | /devices/link | → {code, expires_in: 120} |

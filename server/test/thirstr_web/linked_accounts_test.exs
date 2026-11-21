@@ -9,7 +9,7 @@ defmodule ThirstrWeb.LinkedAccountsTest do
     on_exit(fn ->
       :ets.delete(:thirstr_flags, :rows)
 
-      for k <- [:bluesky_profile, :creator_page, :x_conf, :x_identity],
+      for k <- [:bluesky_profile, :creator_page, :x_oembed],
           do: Application.delete_env(:thirstr, k)
     end)
 
@@ -110,43 +110,36 @@ defmodule ThirstrWeb.LinkedAccountsTest do
              authed(u) |> post("/v1/me/linked-accounts/#{j["id"]}/verify") |> json_response(200)
   end
 
-  test "X: OAuth start/finish keeps id + username only", %{u: u} do
-    assert %{"error" => %{"code" => "unavailable"}} =
-             authed(u)
-             |> post("/v1/me/linked-accounts/x/start", %{profile_id: u.pid})
-             |> json_response(409)
+  test "X: code in a public post, read via oEmbed", %{u: u} do
+    x = add(u, "x", "https://x.com/MaxRuns") |> json_response(201)
+    assert x["proof_method"] == "post_code"
+    code = x["code"]
 
-    Application.put_env(:thirstr, :x_conf, %{
-      client_id: "cid",
-      secret: nil,
-      redirect_uri: "app.thirstr://oauth/x"
-    })
+    Application.put_env(:thirstr, :x_oembed, fn
+      "https://x.com/MaxRuns/status/111" ->
+        %{"author_url" => "https://twitter.com/MaxRuns", "html" => "<p>proof " <> code <> "</p>"}
 
-    Application.put_env(:thirstr, :x_identity, fn "the-code", v when is_binary(v) ->
-      {:ok, %{id: "42", username: "MaxRuns"}}
+      _ ->
+        %{"author_url" => "https://twitter.com/MaxRuns", "html" => "<p>hello</p>"}
     end)
 
-    %{"authorize_url" => url, "state" => state} =
-      authed(u)
-      |> post("/v1/me/linked-accounts/x/start", %{profile_id: u.pid, visibility: "verified"})
-      |> json_response(200)
+    v = fn url ->
+      authed(u) |> post("/v1/me/linked-accounts/#{x["id"]}/verify", %{post_url: url})
+    end
 
-    assert url =~ "code_challenge_method=S256"
-    assert url =~ "scope=users.read+tweet.read"
+    assert v.("https://example.com/MaxRuns/status/111") |> json_response(422)
+
+    assert %{"error" => %{"code" => "x_wrong_author"}} =
+             v.("https://x.com/someone/status/111") |> json_response(422)
+
+    assert %{"state" => "unproven"} = v.("https://x.com/MaxRuns/status/222") |> json_response(200)
 
     assert %{"state" => "proven"} =
-             authed(u)
-             |> post("/v1/me/linked-accounts/x/finish", %{state: state, code: "the-code"})
-             |> json_response(200)
+             v.("https://twitter.com/MaxRuns/status/111?s=20") |> json_response(200)
 
-    # state is single use
-    assert authed(u)
-           |> post("/v1/me/linked-accounts/x/finish", %{state: state, code: "the-code"})
-           |> json_response(404)
-
-    assert [["maxruns", "oauth", "42", "verified"]] =
+    assert [["maxruns", "post_code", "handle:maxruns"]] =
              Repo.query!(
-               "SELECT handle, proof, platform_user_id, visibility FROM linked_accounts WHERE platform = 'x'"
+               "SELECT handle, proof, platform_user_id FROM linked_accounts WHERE platform = 'x'"
              ).rows
   end
 

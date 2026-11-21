@@ -224,12 +224,10 @@ Contact side (no account; `rid` from the link fragment; 60 req/min per IP):
 | DELETE | /relay/{rid} | → 204 (opt out, R-13.3) |
 
 ### Social (I-01, I-02, F-18)
-| GET | /me/profiles/{id}/linked-accounts | → {linked: [{id, platform, handle, visibility, proof: bio_code\|oauth\|none, state: unproven\|proven\|manual_pending, code?}]} (I-01 R-I01.14–19) |
-| POST | /me/linked-accounts | {profile_id, platform: x\|bluesky\|onlyfans\|jff\|instagram, handle (or profile URL), visibility: everyone\|verified\|chats} → 201 {id, proof_method: bio_code\|oauth\|none, code?}. Max 5 per profile, one per platform (409). OF/JFF refused (422 `unavailable`) when `adult_links` is off for this build or Safe Mode is on (R-I01.28, R-I01.30) |
+| GET | /me/profiles/{id}/linked-accounts | → {linked: [{id, platform, handle, visibility, proof: bio_code\|post_code\|none, state: unproven\|proven\|manual_pending, code?}]} (I-01 R-I01.14–19) |
+| POST | /me/linked-accounts | {profile_id, platform: x\|bluesky\|onlyfans\|jff\|instagram, handle (or profile URL), visibility: everyone\|verified\|chats} → 201 {id, proof_method: bio_code\|post_code\|none, code?}. Max 5 per profile, one per platform (409). OF/JFF refused (422 `unavailable`) when `adult_links` is off for this build or Safe Mode is on (R-I01.28, R-I01.30) |
 | PATCH | /me/linked-accounts/{id} | {visibility} → 204 |
-| POST | /me/linked-accounts/{id}/verify | → {state} (Bluesky: code in bio/display name via AppView, stores DID; OF/JFF: public page fetch, unreadable → `manual_pending`). 409 `taken` if the platform account is proven by another Thirstr account (R-I01.20). Limit 10/h |
-| POST | /me/linked-accounts/x/start | {profile_id, visibility} → {authorize_url, state} (server keeps PKCE verifier + state 10 min; 409 `unavailable` until `X_CLIENT_ID` is set) |
-| POST | /me/linked-accounts/x/finish | {state, code} → {id, state: proven} (server exchanges code, reads `/2/users/me`, revokes the token; stores `x_user_id` + username only; AC-I01.2) |
+| POST | /me/linked-accounts/{id}/verify | {post_url?} → {state} (X: `post_url` required, an x.com/twitter.com post by the linked handle containing the code, read via public oEmbed; 422 `x_wrong_author`. Bluesky: code in bio/display name via AppView, stores DID; OF/JFF: public page fetch, unreadable → `manual_pending`). 409 `taken` if the platform account is proven by another Thirstr account (R-I01.20). Limit 10/h |
 | DELETE | /me/linked-accounts/{id} | → 204 |
 | GET | /me/profiles/{id}/share | → {share: {slug, url} \| null} |
 | POST | /me/profiles/{id}/share | → {slug, url} (creates or rotates) |

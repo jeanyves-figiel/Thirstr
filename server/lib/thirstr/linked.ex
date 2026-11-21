@@ -3,8 +3,8 @@ defmodule Thirstr.Linked do
   I-01 linked accounts (#17) and I-02 profile share links (beta-build-plan.md › B4d).
 
   Proof (R-I01.17): Bluesky = one-time code in the public bio or display name, read from the
-  public AppView, account kept by DID; X = OAuth 2.0 + PKCE, the server reads `/2/users/me` once and
-  revokes the token (only id + username kept); OnlyFans / JustFor.Fans = code in the public bio,
+  public AppView, account kept by DID; X = one-time code in a public post, the member pastes the post
+  link and the server reads it from X's public oEmbed (no X account or API key needed); OnlyFans / JustFor.Fans = code in the public bio,
   read from the fixed public profile URL, unreadable pages go to the hand-check queue (admin
   console). Instagram is a plain link. The server only ever fetches these fixed profile URLs, never
   a link someone shares in a chat (R-I01.31).
@@ -18,8 +18,7 @@ defmodule Thirstr.Linked do
   @max_per_profile 5
   @recheck_days 90
   @handle ~r/^[a-z0-9._-]{1,64}$/
-  @x_scopes "users.read tweet.read"
-  @x_off {:unavailable, "Sign in with X isn't set up yet"}
+  @x_post ~r"^https://(?:www\.|mobile\.)?(?:x|twitter)\.com/([A-Za-z0-9_]{1,15})/status/([0-9]{1,25})(?:[/?#].*)?$"
   @taken {:conflict_code, "taken", "This account is already proven on Thirstr."}
 
   def platforms, do: @platforms
@@ -66,7 +65,7 @@ defmodule Thirstr.Linked do
   defp state(false, false), do: "unproven"
 
   def proof_method("bluesky"), do: "bio_code"
-  def proof_method("x"), do: "oauth"
+  def proof_method("x"), do: "post_code"
   def proof_method(p) when p in @adult, do: "bio_code"
   def proof_method(_), do: "none"
 
@@ -100,7 +99,8 @@ defmodule Thirstr.Linked do
              [uuid(id), uuid(pid), p, handle, code, vis, proof]
            ) do
         {:ok, _} ->
-          {:ok, %{id: id, proof_method: proof, code: if(proof == "bio_code", do: code)}}
+          {:ok,
+           %{id: id, proof_method: proof, code: if(proof in ~w(bio_code post_code), do: code)}}
 
         {:error, _} ->
           {:error, :conflict}
@@ -163,7 +163,7 @@ defmodule Thirstr.Linked do
   end
 
   @doc "POST /me/linked-accounts/:id/verify (R-I01.17–20). Limit 10/h per account."
-  def verify(%Account{} = a, id) do
+  def verify(%Account{} = a, id, params \\ %{}) do
     mine(a, id, fn ->
       with {:ok, _} <- limit_ok(Thirstr.Valkey.hit("lnkv:#{a.id}", 10, 3600)) do
         [[p, h, code, ok]] =
@@ -172,7 +172,11 @@ defmodule Thirstr.Linked do
             [uuid(id)]
           )
 
-        if ok, do: {:ok, %{verified: true, state: "proven"}}, else: check(id, p, h, code)
+        cond do
+          ok -> {:ok, %{verified: true, state: "proven"}}
+          p == "x" -> check_x(id, h, code, params["post_url"])
+          true -> check(id, p, h, code)
+        end
       end
     end)
   end
@@ -233,160 +237,62 @@ defmodule Thirstr.Linked do
     end
   end
 
-  # ------------------------------------------------------------------ X OAuth (R-I01.17)
+  # ------------------------------------------------------------------ X proof (R-I01.17)
 
-  @doc "POST /me/linked-accounts/x/start → {authorize_url, state}."
-  def x_start(%Account{} = a, %{"profile_id" => pid} = params) do
-    vis = params["visibility"] || "chats"
+  # X: the member posts the code publicly and pastes the post link. The post must be by the linked
+  # handle; the server reads it once from publish.twitter.com/oembed (public, no key). The post can be
+  # deleted afterwards. X has no stable id here, so the lower-case handle is the account key.
+  defp check_x(id, h, code, post_url) when is_binary(post_url) do
+    case Regex.run(@x_post, String.trim(post_url)) do
+      [_, author, sid] ->
+        cond do
+          String.downcase(author) != h ->
+            {:error, {:unprocessable, "x_wrong_author", "That post isn't from @#{h}."}}
 
-    with :ok <- own(a, pid),
-         true <- vis in @visibility || {:error, {:validation, %{visibility: ["invalid"]}}},
-         %{client_id: cid, redirect_uri: redirect} <- x_conf() || {:error, @x_off} do
-      state = rand(24)
-      verifier = rand(48)
-      challenge = :crypto.hash(:sha256, verifier) |> Base.url_encode64(padding: false)
+          x_post_has?(author, sid, code) ->
+            prove(id, "handle:" <> h, nil)
 
-      q!(
-        "DELETE FROM x_oauth_pending WHERE created_at < now() - interval '10 minutes' OR account_id = $1",
-        [uuid(a.id)]
-      )
-
-      q!(
-        "INSERT INTO x_oauth_pending (state, account_id, profile_id, verifier, visibility, created_at) VALUES ($1, $2, $3, $4, $5, now())",
-        [state, uuid(a.id), uuid(pid), verifier, vis]
-      )
-
-      query =
-        URI.encode_query(%{
-          "response_type" => "code",
-          "client_id" => cid,
-          "redirect_uri" => redirect,
-          "scope" => @x_scopes,
-          "state" => state,
-          "code_challenge" => challenge,
-          "code_challenge_method" => "S256"
-        })
-
-      {:ok, %{authorize_url: "https://x.com/i/oauth2/authorize?" <> query, state: state}}
-    end
-  end
-
-  def x_start(_, _), do: {:error, {:validation, %{profile_id: ["required"]}}}
-
-  @doc "POST /me/linked-accounts/x/finish {state, code}: exchange, read id + username, revoke (AC-I01.2)."
-  def x_finish(%Account{} = a, %{"state" => state, "code" => code})
-      when is_binary(state) and is_binary(code) do
-    case q!(
-           "DELETE FROM x_oauth_pending WHERE state = $1 AND account_id = $2 AND created_at > now() - interval '10 minutes' RETURNING profile_id, verifier, visibility",
-           [state, uuid(a.id)]
-         ) do
-      [[pid, verifier, vis]] ->
-        with %{} = conf <- x_conf() || {:error, @x_off},
-             {:ok, %{id: xid, username: name}} <- x_identity(conf, code, verifier) do
-          link_x(cast(pid), xid, String.downcase(name), vis)
+          true ->
+            not_found(id)
         end
 
-      [] ->
-        {:error, :not_found}
+      _ ->
+        {:error, {:validation, %{post_url: ["X post link (x.com/<handle>/status/…)"]}}}
     end
   end
 
-  def x_finish(_, _), do: {:error, {:validation, %{code: ["required"]}}}
+  defp check_x(_id, _h, _code, _),
+    do: {:error, {:validation, %{post_url: ["required"]}}}
 
-  defp link_x(pid, xid, name, vis) do
-    id = Ecto.UUID.generate()
-
-    Repo.transaction(fn ->
-      q!("DELETE FROM linked_accounts WHERE profile_id = $1 AND platform = 'x'", [uuid(pid)])
-
-      case Repo.query(
-             """
-             INSERT INTO linked_accounts (id, profile_id, platform, handle, code, visibility, proof, platform_user_id,
-                                          verified_at, checked_at, created_at)
-             VALUES ($1, $2, 'x', $3, $4, $5, 'oauth', $6, now(), now(), now())
-             """,
-             [uuid(id), uuid(pid), name, new_code(), vis, xid]
-           ) do
-        {:ok, _} -> %{id: id, verified: true, state: "proven"}
-        {:error, _} -> Repo.rollback(@taken)
-      end
-    end)
-  end
-
-  defp x_conf do
-    case System.get_env("X_CLIENT_ID") do
-      cid when is_binary(cid) and cid != "" ->
-        %{
-          client_id: cid,
-          secret: System.get_env("X_CLIENT_SECRET"),
-          redirect_uri: System.get_env("X_REDIRECT_URI", "app.thirstr://oauth/x")
-        }
+  defp x_post_has?(author, sid, code) do
+    case x_oembed("https://x.com/#{author}/status/#{sid}") do
+      %{"author_url" => au, "html" => html} when is_binary(au) and is_binary(html) ->
+        String.downcase(au) |> String.ends_with?("/" <> String.downcase(author)) and
+          String.contains?(html, code)
 
       _ ->
-        Application.get_env(:thirstr, :x_conf)
+        false
     end
   end
 
-  defp x_identity(conf, code, verifier) do
-    case Application.get_env(:thirstr, :x_identity) do
-      f when is_function(f, 2) -> f.(code, verifier)
-      _ -> x_identity_live(conf, code, verifier)
-    end
-  end
-
-  defp x_identity_live(conf, code, verifier) do
-    auth = if conf.secret, do: [auth: {:basic, "#{conf.client_id}:#{conf.secret}"}], else: []
-
-    token =
-      Req.post(
-        "https://api.x.com/2/oauth2/token",
-        [
-          form: [
-            code: code,
-            grant_type: "authorization_code",
-            client_id: conf.client_id,
-            redirect_uri: conf.redirect_uri,
-            code_verifier: verifier
-          ],
-          retry: false,
-          receive_timeout: 8000
-        ] ++ auth
-      )
-
-    case token do
-      {:ok, %{status: 200, body: %{"access_token" => tok}}} -> x_me_and_revoke(conf, tok, auth)
-      _ -> {:error, {:unprocessable, "x_denied", "X sign-in didn't finish"}}
-    end
-  end
-
-  defp x_me_and_revoke(conf, tok, auth) do
-    me =
-      Req.get("https://api.x.com/2/users/me",
-        auth: {:bearer, tok},
-        retry: false,
-        receive_timeout: 8000
-      )
-
-    # The token is never stored or logged; revoke it whatever /users/me answered.
-    Req.post(
-      "https://api.x.com/2/oauth2/revoke",
-      [
-        form: [token: tok, token_type_hint: "access_token", client_id: conf.client_id],
-        retry: false,
-        receive_timeout: 8000
-      ] ++ auth
-    )
-
-    case me do
-      {:ok, %{status: 200, body: %{"data" => %{"id" => id, "username" => name}}}} ->
-        {:ok, %{id: id, username: name}}
+  defp x_oembed(url) do
+    case Application.get_env(:thirstr, :x_oembed) do
+      f when is_function(f, 1) ->
+        f.(url)
 
       _ ->
-        {:error, {:unprocessable, "x_failed", "X didn't answer. Try again."}}
+        case Req.get("https://publish.twitter.com/oembed",
+               params: [url: url, omit_script: 1, dnt: true],
+               retry: false,
+               redirect: false,
+               receive_timeout: 8000,
+               headers: [{"user-agent", "Mozilla/5.0 (compatible; Thirstr-Proof)"}]
+             ) do
+          {:ok, %{status: 200, body: %{} = body}} -> body
+          _ -> nil
+        end
     end
   end
-
-  defp rand(n), do: :crypto.strong_rand_bytes(n) |> Base.url_encode64(padding: false)
 
   # ------------------------------------------------------------------ re-check + hand check
 

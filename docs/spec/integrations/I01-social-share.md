@@ -57,11 +57,11 @@ Privacy first: Thirstr's server never sees which posts are shared, never fetches
   | Platform | Method | Who checks |
   |---|---|---|
   | Bluesky | code `thirstr-xxxxxxx` in the public bio, or in the display name | server reads `public.api.bsky.app` `getProfile`; stores the **DID** so a later handle change keeps the ✓ (handle refreshed from the DID on each check) |
-  | X | **Sign in with X** (OAuth 2.0 + PKCE, scopes `users.read tweet.read`) in the system auth sheet | server exchanges the code, reads `/2/users/me` (id + username), **revokes the token at once**; keeps username + numeric id only |
+  | X | **Code in a public post** (owner decision 2026-11-21: no X developer account, no API key). App shows the code + "Post on X" (`x.com/intent/post?text=<code>`); member pastes the post link | server reads the post once from `publish.twitter.com/oembed` (public, no key); passes if the post is by the linked handle (`author_url`) and contains the code. Post may be deleted after the ✓. Account key = lower-case handle |
   | OnlyFans / JustFor.Fans | code in the public bio | server fetches the public profile page (fixed host + handle, no redirects off-host, 8 s); if the page can't be read (bot wall, JS-only) → **Checked by hand** queue (admin console, owner in beta, SLA 24 h): moderator opens the public page in a clean browser and taps Approve / Reject |
   | Instagram | none in beta | shown without ✓ |
-- R-I01.18 Proof UX: the code is shown big with **Copy**, a **Open ‹platform›** button (opens the profile edit page of that platform where known), and **Check now**. States: Not checked · Checking… · ✓ Proven · Checked by hand (pending) · Not found ("We couldn't find the code in @handle's bio. It can take a minute to show.") After ✓: "You can remove the code from your bio now."
-- R-I01.19 Re-check every **90 d** (daily sweep, ≤ 200 per run): Bluesky by DID, OF/JFF by page fetch (fail = keep ✓ but flag for hand check, never silently drop on a bot wall), X never re-checked (OAuth proof stands; ✓ removed if the X id now has another username → handle updated, ✓ kept). Bio code check passes only if the code is still there **or** the account was proven ≥ 1 day ago (user may remove it, R-I01.18): re-check confirms the handle still exists, not the code.
+- R-I01.18 Proof UX: the code is shown big with **Copy**, a **Open ‹platform›** button (opens the profile edit page of that platform where known; for X: **Post on X** with the code prefilled, plus a field for the post link), and **Check now**. States: Not checked · Checking… · ✓ Proven · Checked by hand (pending) · Not found ("We couldn't find the code in @handle's bio. It can take a minute to show.") After ✓: "You can remove the code from your bio now."
+- R-I01.19 Re-check every **90 d** (daily sweep, ≤ 200 per run): Bluesky by DID, OF/JFF by page fetch (fail = keep ✓ but flag for hand check, never silently drop on a bot wall), X never re-checked (post proof stands; oEmbed gives no stable id, so a renamed handle needs a new proof). Bio code check passes only if the code is still there **or** the account was proven ≥ 1 day ago (user may remove it, R-I01.18): re-check confirms the handle still exists, not the code.
 - R-I01.20 A handle proven by one Thirstr account cannot be proven by another (unique on `platform + platform_user_id`); conflict → "This account is already proven on Thirstr. Report if it's yours." (opens R-I01.24 impersonation report).
 - R-I01.21 **Creator rule** (F-15 R-15.8): linking OF/JFF does not make a profile a Creator. Linking OF/JFF with visibility **Everyone** shows a one-time note "Fine to show your page. Sending promo links to lots of people isn't: that needs a Creator profile (F-15 R-15.8)." Creator self-declare UI is not part of #17. Promotion signals in R-I01.23.
 
@@ -82,15 +82,15 @@ Privacy first: Thirstr's server never sees which posts are shared, never fetches
 - R-I01.30 **`adult_links` flag** (EN-13, default on). New rule `off_builds` (per platform list of native build numbers). Before a store submission, ops sets `Flags.set("adult_links", true, %{"off_builds" => %{"ios" => [<build>]}})`, so the build under review (and only it) shows no OF/JFF: no platform tiles, profile chips filtered **server-side** by the request's build, link cards from those hosts degrade to host-only, share sheet still sends them as plain text. After approval, ops removes the build from the list; nothing ships again. Kill switch: `enabled = false` hides it for every build.
 
 ### F. Privacy, energy, performance
-- R-I01.31 Server never fetches a shared URL; only fixed profile URLs on 4 hosts (Bluesky AppView, X API, onlyfans.com, justfor.fans) for proofs. Egress allowlist in config; no user-controlled host, path built from a validated handle (`^[a-z0-9._-]{1,64}$`).
-- R-I01.32 Logs and metrics never contain shared URLs, titles or `lh` values (AC-I01.1). OAuth codes and tokens are never logged; token discarded after the single `/users/me` call (AC-I01.2).
+- R-I01.31 Server never fetches a shared URL; only fixed URLs on 4 hosts (Bluesky AppView, publish.twitter.com oEmbed, onlyfans.com, justfor.fans) for proofs; the X post URL is rebuilt from a validated handle + numeric id. Egress allowlist in config; no user-controlled host, path built from a validated handle (`^[a-z0-9._-]{1,64}$`).
+- R-I01.32 Logs and metrics never contain shared URLs, titles or `lh` values (AC-I01.1). X post links used for proof are never logged or stored (AC-I01.2).
 - R-I01.33 The receiver's phone makes **no network call** for a card except the encrypted thumbnail download (≤ 40 KB), so opening a chat never tells any platform who you are or where.
 - R-I01.34 Energy/data: preview fetch only on explicit share/paste, never in the background; ≤ 1 MB per preview; thumbnails follow Data saver (≤ 40 KB, always loaded, F-17 R-17.16).
 - R-I01.35 Export (R-01.11) includes linked accounts (platform, handle, visibility, proof method, proven at). Delete account deletes them at once.
 
 ## Acceptance criteria
 - AC-I01.1 Server logs, DB and metrics contain no shared URL, title, post text or `lh` (grep test on a staging run with 20 shares).
-- AC-I01.2 X OAuth: token revoked and not persisted; only `x_user_id` + username stored.
+- AC-I01.2 X proof: no X account, key or token anywhere; the proof post link is not stored; only the handle is kept.
 - AC-I01.3 Share from X, Bluesky, OnlyFans, JustFor.Fans and Safari (iOS) / Chrome (Android) opens S-44 in ≤ 1.5 s (warm) and the card is ready in ≤ 2 s on 4G.
 - AC-I01.4 Receiver opening a chat with 10 link cards makes 0 requests to any host other than our media storage.
 - AC-I01.5 OF/JFF cards are blurred by default; a Bluesky post labelled `porn` is blurred.

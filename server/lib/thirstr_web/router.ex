@@ -351,8 +351,6 @@ defmodule ThirstrWeb.Router do
       post "/devices/transfer/:id/done", AccountDataController, :xfer_finish
       get "/me/profiles/:id/linked-accounts", AccountDataController, :linked
       post "/me/linked-accounts", AccountDataController, :link_account
-      post "/me/linked-accounts/x/start", AccountDataController, :x_start
-      post "/me/linked-accounts/x/finish", AccountDataController, :x_finish
       patch "/me/linked-accounts/:id", AccountDataController, :update_linked
       post "/me/linked-accounts/:id/verify", AccountDataController, :verify_linked
       delete "/me/linked-accounts/:id", AccountDataController, :remove_linked

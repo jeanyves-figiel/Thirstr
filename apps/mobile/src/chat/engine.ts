@@ -175,6 +175,10 @@ export function messages(id: string): Promise<Msg[]> {
   return store.all<Msg>(id);
 }
 
+/** SR-15: newest `n` messages (first paint of a long chat), oldest first. */
+export const recentMessages = (id: string, n = 50): Promise<Msg[]> => store.recent<Msg>(id, n);
+export const messagesCached = (id: string) => store.cached(id);
+
 /** Changes one conversation's messages under its lock; `fn` returns rows to write / ids to delete. */
 function edit(cid: string, fn: (list: Msg[]) => { put?: Msg[]; del?: string[] } | void | Promise<{ put?: Msg[]; del?: string[] } | void>) {
   return store.lock('c:' + cid, async () => {

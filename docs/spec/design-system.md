@@ -34,6 +34,7 @@ Generated to TS (RN theme) by Style Dictionary in CI. Hard-coded colours/sizes i
 | `trust` | #3DD6C3 | verified, location, privacy, E2EE, Save in privacy flows (teal) |
 | `personal` | #FFC93C | private note, defaults, disappearing timer (sunflower) |
 | `travel` | #7CC8FF | travel plans (F-20): Visiting labels, visitor tile outline, trip cards, "Looking around from afar" bar (sky; ink text 10.9:1). Never used for anything else |
+| `moment` | gradient #FF6B5B → #A78BFA → #B8F04A (135°) | unseen Moment rings and the composer Share glow only (F-21). Seen ring = `line` |
 | `danger` | #FF4D6D | block, report, panic: always icon + label, never a plain fill beside `mode.hookup` |
 | `tile.*` | #7A2F3B, #4B3A8C, #2F6B5E, #7A5A1E, #5B2F6E, #2E4F8C | photo placeholder / skeleton tones before an image loads (rotate by user id hash) |
 - Accent = current mode token. `trust`, `personal`, `danger` never change with mode.

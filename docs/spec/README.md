@@ -49,6 +49,7 @@ Status: draft v0.1 · 2026-11-17 · Source of truth before any code. Product rat
 | F-18 | [Vouches & trust badges](features/F18-trust.md) |
 | F-19 | [Gestures & haptics](features/F19-gestures.md) |
 | F-20 | [Travel plans](features/F20-travel.md) (#188) |
+| F-21 | [Moments: temporary photos](features/F21-moments.md) (#212, placement pick pending) |
 | I-01 | [Social post sharing (X, Bluesky, OnlyFans, JustFor.Fans)](integrations/I01-social-share.md) |
 | I-02 | [GDPR export import & profile share link](integrations/I02-import-share-link.md) |
 | I-03 | [Platform services: push, maps, passkeys, attestation, stores](integrations/I03-platform.md) |

@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Moments spec** (docs, #212, F-21): temporary story-style photos (1 h / 6 h / 24 h, max 10 live), audience per Moment (Everyone who can see me · People I chat with · Favorites), on-device blur brush and Blur faces, no location data, screenshot block (Android) / notice (iOS), permissive classifier (no genitals), hard delete + CDN purge at expiry. New screens S-74 composer, S-75 viewer; new token `moment`. Placement (D-21a) and who-viewed list (D-21b) pending owner pick ([mockup](https://claude.ai/artifact/Ctum8QhK6cBFwWytjziZu1)).
+
 ### Fixed
 - **Swiping between profiles, redone** (app, #187 follow-up, G10): the profile now follows the finger 1:1 with the next (or previous) person's photo and name sliding in right behind it, like a pager. The two neighbours (and one more each way) are loaded ahead with their first photo, so a swipe lands on a ready profile with no spinner; it opens scrolled to the top. Someone no longer available is skipped instead of ending on "Not available" (which also stuck to every following profile). A fling finishes at the finger's speed; ‹ › slide the same way. Vertical scrolling still wins over a mostly-vertical drag.
 - **Map pins open on one tap; swipe between photos works** (app, #187 follow-up): on iPhone a map pin (person, place, visitors bubble) needed two taps, because the map's own tap took the first one. Now one tap opens it. In the full-screen photo viewer, a swipe was held back by the double-tap zoom and never changed photo; any finger movement now ends the tap at once, so swiping works (same fix on the profile photo and chat bubbles).

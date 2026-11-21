@@ -1,0 +1,78 @@
+# EN-08 (#167): DAST, ZAP baseline (passive: spider + header/cookie/disclosure checks, no attacks)
+# against STAGING only. Free, open source, nothing uploaded to a third party.
+# Never point this at prod (api.thirstr.fun / thirstr.fun): the target is fixed and checked below.
+# Policy: rules set to FAIL in .zap/rules.tsv fail the job; WARN rules go to the summary only.
+# Patch SLAs for what it finds: docs/runbooks/security-patching.md.
+name: ZAP staging
+
+on:
+  workflow_run:
+    workflows: ["Deploy staging"]
+    types: [completed]
+  schedule:
+    - cron: "30 3 * * 1" # weekly, Monday 03:30 UTC (after nightly)
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/zap-staging.yml"
+      - ".zap/**"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: zap-staging
+  cancel-in-progress: false
+
+env:
+  TARGET: https://staging.thirstr.fun
+  ZAP_IMAGE: zaproxy/zap-stable:2.17.0
+
+jobs:
+  baseline:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Target is staging (never prod)
+        run: |
+          case "$TARGET" in
+            https://staging.thirstr.fun) ;;
+            *) echo "::error::ZAP may only scan staging, got $TARGET"; exit 1 ;;
+          esac
+      - name: ZAP baseline
+        id: zap
+        run: |
+          mkdir -p zap && cp .zap/rules.tsv zap/ && chmod -R a+rwX zap
+          set +e
+          docker run --rm -v "$PWD/zap:/zap/wrk:rw" "$ZAP_IMAGE" zap-baseline.py \
+            -t "$TARGET" -c rules.tsv -I -m 2 \
+            -r report.html -w report.md -J report.json \
+            -z "-config connection.timeoutInSecs=30"
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          { echo "### ZAP baseline on $TARGET (exit $code)"; echo; cat zap/report.md 2>/dev/null || echo "no report"; } >> "$GITHUB_STEP_SUMMARY"
+          # 0 = clean, 1 = a FAIL rule fired, 2 = warnings only (ignored by -I), 3 = scan error
+          exit $code
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: zap-staging-report
+          path: zap/report.*
+          retention-days: 30
+      - name: Open or update findings issue
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZAP_CODE: ${{ steps.zap.outputs.code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create security --color B60205 --description "Security finding (patch SLAs: docs/runbooks/security-patching.md)" --force
+          title="ZAP baseline: FAIL findings on staging"
+          body="ZAP baseline (exit $ZAP_CODE) on $TARGET. Run: $RUN_URL (report artifact \`zap-staging-report\`). Triage per docs/runbooks/security-patching.md."
+          n=$(gh issue list --state open --label security --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$body"; else gh issue create --title "$title" --label security --body "$body"; fi

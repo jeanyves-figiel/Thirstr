@@ -37,6 +37,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 ### D. Security
 - **EN-08** (#167) Security program: annual external pen test (API + iOS + Android + MLS implementation review), bug bounty (private → public), SAST/DAST in CI (sobelow, semgrep, ZAP on staging), dependency patch SLAs (critical 48 h), SBOM already signed (cosign).
   - Done (#244): every GitHub Action pinned to a full commit SHA with a version comment (Dependabot proposes bumps monthly), workflow inputs and step outputs reach `run:` only through quoted `env:` variables, `FLY_TOKEN` scoped to the jobs that use it, and the `semgrep` CI job is blocking (`--error`); a justified false positive gets `# nosemgrep: <rule-id> <reason>`.
+  - Done (#167, free tooling only until public launch, owner 2026-11-21): ZAP baseline on staging (`.github/workflows/zap-staging.yml`, `.zap/rules.tsv`), patch SLAs (`docs/runbooks/security-patching.md`). Next: AI pen test on staging; external pen test + bounty revisited before launch.
 - **EN-09** (#168) Secrets & keys: EU KMS for pepper (#27) and backup key, rotation schedule, short-lived deploy tokens, Fly org `thirstr` with SSO + 2FA, least-privilege tokens, break-glass account, quarterly access review.
 - Certificate pinning + app attestation (App Attest / Play Integrity) against bots and API scraping (spec security.md).
 

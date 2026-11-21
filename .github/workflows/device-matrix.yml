@@ -18,7 +18,7 @@ on:
       profiles:
         description: Profiles to run
         type: choice
-        options: [all, android-low, android-mid, ios-old]
+        options: [all, android-low, android-mid, ios-old, android-real]
         default: all
 
 permissions:
@@ -223,5 +223,84 @@ jobs:
         if: always()
         with:
           name: device-matrix-ios-old
+          path: ${{ runner.temp }}/out
+          retention-days: 14
+
+  # Real low-end Android phone on Firebase Test Lab (owner pick 2026-11-21: free Spark tier, ≤ 5 physical
+  # runs/day, Google-hosted). Robo crawl of a staging build, signed out. Skips until the Firebase
+  # project exists (secret FIREBASE_TESTLAB_SA + variable FIREBASE_PROJECT_ID, testing.md › Real devices).
+  android-real:
+    if: ${{ github.event_name != 'pull_request' && ((inputs.profiles || 'all') == 'all' || inputs.profiles == 'android-real') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HAS_TESTLAB: ${{ secrets.FIREBASE_TESTLAB_SA != '' && vars.FIREBASE_PROJECT_ID != '' }}
+      PROJECT: ${{ vars.FIREBASE_PROJECT_ID }}
+      EXPO_PUBLIC_ENV: staging
+      EXPO_PUBLIC_API_URL: https://staging.thirstr.fun
+    steps:
+      - name: Firebase Test Lab configured?
+        run: |
+          if [ "$HAS_TESTLAB" != true ]; then
+            echo "::notice::Firebase Test Lab not set up yet (secret FIREBASE_TESTLAB_SA, variable FIREBASE_PROJECT_ID); skipping real device."
+          fi
+      - uses: actions/checkout@v4
+        if: env.HAS_TESTLAB == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_TESTLAB == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        if: env.HAS_TESTLAB == 'true'
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        if: env.HAS_TESTLAB == 'true'
+      - name: Staging release APK (arm64)
+        if: env.HAS_TESTLAB == 'true'
+        working-directory: apps/mobile
+        run: |
+          npm ci
+          npx expo prebuild --platform android --no-install
+          cd android && ./gradlew --no-daemon assembleRelease -PreactNativeArchitectures=arm64-v8a
+      - uses: google-github-actions/auth@v2
+        if: env.HAS_TESTLAB == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_TESTLAB_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: env.HAS_TESTLAB == 'true'
+      - name: Robo test on the most low-end physical phone
+        if: env.HAS_TESTLAB == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          apk=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          dev="${{ vars.TESTLAB_DEVICE }}"
+          [ -n "$dev" ] || dev=$(gcloud firebase test android models list --project "$PROJECT" --format=json | python3 scripts/device-matrix/testlab-pick.py)
+          echo "Device: $dev"
+          gcloud firebase test android run --project "$PROJECT" --type robo --app "$apk" --device "$dev" \
+            --timeout 300s --results-history-name thirstr-device-matrix --no-record-video \
+            2>&1 | tee "$RUNNER_TEMP/out/testlab.log" || true
+          matrix=$(grep -oE 'matrices/[0-9]+' "$RUNNER_TEMP/out/testlab.log" | head -1 | cut -d/ -f2)
+          [ -n "$matrix" ] || { echo "::error::no Test Lab matrix id"; exit 1; }
+          python3 scripts/device-matrix/testlab-metrics.py "$PROJECT" "$matrix" "$(gcloud auth print-access-token)" > "$RUNNER_TEMP/out/metrics.json"
+          python3 - "$RUNNER_TEMP/out/metrics.json" "$dev" "$apk" <<'PY'
+          import json, os, subprocess, sys
+          p, dev, apk = sys.argv[1:]
+          d = json.load(open(p)); d["device"] = dev; d["apk_bytes"] = os.path.getsize(apk)
+          out = subprocess.run(["unzip", "-l", apk, "assets/index.android.bundle"], capture_output=True, text=True).stdout.splitlines()
+          d["js_bundle_bytes"] = int(out[3].split()[0]) if len(out) > 3 else None
+          json.dump(d, open(p, "w"), indent=1)
+          PY
+          cat "$RUNNER_TEMP/out/metrics.json"
+      - name: Budgets
+        if: always() && env.HAS_TESTLAB == 'true'
+        run: python3 scripts/device-matrix/budgets.py android-real "$RUNNER_TEMP/out/metrics.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always() && env.HAS_TESTLAB == 'true'
+        with:
+          name: device-matrix-android-real
           path: ${{ runner.temp }}/out
           retention-days: 14

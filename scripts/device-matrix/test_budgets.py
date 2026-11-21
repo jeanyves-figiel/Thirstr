@@ -15,7 +15,7 @@ _, f = check("p", {}, B)
 assert "no flow ran" in f, f
 real = json.load(open(os.path.join(os.path.dirname(__file__), "..", "..", "apps", "mobile", "e2e", "budgets.json")))
 real.pop("_doc", None)
-for prof in ("android-low", "android-mid", "ios-old"):
+for prof in ("android-low", "android-mid", "ios-old", "android-real"):
     assert prof in real, prof
     for k, r in real[prof].items():
         assert isinstance(r["max"], (int, float)) and r["max"] > 0, (prof, k)

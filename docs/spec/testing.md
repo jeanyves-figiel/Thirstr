@@ -45,7 +45,7 @@ Simulated users so testers can try chat, photos, albums, location modes, plans a
 - **Tests**: `apps/testbot` `npm test`: reply rules, and end to end with the built bots against a mock API and a second client (the app's MLS code): setup calls, Delivered/Read, language switch, quick reply `k`, photos / view-once / album the peer decrypts, live location, party request accepted and group chat answered. Server: `test/thirstr_web/test_bot_test.exs`.
 
 ## Device matrix (EN-16, #175)
-Nightly (02:30 UTC) and on demand: `.github/workflows/device-matrix.yml`. No paid device farm (owner rule "no extra spend", 2026-11-21): GitHub-hosted runners only (free for this public repo). Real devices are a separate, owner-decided step (§ Real devices).
+Nightly (02:30 UTC) and on demand: `.github/workflows/device-matrix.yml`. No paid device farm (owner rule "no extra spend", 2026-11-21): GitHub-hosted runners only (free for this public repo). Real phones: Firebase Test Lab free tier (§ Real devices).
 
 | Profile | Runs on | Stands for | CPU / RAM | Screen | Network | Backend |
 |---|---|---|---|---|---|---|
@@ -77,8 +77,13 @@ Nightly (02:30 UTC) and on demand: `.github/workflows/device-matrix.yml`. No pai
 - **Gate**: a failing flow or an enforced budget fails the run. "report" budgets print ⚠ when exceeded; they switch to enforced once 7 nightly runs give a baseline (EN-18 #177: "release blocked on regression"). Emulators on shared CI hosts are noisy, so timing budgets are ceilings for regressions, not the EN-18 targets on real phones.
 - **Run by hand**: also runs on PRs that change the matrix (flows, scripts, budgets). Actions › Device matrix › Run workflow (input `profiles`: `all`, `android-low`, `android-mid`, `ios-old`). Locally with an emulator: `scripts/device-matrix/android.sh` (needs Docker, Android SDK, Maestro).
 
-### Real devices
-Real hardware (old CPU, thermal throttling, real radios) needs a device farm, which costs money or sends builds outside the EU. Options are an owner decision (enterprise-readiness.md › EN-16); until then the emulator matrix plus TestFlight on the owner's phone is the coverage.
+### Real devices (`android-real`)
+Owner pick 2026-11-21: **Firebase Test Lab, free Spark tier** (no billing account, ≤ 5 physical-device runs a day; Google-hosted, not EU-only: the build has no user data and talks to staging only).
+- Nightly job `android-real` (not on PRs, to keep the daily quota): Release APK (arm64) built for **staging**, signed out; **Robo** test (Test Lab crawls the app for 5 min) on the **most low-end physical phone** Test Lab offers (fewest screen pixels, then oldest Android ≥ API 24; `scripts/device-matrix/testlab-pick.py`; override with repo variable `TESTLAB_DEVICE`, e.g. `model=a10,version=29`).
+- Metrics from the Tool Results API (`testlab-metrics.py`): cold start to first frame and to fully drawn, peak memory, network bytes, crash-free outcome; same budget table (`android-real` in `budgets.json`).
+- The Android staging build offers no sign-in method a crawler can complete (Apple/Google are iOS-only, email link is off), so Robo never sends email or creates accounts.
+- iOS on Test Lab needs XCTest bundles signed for devices: not set up (would use the same quota).
+- **Setup (owner, once, ~10 min)**: 1) console.firebase.google.com › Add project `thirstr-testlab` (Analytics off), stay on **Spark**. 2) In Google Cloud console for that project, enable **Cloud Testing API** and **Cloud Tool Results API**. 3) IAM › Service accounts › create `github-testlab`, role **Editor** (project holds nothing else) › Keys › Add key › JSON. 4) GitHub › Settings › Secrets and variables › Actions: secret `FIREBASE_TESTLAB_SA` = the JSON file content; variable `FIREBASE_PROJECT_ID` = the project id. Until then the job prints a notice and skips.
 
 ## Chaos and game days (EN-15, #174)
 Staging only. Runbook: [`docs/runbooks/game-day.md`](../runbooks/game-day.md). Tool: `scripts/chaos/chaos.sh` run by `.github/workflows/chaos-staging.yml` (manual only, never scheduled, so nobody is surprised while testing TestFlight against staging).

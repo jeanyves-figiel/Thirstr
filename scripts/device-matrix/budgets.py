@@ -8,7 +8,7 @@ DEFAULT = os.path.join(os.path.dirname(__file__), "..", "..", "apps", "mobile", 
 LABEL = {
     "js_bundle_bytes": "JS bundle", "apk_bytes": "APK size", "app_bytes": ".app size",
     "first_frame_ms": "Cold start → first frame", "tti_ms": "Cold start → Welcome",
-    "pss_mb": "Memory after Explore (PSS)", "rss_mb": "Memory (RSS)", "net_bytes": "Network during flows",
+    "pss_mb": "Memory (PSS, Android)", "rss_mb": "Memory (RSS)", "net_bytes": "Network during flows",
 }
 
 

@@ -1,7 +1,5 @@
 # ops.md › Trunk model step 5: manual "Promote to production". Same image digest as staging,
 # live on staging ≥ 30 min with green smoke, then owner approval (environment `production`).
-# EN-12 (#171, runbook docs/runbooks/canary.md): migrations dry-run on a restored prod backup first, then ONE prod
-# machine gets the image and is watched (scripts/ops/canary.sh) before the rest; any gate failure rolls it back.
 name: Promote to production
 
 on:
@@ -13,14 +11,6 @@ on:
       reason:
         description: "What this change is (shown in the run)"
         required: true
-      canary_minutes:
-        description: "Minutes to watch the canary machine (0 = no canary: emergency rollback only)"
-        required: false
-        default: "10"
-      dry_run:
-        description: "Dry-run migrations on a restored prod backup first"
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -59,28 +49,8 @@ jobs:
       - name: Staging smoke green
         run: ./scripts/smoke.sh https://staging.thirstr.fun
 
-  dry-run:
-    # EN-12: the new image's migrations against a copy of prod restored from backups (temporary machines, destroyed after).
-    needs: verify
-    if: inputs.dry_run
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }} # job-scoped (semgrep gha-workflow-env-secret)
-    environment: production
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Migrations on a restored prod copy
-        env:
-          DIGEST: ${{ needs.verify.outputs.digest }}
-        run: |
-          set -o pipefail
-          ./scripts/ops/restore-drill.sh prod fra --migrate-image "${REPO}@${DIGEST}" | tee result.json
-          jq -r '"Dry run: migrations \(.migrate) in \(.migrate_s) s on a copy restored in \(.rto_s) s"' result.json >> "$GITHUB_STEP_SUMMARY"
-
   deploy:
-    needs: [verify, dry-run]
-    if: always() && needs.verify.result == 'success' && (needs.dry-run.result == 'success' || needs.dry-run.result == 'skipped')
+    needs: verify
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }} # job-scoped (semgrep gha-workflow-env-secret)
     runs-on: ubuntu-latest
@@ -93,20 +63,6 @@ jobs:
       - id: prev
         name: Remember current prod image for rollback
         run: echo "image=$(./scripts/fly-live-image.sh thirstr-api-prod 2>/dev/null | jq -r '.image // empty')" >> "$GITHUB_OUTPUT"
-      - name: Canary (one machine, watched)
-        id: canary
-        if: inputs.canary_minutes != '0' && steps.prev.outputs.image != ''
-        env:
-          DIGEST: ${{ needs.verify.outputs.digest }}
-          PREV_IMAGE: ${{ steps.prev.outputs.image }}
-          MINUTES: ${{ inputs.canary_minutes }}
-        run: |
-          set +e
-          ./scripts/ops/canary.sh thirstr-api-prod "${REPO}@${DIGEST}" "$PREV_IMAGE" "$MINUTES"
-          rc=$?
-          # 3 = fewer than 2 machines: nothing to compare, fall through to the normal rolling deploy
-          [[ $rc -eq 3 ]] && { echo "::warning::canary skipped (fewer than 2 machines)"; exit 0; }
-          exit $rc
       - name: Deploy same image to prod
         env:
           DIGEST: ${{ needs.verify.outputs.digest }}
@@ -115,8 +71,7 @@ jobs:
         id: smoke
         run: ./scripts/smoke.sh https://api.thirstr.fun
       - name: Auto-rollback
-        # canary failures already put the canary back; only a failure after the canary needs the full redeploy
-        if: failure() && steps.prev.outputs.image != '' && steps.canary.outcome != 'failure'
+        if: failure() && steps.prev.outputs.image != ''
         env:
           PREV_IMAGE: ${{ steps.prev.outputs.image }}
         run: |

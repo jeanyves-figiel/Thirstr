@@ -30,7 +30,7 @@
 |---|---|---|
 | `ci.yml` | PR | server (mix format/credo/sobelow/deps.audit/test), core (cargo fmt/clippy/test/audit), mobile (tsc/eslint/jest/web build), image build, infra (EU-region check, compose config), changelog-check, secret scan (gitleaks) |
 | `deploy-staging.yml` | push main | build+sign images (cosign), SBOM, push to EU registry, `fly deploy --image <digest>` to staging apps, smoke tests |
-| `promote-prod.yml` | manual | verify digest deployed on staging ≥ 30 min (Machines API, `scripts/fly-live-image.sh`) & smoke green → migration dry run on a restored prod backup (EN-12) → environment `production` → canary: migrations, one machine on the new image, watched 10 min (health, restarts, 5xx, p95, crashes), auto-rollback of the canary on any gate failure → `fly deploy --image <digest>` rest → smoke → auto-rollback (redeploy previous release) on failure. Runbook `docs/runbooks/canary.md` |
+| `promote-prod.yml` | manual | verify digest deployed on staging ≥ 30 min (Machines API, `scripts/fly-live-image.sh`) & smoke green → environment `production` approval → `fly deploy --image <digest>` to prod apps → smoke → auto-rollback (redeploy previous release) on failure |
 | `ios-testflight.yml` | push main touching `apps/mobile/**`, manual | GitHub macOS runner: `expo prebuild` → `xcodebuild archive` (automatic signing via App Store Connect API key) → export + upload to TestFlight; app → staging API; skips with a warning until owner secrets exist (#31, runbook `docs/runbooks/ios.md`) |
 | `mobile-release.yml` (later) | tag `app-v*` | prod-pointing store builds; store submission manual |
 | `nightly.yml` | cron | dependency audits (mix, cargo, npm), staging smoke; abuse harnesses (trilateration, scraping) added as features land |

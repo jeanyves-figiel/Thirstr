@@ -7,6 +7,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 ## [Unreleased]
 
 ### Specified
+- **Shared posts and linked accounts** (spec, #17, I-01, D-23): share a post from X, Bluesky, OnlyFans, JustFor.Fans or any site into up to 5 chats from the phone's share sheet; the preview is built on the sender's phone and sent end-to-end encrypted (our server never fetches a shared link, the receiver's phone never contacts the platform); OnlyFans/JustFor.Fans and labelled posts are blurred; links open outside the app. Linked accounts get a ✓ when proven (Bluesky code + DID, Sign in with X, OnlyFans/JustFor.Fans bio code with a hand check fallback). Guardrails: only after a reply, per-sender link hash, consent reports. Store review: `adult_links` flag hides OnlyFans/JustFor.Fans on the build under review.
 - **Chat history on a new phone** (spec, #146, F-01 R-01.14–R-01.15, F-07 R-07.13): after linking a new phone, the old phone can move all chats (or the last 12 months), with photos and videos, end-to-end encrypted, checked by a 6-digit code on both screens. Optional **Chat backup** (off by default), sealed with a key only the recovery phrase unlocks, daily on Wi-Fi and power. API and data model added; build follows the mockup pick.
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.
 

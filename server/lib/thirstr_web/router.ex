@@ -325,6 +325,12 @@ defmodule ThirstrWeb.Router do
       delete "/me/recovery", AccountDataController, :recovery_delete
       get "/me/recovery/vault", AccountDataController, :vault_get
       put "/me/recovery/vault", AccountDataController, :vault_put
+      # R-01.15 opt-in chat backup (#146)
+      get "/me/backup", AccountDataController, :backup_status
+      post "/me/backup/segments", AccountDataController, :backup_segment
+      get "/me/backup/manifest", AccountDataController, :backup_get
+      put "/me/backup/manifest", AccountDataController, :backup_commit
+      delete "/me/backup", AccountDataController, :backup_delete
       # #25 device attestation (iOS App Attest)
       get "/devices/attest", AccountDataController, :attest_status
       post "/devices/attest/challenge", AccountDataController, :attest_challenge

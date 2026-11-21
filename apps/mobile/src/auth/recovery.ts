@@ -99,6 +99,17 @@ const secure = {
   del: (k: string) => (Platform.OS === 'web' ? kv.set(k, null) : SecureStore.deleteItemAsync(k)),
 };
 
+/** The vault key on this phone (recovery phrase on), or null. Chat backup derives from it (R-01.15). */
+export async function vaultKey(): Promise<Uint8Array | null> {
+  const k = await secure.get(VAULT_KEY);
+  return k ? fromB64(k) : null;
+}
+
+/** Restore on a phone signed in another way: keep the vault key once it opened the backup. */
+export async function keepVaultKey(k: Uint8Array) {
+  await secure.set(VAULT_KEY, toB64(k));
+}
+
 /** Uploads the backup when it changed and the last upload is ≥ 1 h old (or `force`). */
 export async function backupNow(opts: { force?: boolean; now?: number } = {}): Promise<boolean> {
   const k = await secure.get(VAULT_KEY);

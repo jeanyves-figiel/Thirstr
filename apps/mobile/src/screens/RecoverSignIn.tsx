@@ -1,10 +1,12 @@
 // F-01 R-01.7 (#25, option B): sign in with the 12 words (S-65), then "You're back" (S-66).
 // The words live only in this screen's state; nothing is stored until the server accepts them.
 import * as Clipboard from 'expo-clipboard';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ApiError, Me } from '../api/client';
 import * as R from '../auth/recovery';
+import * as B from '../chat/backup';
+import { bx, mb } from '../i18n/backup';
 import { rx } from '../i18n/recovery';
 import { Enter, StepShell } from '../onboarding/kit';
 import { color, font, radius, space } from '../theme/tokens';
@@ -121,12 +123,30 @@ export function RecoverSignInScreen({ onBack, onDone }: { onBack: () => void; on
 
 export function RecoveredScreen({ me, restored, onDone }: { me: Me; restored: R.Restored | null; onDone: () => void }) {
   const name = me.profile?.display_name;
+  // R-01.15: an opt-in chat backup can bring the chats back; Chats runs it once the app is open.
+  const [chats, setChats] = useState<B.Info>(null);
+  useEffect(() => {
+    B.info().then(setChats);
+  }, []);
+  const cta = chats
+    ? { title: bx.restore, onPress: () => B.requestRestore().then(onDone), fill: color.trust, testID: 'recover-restore' }
+    : { title: rx.go, onPress: onDone, fill: color.bgInverse, testID: 'recover-go' };
   return (
-    <StepShell title={name ? rx.backTitleName(name) : rx.backTitle} cta={{ title: rx.go, onPress: onDone, fill: color.bgInverse, testID: 'recover-go' }}>
+    <StepShell
+      title={name ? rx.backTitleName(name) : rx.backTitle}
+      cta={cta}
+      below={
+        chats ? (
+          <Pressable testID="recover-go" accessibilityRole="button" onPress={onDone} style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={s.ls}>{rx.go}</Text>
+          </Pressable>
+        ) : undefined
+      }
+    >
       <Enter delay={40} style={s.list}>
         <Line ok t={rx.r1} />
         <Line ok={!!restored} t={rx.r2} sub={restored ? rx.r2s(day(restored.backupAt)) : rx.r2none} />
-        <Line ok={false} t={rx.r3} sub={rx.r3s} />
+        {chats ? <Line ok t={bx.restoreTitle} sub={`${bx.restoreMeta(day(chats.updated_at), mb(chats.bytes))}. ${bx.restoreLater}`} /> : <Line ok={false} t={rx.r3} sub={rx.r3s} />}
         <Line ok t={rx.r4} />
       </Enter>
     </StepShell>

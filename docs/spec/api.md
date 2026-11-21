@@ -35,11 +35,11 @@ Errors: `{ "error": { "code": "rate_limited", "message": "...", "retry_after": 3
 | PUT | /me/recovery | {public_key} → {on: true, …}; replaces the old key and deletes the old backup; 409 `key_in_use` |
 | DELETE | /me/recovery | → 204; deletes key and sealed backup |
 | GET · PUT | /me/recovery/vault | → {vault, updated_at} · {vault (base64 AES-256-GCM, ≤ 1 MB)} → {on, since, backup_at}; 404 none, 409 `recovery_off`; PUT 30/day |
-| GET | /me/backup | → {on, bytes, segments, media, updated_at, quota} (F-01 R-01.15, #146); 404 none |
-| POST | /me/backup/segments | {size (≤ 4.5 MiB), sha256} → {id, upload_url} (presigned PUT, 15 min); 409 `recovery_off`, 413 `quota`; 500 / day |
-| PUT | /me/backup/manifest | {manifest (base64 sealed, ≤ 256 KiB), segments: [id]} → {bytes, updated_at}; segments not listed are deleted after 24 h; 409 `segment_missing` |
-| GET | /me/backup/manifest | → {manifest, segments: [{id, size, url}]} (URLs 1 h) |
-| DELETE | /me/backup | → 204; deletes manifest and segments |
+| GET | /me/backup | → {on, bytes, segments, updated_at, quota} (F-01 R-01.15, #146); 404 none |
+| POST | /me/backup/segments | {size (≤ 4.5 MiB), sha256 (base64, 32 B)} → {id, upload_url} (presigned PUT, 5 min, `content-type: application/octet-stream`); 409 `recovery_off`, 422 `quota` (2 GiB); 500 / day |
+| PUT | /me/backup/manifest | {manifest (base64 sealed, ≤ 256 KiB), segments: [id]} → status; new segments must be in storage with their declared size, else 409 `segment_missing`; committed segments not listed are deleted after 24 h |
+| GET | /me/backup/manifest | → {manifest, updated_at, segments: [{id, size, url}]} (URLs 1 h) |
+| DELETE | /me/backup | → 204; deletes manifest and segments (also on `DELETE /me/recovery` and `PUT /me/recovery`) |
 | POST | /devices/transfer | {to_device_id, estimate_bytes} → {id} (old phone, after R-01.6; F-01 R-01.14); 409 `transfer_active`; ≤ 20 GiB |
 | POST | /devices/transfer/:id/chunks | {n, size (≤ 4.5 MiB)} → {upload_url} (15 min); then the new device gets `xfer.chunk {id, n, url}` on `device:<id>` |
 | GET | /devices/transfer/:id | → {state, chunks: [{n, url}], done} (new phone, resume after reconnect) |

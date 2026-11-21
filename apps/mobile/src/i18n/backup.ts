@@ -1,0 +1,88 @@
+import { getLocales } from 'expo-localization';
+
+// F-01 R-01.15 (#146): opt-in chat backup. en / fr / de.
+const en = {
+  title: 'Chat backup',
+  on: 'Back up my chats',
+  last: (when: string, size: string) => `Last backup ${when} · ${size}`,
+  never: 'No backup yet',
+  lock: "Locked with your 12 recovery words. Nobody else can open it, Thirstr included. Lose the words and the backup can't be opened.",
+  now: 'Back up now',
+  running: 'Backing up…',
+  cellular: 'Back up over mobile data',
+  cellularOff: 'Off: waits for Wi-Fi',
+  cellularOn: 'On: also on mobile data',
+  rules: 'Runs once a day on Wi-Fi when you open the app. View-once photos and chats that disappear within a day are never backed up. Turning this off deletes the backup.',
+  needPhrase: 'Needs your recovery phrase',
+  needPhraseSub: 'Set up your 12 words first. They are the only key to the backup.',
+  setUp: 'Set up recovery phrase',
+  sumOn: (when: string) => `On · ${when}`,
+  sumOff: 'Off',
+  failed: "Backup didn't finish. It will try again.",
+  // restore
+  restoreTitle: 'Your chat backup',
+  restoreMeta: (when: string, size: string) => `From ${when} · ${size}`,
+  restore: 'Restore chats',
+  restoreLater: 'Chats come back while you use the app.',
+  restoring: (done: number, total: number) => `Restoring chats · ${done} of ${total}`,
+  restored: (n: number) => `${n} messages are back`,
+  restoreFailed: "Restore didn't finish. Try again.",
+};
+type S = typeof en;
+const fr: S = {
+  title: 'Sauvegarde des chats',
+  on: 'Sauvegarder mes chats',
+  last: (when, size) => `Dernière sauvegarde ${when} · ${size}`,
+  never: 'Pas encore de sauvegarde',
+  lock: 'Verrouillée par tes 12 mots de récupération. Personne d’autre ne peut l’ouvrir, Thirstr compris. Sans les mots, la sauvegarde ne s’ouvre plus.',
+  now: 'Sauvegarder maintenant',
+  running: 'Sauvegarde…',
+  cellular: 'Sauvegarder avec les données mobiles',
+  cellularOff: 'Désactivé : attend le Wi-Fi',
+  cellularOn: 'Activé : aussi en données mobiles',
+  rules: 'Une fois par jour en Wi-Fi quand tu ouvres l’app. Les photos à vue unique et les chats qui disparaissent en moins d’un jour ne sont jamais sauvegardés. Désactiver supprime la sauvegarde.',
+  needPhrase: 'Il faut ta phrase de récupération',
+  needPhraseSub: 'Crée d’abord tes 12 mots. Ce sont la seule clé de la sauvegarde.',
+  setUp: 'Créer la phrase de récupération',
+  sumOn: (when) => `Activée · ${when}`,
+  sumOff: 'Désactivée',
+  failed: 'La sauvegarde n’a pas abouti. Nouvel essai plus tard.',
+  restoreTitle: 'Ta sauvegarde des chats',
+  restoreMeta: (when, size) => `Du ${when} · ${size}`,
+  restore: 'Restaurer les chats',
+  restoreLater: 'Tes chats reviennent pendant que tu utilises l’app.',
+  restoring: (done, total) => `Restauration des chats · ${done} sur ${total}`,
+  restored: (n) => `${n} messages sont de retour`,
+  restoreFailed: 'La restauration n’a pas abouti. Réessaie.',
+};
+const de: S = {
+  title: 'Chat-Backup',
+  on: 'Meine Chats sichern',
+  last: (when, size) => `Letztes Backup ${when} · ${size}`,
+  never: 'Noch kein Backup',
+  lock: 'Mit deinen 12 Wiederherstellungswörtern verschlossen. Niemand sonst kann es öffnen, auch Thirstr nicht. Ohne die Wörter lässt es sich nicht mehr öffnen.',
+  now: 'Jetzt sichern',
+  running: 'Wird gesichert…',
+  cellular: 'Über mobile Daten sichern',
+  cellularOff: 'Aus: wartet auf WLAN',
+  cellularOn: 'An: auch über mobile Daten',
+  rules: 'Einmal am Tag im WLAN, wenn du die App öffnest. Einmal-Ansicht-Fotos und Chats, die in weniger als einem Tag verschwinden, werden nie gesichert. Ausschalten löscht das Backup.',
+  needPhrase: 'Braucht deine Wiederherstellungsphrase',
+  needPhraseSub: 'Richte zuerst deine 12 Wörter ein. Sie sind der einzige Schlüssel zum Backup.',
+  setUp: 'Wiederherstellungsphrase einrichten',
+  sumOn: (when) => `An · ${when}`,
+  sumOff: 'Aus',
+  failed: 'Das Backup wurde nicht fertig. Es versucht es erneut.',
+  restoreTitle: 'Dein Chat-Backup',
+  restoreMeta: (when, size) => `Vom ${when} · ${size}`,
+  restore: 'Chats wiederherstellen',
+  restoreLater: 'Deine Chats kommen zurück, während du die App nutzt.',
+  restoring: (done, total) => `Chats werden wiederhergestellt · ${done} von ${total}`,
+  restored: (n) => `${n} Nachrichten sind zurück`,
+  restoreFailed: 'Die Wiederherstellung wurde nicht fertig. Versuch es nochmal.',
+};
+const lang = getLocales()[0]?.languageCode ?? 'en';
+export const bx: S = lang === 'fr' ? fr : lang === 'de' ? de : en;
+export { en as bxEn, fr as bxFr, de as bxDe };
+
+export const mb = (bytes: number) => (bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`);

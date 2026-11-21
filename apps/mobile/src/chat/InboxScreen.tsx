@@ -20,6 +20,7 @@ import { useTopics } from './hooks';
 import { TapsButton, TypingLine } from './TapsButton';
 import * as P from './people';
 import { SafetySheet, SheetRow } from '../trust/SafetySheet';
+import { RestoreCard } from '../me/settings/ChatBackupScreen';
 
 type Nav = { navigate: (s: string, p?: object) => void };
 type Tab = 'all' | 'unread' | 'fav' | 'friends';
@@ -189,6 +190,7 @@ export function InboxScreen({ navigation }: { navigation: Nav }) {
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <>
+            {!q ? <RestoreCard /> : null}
             {favStrip.length ? (
               <ScrollView keyboardDismissMode="on-drag" testID="fav-strip" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: space.l, paddingVertical: space.s }}>
                 {favStrip.map((f) => {

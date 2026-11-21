@@ -27,7 +27,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 
 ### B. Observability, SLOs, on-call
 - Metrics + alerts (SR-07).
-- **EN-04** (#163) SLOs with error budgets for the targets above; burn-rate alerts; public status page (`status.thirstr.fun`); weekly SLO review.
+- **EN-04** (#163) SLOs with error budgets for the targets above; burn-rate alerts; public status page (`status.thirstr.fun`); weekly SLO review. ✔ Spec `slos.md`, status page on GitHub Pages (`status.yml`), weekly report (`slo-report.yml`), alert rules in `monitoring.md`.
 - **EN-05** (#164) Error + crash reporting with PII scrubbing, EU-hosted (Sentry EU or self-hosted GlitchTip): server, iOS, Android; release health gates (crash-free %). ✔ Built in-house instead (no vendor, no cost): anonymous app reports + session pings, server grouping and scrubbing, crash-free alert (`docs/runbooks/monitoring.md` › App crashes); server errors via existing metrics + Fly logs.
 - **EN-06** (#165) On-call: rotation (owner + ≥ 1 engineer once hired), paging (phone push + SMS), runbook per alert, escalation path.
 
@@ -58,7 +58,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 - **EN-16** (#175) Device test matrix: real-device runs (low-end Android, old iPhone, 3G profile) in CI nightly; performance budgets enforced (EN-18).
 
 ### H. Retention, backup & DR
-- **EN-17** (#176) Quarterly full DR drill: restore prod into the second region from backups only, measure RTO/RPO, log in `docs/runbooks/db-backups.md`. Automated checks that retention rules (data-model.md) actually delete (row age metrics). Retention probes ✔ (`Thirstr.Retention`, alert in monitoring.md); DR drill open.
+- **EN-17** (#176) Quarterly full DR drill: restore prod into the second region from backups only, measure RTO/RPO, log in `docs/runbooks/db-backups.md`. Automated checks that retention rules (data-model.md) actually delete (row age metrics). Retention probes ✔ (`Thirstr.Retention`, alert in monitoring.md); DR drill ✔ automated (`dr-drill.yml`, quarterly into `ams` from backups only, `db-backups.md` › Automated drill).
 
 ### I. Performance, battery & data saving ("no compromises")
 - **EN-18** (#177) Performance + energy budget, measured on every release:

@@ -175,7 +175,19 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
 
   useEffect(() => {
     if (!cid) return;
-    E.messages(cid).then(setList);
+    let live = true;
+    (async () => {
+      // SR-15 (#155): a long chat not in memory paints its newest 50 first, then the rest.
+      if (!E.messagesCached(cid)) {
+        const head = await E.recentMessages(cid, 50).catch(() => null);
+        if (live && head) setList(head);
+      }
+      const all = await E.messages(cid);
+      if (live) setList(all);
+    })();
+    return () => {
+      live = false;
+    };
   }, [cid, tick]);
 
   // R-13.18: meetup prompt, matched on this phone only.

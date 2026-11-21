@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Thirstr Status</title>
+<meta name="description" content="Is Thirstr working? Live status of sign-in, chat, Explore, photos, notifications and the website.">
+<meta name="theme-color" content="#17142E">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="application/atom+xml" title="Thirstr status" href="feed.xml">
+<link rel="preload" href="fonts/bricolage-grotesque-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<!-- docs/spec/slos.md › 6. Static, no cookies, no third-party requests. Data: status.json from the `status-data` branch. -->
+<style>
+@font-face{font-family:"Bricolage Grotesque";font-weight:400;font-display:swap;src:url(fonts/bricolage-grotesque-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Bricolage Grotesque";font-weight:800;font-display:swap;src:url(fonts/bricolage-grotesque-latin-800-normal.woff2) format("woff2")}
+:root{
+  --ink:#17142E;--raised:#262248;--overlay:#2E2A55;--line:#39346A;
+  --fg:#FFFFFF;--fg2:#C2BDE3;--muted:#8A86B0;
+  --coral:#FF6B5B;--violet:#A78BFA;--lime:#B8F04A;--teal:#3DD6C3;--sun:#FFC93C;--danger:#FF4D6D;
+  --ok:var(--teal);--warn:var(--sun);--down:var(--danger);--maint:var(--violet);--none:#39346A;
+  --font:"Bricolage Grotesque",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ink);color:var(--fg)}
+body{font:15px/1.5 var(--font);padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px));-webkit-font-smoothing:antialiased}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+a{color:var(--fg2)}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-top:20px}
+.brand{display:flex;align-items:baseline;gap:10px;text-decoration:none;color:var(--fg)}
+.wm{font-weight:800;font-size:30px;line-height:1;letter-spacing:-.04em}
+.wm .r{color:var(--coral)}
+.dots{display:inline-flex;gap:.08em;margin-left:.06em}.dots i{width:.3em;height:.3em;border-radius:50%;display:inline-block}
+.brand small{font-size:13px;color:var(--fg2);letter-spacing:.06em;text-transform:uppercase;font-weight:800}
+.lang{display:flex;background:var(--raised);border-radius:999px;padding:3px}
+.lang button{font:800 13px var(--font);border:0;background:none;color:var(--fg2);padding:5px 11px;border-radius:999px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--overlay);color:var(--fg)}
+.hero{border-radius:28px;padding:22px 22px 20px;color:var(--ink);display:flex;flex-direction:column;gap:6px;background:var(--none)}
+.hero h1{font-weight:800;font-size:clamp(24px,5vw,32px);line-height:1.1;letter-spacing:-.03em;margin:0;text-wrap:balance;display:flex;align-items:center;gap:12px}
+.hero p{margin:0;font-size:14px;opacity:.85}
+.pulse{width:14px;height:14px;border-radius:50%;background:var(--ink);flex:none;position:relative}
+.pulse::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--ink);opacity:.35;animation:p 2s ease-out infinite}
+@keyframes p{from{transform:scale(.6);opacity:.6}to{transform:scale(1.4);opacity:0}}
+@media (prefers-reduced-motion:reduce){.pulse::after{animation:none}}
+h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--fg2);margin:0 0 10px}
+.incident{background:var(--raised);border-radius:24px;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.incident+.incident{margin-top:10px}
+.inc-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.inc-head h3{margin:0;font-weight:800;font-size:19px;line-height:1.25;letter-spacing:-.02em;min-width:0}
+.pill{font-weight:800;font-size:12px;color:var(--ink);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.affects{display:flex;gap:6px;flex-wrap:wrap}
+.affects span{font-size:12px;background:var(--overlay);color:var(--fg2);padding:3px 9px;border-radius:999px}
+.timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.timeline li{display:grid;grid-template-columns:110px 1fr;gap:12px}
+.when{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;padding-top:2px}
+.what{min-width:0;overflow-wrap:anywhere}
+.what b{display:block;font-size:14px}
+.what span{color:var(--fg2);font-size:14px;white-space:pre-line}
+.comps{background:var(--raised);border-radius:24px;overflow:hidden}
+.comp{padding:16px 20px;display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--overlay)}
+.comp:first-child{border-top:0}
+.comp-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.comp-name{font-weight:800;font-size:16px;min-width:0}
+.comp-name small{display:block;font-weight:400;font-size:13px;color:var(--muted)}
+.state{font-size:13px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.state i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.bars{display:grid;grid-template-columns:repeat(90,1fr);gap:2px;height:30px}
+.bars span{border-radius:2px;min-width:0}
+.axis{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.axis .a45{display:none}
+.slo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{background:var(--raised);border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile .v{font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-.02em;font-weight:800}
+.tile .l{font-size:13px;color:var(--fg2)}
+.tile .t{font-size:12px;color:var(--muted)}
+.past{background:var(--raised);border-radius:24px;overflow:hidden}
+.day{padding:14px 20px;border-top:1px solid var(--overlay);display:flex;flex-direction:column;gap:4px}
+.day:first-child{border-top:0}
+.day .d{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.day .x{font-weight:800;font-size:15px}
+.day .y{color:var(--fg2);font-size:14px}
+footer{display:flex;flex-direction:column;gap:8px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+footer .links{display:flex;gap:16px;flex-wrap:wrap}
+.tip{position:fixed;pointer-events:none;background:var(--fg);color:var(--ink);font-size:12px;font-weight:800;padding:6px 9px;border-radius:10px;white-space:nowrap;z-index:5}
+@media (max-width:520px){
+  .slo{grid-template-columns:1fr 1fr}.slo .tile:last-child{grid-column:span 2}
+  .bars{grid-template-columns:repeat(45,1fr)}.bars span:nth-child(-n+45){display:none}
+  .axis .a90{display:none}.axis .a45{display:inline}
+  .timeline li{grid-template-columns:1fr;gap:2px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="https://thirstr.fun/" aria-label="Thirstr">
+      <span class="wm">thirst<span class="r">r</span><span class="dots"><i style="background:var(--sun)"></i><i style="background:var(--violet)"></i><i style="background:var(--lime)"></i></span></span>
+      <small data-t="status">Status</small>
+    </a>
+    <div class="lang" role="group" aria-label="Language">
+      <button data-l="en" aria-pressed="false">EN</button><button data-l="fr" aria-pressed="false">FR</button><button data-l="de" aria-pressed="false">DE</button>
+    </div>
+  </header>
+  <div class="hero" id="hero" role="status" aria-live="polite"><h1><span class="pulse"></span><span data-t="loading">Checking…</span></h1></div>
+  <section id="active" hidden><h2 data-t="now">Now</h2><div id="inc"></div></section>
+  <section id="month" hidden><h2 data-t="this_month">This month</h2><div class="slo" id="tiles"></div></section>
+  <section><h2 data-t="last90">Last 90 days</h2><div class="comps" id="comps"></div></section>
+  <section><h2 data-t="past">Past incidents</h2><div class="past" id="past"></div></section>
+  <footer>
+    <span><span data-t="foot_checked">Checked every 5 minutes from outside our servers, so this page works even when Thirstr doesn't.</span> <span data-t="last_check">Last check</span> <span id="last">–</span>.</span>
+    <span data-t="foot_privacy">No cookies, no tracking, no sign-up. Follow incidents with the Atom feed.</span>
+    <div class="links"><a href="feed.xml" data-t="feed">Atom feed</a><a href="https://thirstr.fun/">thirstr.fun</a></div>
+  </footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script>
+"use strict";
+const T = {
+  en: { status:"Status", loading:"Checking…", now:"Now", planned:"Planned", this_month:"This month", last90:"Last 90 days", past:"Past incidents",
+    foot_checked:"Checked every 5 minutes from outside our servers, so this page works even when Thirstr doesn't.", last_check:"Last check",
+    foot_privacy:"No cookies, no tracking, no sign-up. Follow incidents with the Atom feed.", feed:"Atom feed",
+    all_ok:"All systems working", all_ok_sub:"Everything checked fine {ago}.", some_warn:"Some parts are slower than usual", some_down:"Some parts aren't working",
+    all_down:"Thirstr is down", all_down_sub:"The app can't connect right now. We're on it.", maint_now:"Maintenance in progress", stale:"Status unknown", stale_sub:"Our checks haven't reported for a while.",
+    comp_sign:"Sign-in and accounts", comp_sign_s:"Email links, passkeys, Apple and Google", comp_chat:"Chat", comp_chat_s:"Sending and receiving messages, photos and videos",
+    comp_explore:"Explore and map", comp_explore_s:"Grid, map, Tonight board, parties", comp_media:"Photos and albums", comp_media_s:"Uploads, private albums, Moments",
+    comp_push:"Notifications", comp_push_s:"Alerts on iPhone and Android", comp_site:"Website", comp_site_s:"thirstr.fun",
+    s_ok:"Working", s_warn:"Slower than usual", s_down:"Not working", s_maint:"Maintenance", s_none:"No data",
+    d_ok:"No problems", d_warn:"Slower for a while", d_down:"Down for a while", d_maint:"Planned maintenance", d_none:"No data yet",
+    ago90:"90 days ago", ago45:"45 days ago", today:"Today", avail:"{p} % available",
+    t_avail:"Thirstr available", t_avail_t:"Target 99.9 %", t_msg:"Messages delivered", t_msg_t:"95 % within · target 0.5 s", t_map:"Map and grid load", t_map_t:"95 % within · target 0.3 s",
+    st_investigating:"Investigating", st_identified:"Identified", st_monitoring:"Monitoring", st_resolved:"Resolved", st_scheduled:"Scheduled",
+    no_incidents:"No incidents in the last 90 days.", resolved_after:"Resolved after {d}.", update:"Update", ago_min:"{n} min ago", just_now:"just now" },
+  fr: { status:"Statut", loading:"Vérification…", now:"En ce moment", planned:"Prévu", this_month:"Ce mois-ci", last90:"90 derniers jours", past:"Incidents passés",
+    foot_checked:"Vérifié toutes les 5 minutes depuis l'extérieur de nos serveurs : cette page marche même quand Thirstr ne marche pas.", last_check:"Dernière vérification",
+    foot_privacy:"Pas de cookies, pas de pistage, pas d'inscription. Suivez les incidents avec le flux Atom.", feed:"Flux Atom",
+    all_ok:"Tout fonctionne", all_ok_sub:"Tout allait bien {ago}.", some_warn:"Certaines parties sont plus lentes que d'habitude", some_down:"Certaines parties ne fonctionnent pas",
+    all_down:"Thirstr est en panne", all_down_sub:"L'app ne peut pas se connecter pour l'instant. On s'en occupe.", maint_now:"Maintenance en cours", stale:"Statut inconnu", stale_sub:"Nos vérifications n'ont rien envoyé depuis un moment.",
+    comp_sign:"Connexion et comptes", comp_sign_s:"Liens e-mail, passkeys, Apple et Google", comp_chat:"Chat", comp_chat_s:"Envoyer et recevoir messages, photos et vidéos",
+    comp_explore:"Explorer et carte", comp_explore_s:"Grille, carte, Ce soir, soirées", comp_media:"Photos et albums", comp_media_s:"Envois, albums privés, Moments",
+    comp_push:"Notifications", comp_push_s:"Alertes sur iPhone et Android", comp_site:"Site web", comp_site_s:"thirstr.fun",
+    s_ok:"Fonctionne", s_warn:"Plus lent que d'habitude", s_down:"Ne fonctionne pas", s_maint:"Maintenance", s_none:"Pas de données",
+    d_ok:"Aucun problème", d_warn:"Lent pendant un moment", d_down:"En panne pendant un moment", d_maint:"Maintenance prévue", d_none:"Pas encore de données",
+    ago90:"Il y a 90 jours", ago45:"Il y a 45 jours", today:"Aujourd'hui", avail:"{p} % disponible",
+    t_avail:"Thirstr disponible", t_avail_t:"Objectif 99,9 %", t_msg:"Messages livrés", t_msg_t:"95 % en moins de · objectif 0,5 s", t_map:"Carte et grille", t_map_t:"95 % en moins de · objectif 0,3 s",
+    st_investigating:"En analyse", st_identified:"Identifié", st_monitoring:"Sous surveillance", st_resolved:"Résolu", st_scheduled:"Prévu",
+    no_incidents:"Aucun incident ces 90 derniers jours.", resolved_after:"Résolu après {d}.", update:"Mise à jour", ago_min:"il y a {n} min", just_now:"à l'instant" },
+  de: { status:"Status", loading:"Wird geprüft…", now:"Jetzt", planned:"Geplant", this_month:"Diesen Monat", last90:"Letzte 90 Tage", past:"Frühere Störungen",
+    foot_checked:"Alle 5 Minuten von außerhalb unserer Server geprüft, damit diese Seite auch funktioniert, wenn Thirstr es nicht tut.", last_check:"Letzte Prüfung",
+    foot_privacy:"Keine Cookies, kein Tracking, keine Anmeldung. Störungen per Atom-Feed verfolgen.", feed:"Atom-Feed",
+    all_ok:"Alles funktioniert", all_ok_sub:"Alles war {ago} in Ordnung.", some_warn:"Einiges ist langsamer als sonst", some_down:"Einiges funktioniert nicht",
+    all_down:"Thirstr ist nicht erreichbar", all_down_sub:"Die App kann sich gerade nicht verbinden. Wir sind dran.", maint_now:"Wartung läuft", stale:"Status unbekannt", stale_sub:"Unsere Prüfungen haben sich länger nicht gemeldet.",
+    comp_sign:"Anmeldung und Konten", comp_sign_s:"E-Mail-Links, Passkeys, Apple und Google", comp_chat:"Chat", comp_chat_s:"Nachrichten, Fotos und Videos senden und empfangen",
+    comp_explore:"Entdecken und Karte", comp_explore_s:"Raster, Karte, Heute-Abend-Board, Partys", comp_media:"Fotos und Alben", comp_media_s:"Uploads, private Alben, Moments",
+    comp_push:"Benachrichtigungen", comp_push_s:"Hinweise auf iPhone und Android", comp_site:"Website", comp_site_s:"thirstr.fun",
+    s_ok:"Funktioniert", s_warn:"Langsamer als sonst", s_down:"Funktioniert nicht", s_maint:"Wartung", s_none:"Keine Daten",
+    d_ok:"Keine Probleme", d_warn:"Zeitweise langsamer", d_down:"Zeitweise ausgefallen", d_maint:"Geplante Wartung", d_none:"Noch keine Daten",
+    ago90:"Vor 90 Tagen", ago45:"Vor 45 Tagen", today:"Heute", avail:"{p} % verfügbar",
+    t_avail:"Thirstr verfügbar", t_avail_t:"Ziel 99,9 %", t_msg:"Nachrichten zugestellt", t_msg_t:"95 % innerhalb · Ziel 0,5 s", t_map:"Karte und Raster", t_map_t:"95 % innerhalb · Ziel 0,3 s",
+    st_investigating:"Wird untersucht", st_identified:"Ursache gefunden", st_monitoring:"Wird beobachtet", st_resolved:"Behoben", st_scheduled:"Geplant",
+    no_incidents:"Keine Störungen in den letzten 90 Tagen.", resolved_after:"Nach {d} behoben.", update:"Update", ago_min:"vor {n} Min.", just_now:"gerade eben" }
+};
+const COMPS = ["sign","chat","explore","media","push","site"];
+const COL = { ok:"var(--ok)", warn:"var(--warn)", down:"var(--down)", maint:"var(--maint)", none:"var(--none)" };
+const STCOL = { investigating:"warn", identified:"warn", monitoring:"ok", resolved:"ok", scheduled:"maint" };
+const pick = () => { try { const s = localStorage.getItem("lang"); if (T[s]) return s; } catch {} const n = (navigator.language || "en").slice(0,2); return T[n] ? n : "en"; };
+let lang = pick(), data = null;
+const t = (k, v = {}) => (T[lang][k] ?? T.en[k] ?? k).replace(/\{(\w+)\}/g, (_, x) => v[x] ?? "");
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" })[c]);
+const fmtDate = (iso) => new Date(iso).toLocaleDateString(lang, { month:"short", day:"numeric", year:"numeric" });
+const fmtTime = (iso) => new Date(iso).toLocaleString(lang, { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? t("just_now") : t("ago_min", { n: m }); };
+const dur = (a, b) => { const m = Math.max(1, Math.round((new Date(b) - new Date(a)) / 60000)); return m < 120 ? `${m} min` : `${Math.round(m / 60)} h`; };
+const num = (x, d = 2) => x == null ? "–" : x.toLocaleString(lang, { maximumFractionDigits: d, minimumFractionDigits: d });
+
+function render() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-t]").forEach((el) => { el.textContent = t(el.dataset.t); });
+  document.querySelectorAll(".lang button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.l === lang));
+  if (!data) return;
+  const comps = Object.fromEntries(data.components.map((c) => [c.id, c]));
+  const active = data.incidents.filter((i) => i.state !== "resolved");
+  const maintNow = active.find((i) => i.kind === "maintenance" && i.window && new Date(i.window.from) <= Date.now() && Date.now() <= new Date(i.window.to));
+  const states = COMPS.map((id) => maintNow?.affects.includes(id) && comps[id].state !== "ok" ? "maint" : comps[id]?.state ?? "none");
+  const stale = Date.now() - new Date(data.updated) > 30 * 60000;
+  const core = states.slice(0, 4);
+  let hero;
+  if (stale) hero = ["none", t("stale"), t("stale_sub")];
+  else if (core.every((s) => s === "down")) hero = ["down", t("all_down"), t("all_down_sub")];
+  else if (maintNow) hero = ["maint", t("maint_now"), maintNow.title];
+  else if (states.includes("down")) hero = ["down", t("some_down"), active.find((i) => i.kind === "incident")?.title ?? ""];
+  else if (states.includes("warn")) hero = ["warn", t("some_warn"), active.find((i) => i.kind === "incident")?.title ?? ""];
+  else hero = ["ok", t("all_ok"), t("all_ok_sub", { ago: ago(data.updated) })];
+  const h = document.getElementById("hero");
+  h.style.background = COL[hero[0]]; if (hero[0] === "none") h.style.color = "var(--fg)";
+  h.innerHTML = `<h1><span class="pulse"></span>${esc(hero[1])}</h1>${hero[2] ? `<p>${esc(hero[2])}</p>` : ""}`;
+
+  const act = document.getElementById("active"); act.hidden = !active.length;
+  document.getElementById("inc").innerHTML = active.map(incidentCard).join("");
+
+  const m = data.month || {};
+  document.getElementById("month").hidden = m.availability == null;
+  document.getElementById("tiles").innerHTML =
+    tile(m.availability == null ? "–" : `${num(m.availability)} %`, t("t_avail"), t("t_avail_t")) +
+    (m.message_p95_ms != null ? tile(`${num(m.message_p95_ms / 1000)} s`, t("t_msg"), t("t_msg_t")) : "") +
+    (m.map_p95_ms != null ? tile(`${num(m.map_p95_ms / 1000)} s`, t("t_map"), t("t_map_t")) : "");
+
+  document.getElementById("comps").innerHTML = COMPS.map((id, i) => {
+    const s = states[i], days = data.days[id] || [], up = comps[id]?.uptime90;
+    if (s === "none" && up == null) return ""; // never measured (e.g. Notifications without metrics access)
+    return `<div class="comp"><div class="comp-row"><span class="comp-name">${esc(t("comp_" + id))}<small>${esc(t("comp_" + id + "_s"))}</small></span>
+      <span class="state" style="color:${COL[s]}"><i style="background:${COL[s]}"></i>${esc(t("s_" + s))}</span></div>
+      <div class="bars" role="img" aria-label="${esc(t("comp_" + id))}: ${up == null ? t("d_none") : t("avail", { p: num(up) })}">${days.map((d) => `<span style="background:${COL[d.s]}" data-d="${d.d}" data-s="${d.s}" data-u="${d.up ?? ""}"></span>`).join("")}</div>
+      <div class="axis"><span class="a90">${esc(t("ago90"))}</span><span class="a45">${esc(t("ago45"))}</span><span>${up == null ? "" : esc(t("avail", { p: num(up) }))}</span><span>${esc(t("today"))}</span></div></div>`;
+  }).join("");
+
+  const past = data.incidents.filter((i) => i.state === "resolved");
+  document.getElementById("past").innerHTML = past.length ? past.map((i) =>
+    `<div class="day" id="incident-${i.id}"><span class="d">${esc(fmtDate(i.opened))}</span><span class="x">${esc(i.title)}</span>
+     <span class="y">${esc(t("resolved_after", { d: dur(i.opened, i.closed) }))}${i.updates[0] ? " " + esc(i.updates[0].text) : ""}</span></div>`).join("")
+    : `<div class="day"><span class="y">${esc(t("no_incidents"))}</span></div>`;
+  document.getElementById("last").textContent = ago(data.updated);
+}
+const tile = (v, l, s) => `<div class="tile"><span class="v">${esc(v)}</span><span class="l">${esc(l)}</span><span class="t">${esc(s)}</span></div>`;
+function incidentCard(i) {
+  const head = i.kind === "maintenance" && i.window ? `${fmtTime(i.window.from)} – ${fmtTime(i.window.to)}` : "";
+  return `<div class="incident" id="incident-${i.id}"><div class="inc-head"><h3>${esc(i.title)}</h3>
+    <span class="pill" style="background:${COL[STCOL[i.state] || "warn"]}">${esc(t("st_" + i.state))}</span></div>
+    ${head ? `<span class="y" style="color:var(--fg2)">${esc(head)}</span>` : ""}
+    ${i.affects.length ? `<div class="affects">${i.affects.map((a) => `<span>${esc(t("comp_" + a))}</span>`).join("")}</div>` : ""}
+    <ol class="timeline">${i.updates.map((u) => `<li><span class="when">${esc(fmtTime(u.at))}</span><span class="what"><b>${esc(t("st_" + (u.state || "investigating")) || t("update"))}</b><span>${esc(u.text)}</span></span></li>`).join("")}</ol></div>`;
+}
+document.querySelectorAll(".lang button").forEach((b) => b.addEventListener("click", () => { lang = b.dataset.l; try { localStorage.setItem("lang", lang); } catch {} render(); }));
+const tip = document.getElementById("tip");
+document.addEventListener("pointerover", (e) => {
+  const s = e.target.closest(".bars span"); if (!s) { tip.hidden = true; return; }
+  tip.textContent = `${fmtDate(s.dataset.d + "T12:00:00Z")} · ${t("d_" + s.dataset.s)}${s.dataset.u ? ` · ${num(+s.dataset.u)} %` : ""}`;
+  tip.hidden = false; const r = s.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(innerWidth - tip.offsetWidth - 8, r.left - tip.offsetWidth / 2)) + "px"; tip.style.top = (r.top - 34) + "px";
+});
+async function load() {
+  try { const r = await fetch("status.json?" + Math.floor(Date.now() / 60000), { cache: "no-store" }); if (r.ok) data = await r.json(); } catch {}
+  render();
+}
+render(); load(); setInterval(load, 60000);
+</script>
+</body>
+</html>

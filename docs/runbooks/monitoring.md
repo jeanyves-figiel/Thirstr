@@ -41,6 +41,18 @@
 
 Set up once per environment; staging alerts go to a muted contact point.
 
+## SLO burn-rate alerts (EN-04, #163; spec `docs/spec/slos.md` › 3)
+`ERR(W)` = `(sum(rate(phoenix_router_dispatch_stop_duration_count{app="thirstr-api-prod",status=~"5.."}[W])) or vector(0)) / sum(rate(phoenix_router_dispatch_stop_duration_count{app="thirstr-api-prod"}[W]))`. Budget `B` = 0.001 (99.9 %). Same shape for SLO-3/4 with the slow ratio (`le="500"` / `le="300"`) and `B` = 0.05, and SLO-5 with the crash ratio and `B` = 0.005.
+
+| Alert | Rule | Guard | Contact |
+|---|---|---|---|
+| SLO-1 fast burn | `ERR(1h) > 14.4*B and ERR(5m) > 14.4*B` | `sum(increase(…_count[1h])) >= 100` | phone (page) |
+| SLO-1 slow burn | `ERR(6h) > 6*B and ERR(30m) > 6*B` | `sum(increase(…_count[6h])) >= 100` | phone (page) |
+| SLO-1 budget drain | `ERR(3d) > B and ERR(6h) > B` | `sum(increase(…_count[3d])) >= 100` | email |
+| SLO-3/4/5 | same three rows with their ratio and `B` | same | email (no page in closed beta) |
+
+These replace "API errors" above for paging once set up; keep "API errors" as the email-only early signal. The weekly review (`slo-review.md`) checks which fired.
+
 ## App crashes (EN-05, #164)
 In-house, no vendor SDK. The app (`src/app/crash.ts`) reports JS errors to `POST /v1/client/errors`: platform, build, message, stack only (no account, device or install id). Fatal errors and render crashes are queued on the phone and sent on the next start; one ping per start goes to `POST /v1/client/sessions`. The server scrubs emails, URLs, ids, tokens and long numbers, groups by signature (platform + build + message + top of stack) in `client_errors`, and deletes groups idle 30 days. Rate limit 120 reports per IP per hour.
 

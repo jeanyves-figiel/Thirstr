@@ -227,6 +227,15 @@ const waiters = new Set<() => void>();
 /** Resolves once `start` has loaded the conversation list (jobs that read every chat wait for it). */
 export const loadedConvs = () => (loaded ? Promise.resolve() : new Promise<void>((r) => waiters.add(r)));
 
+/** #260 background launch: the chat list from the encrypted store only (no socket, no pull). */
+export async function loadConvsOnly() {
+  if (loaded) return;
+  convs = (await kv.get<Record<string, Conv>>('convs')) ?? {};
+  loaded = true;
+  waiters.forEach((r) => r());
+  waiters.clear();
+}
+
 /** Starts the engine for the signed-in account: key packages, realtime, first pull. */
 export async function start(account: Me) {
   me = account;

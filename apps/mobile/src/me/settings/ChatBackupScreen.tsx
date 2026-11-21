@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { api } from '../../api/client';
 import { deriveKeys, vaultKey } from '../../auth/recovery';
+import { syncBackgroundBackup } from '../../chat/backgroundBackup';
 import * as B from '../../chat/backup';
 import * as E from '../../chat/engine';
 import { tx } from '../../i18n/app';
@@ -84,7 +85,7 @@ export function ChatBackupSettings({ navigation }: { navigation: Nav }) {
           sub={on ? (info ? bx.last(when(info.updated_at), mb(info.bytes)) : bx.never) : undefined}
           value={on}
           disabled={busy}
-          onChange={(v) => run(() => (v ? B.turnOn(p.cellular) : B.turnOff()))}
+          onChange={(v) => run(() => (v ? B.turnOn(p.cellular) : B.turnOff()).finally(syncBackgroundBackup))}
         />
         {on ? (
           <Pressable testID="backup-now" accessibilityRole="button" disabled={busy} onPress={() => run(() => B.backupNow())} style={({ pressed }) => ({ minHeight: 52, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: space.s, backgroundColor: pressed ? color.bgOverlay : 'transparent' })}>

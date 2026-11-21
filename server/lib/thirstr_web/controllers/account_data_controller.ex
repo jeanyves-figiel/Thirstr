@@ -61,8 +61,12 @@ defmodule ThirstrWeb.AccountDataController do
   def linked(conn, %{"id" => pid}), do: Linked.list(me(conn), pid) |> done(conn)
 
   def link_account(conn, p) do
-    with {:ok, r} <- Linked.add(me(conn), p), do: conn |> put_status(201) |> json(r)
+    with {:ok, r} <- Linked.add(me(conn), p, conn.assigns[:client] || %{}),
+         do: conn |> put_status(201) |> json(r)
   end
+
+  def x_start(conn, p), do: Linked.x_start(me(conn), p) |> done(conn)
+  def x_finish(conn, p), do: Linked.x_finish(me(conn), p) |> done(conn)
 
   def update_linked(conn, %{"id" => id} = p), do: Linked.update(me(conn), id, p) |> done(conn)
   def verify_linked(conn, %{"id" => id}), do: Linked.verify(me(conn), id) |> done(conn)

@@ -223,6 +223,7 @@ defmodule Thirstr.Chat do
       |> case do
         {:ok, {res, events}} ->
           announce(events)
+          link_fanout(a, params["lh"], events)
           {:ok, res}
 
         {:error, _} = e ->
@@ -230,6 +231,25 @@ defmodule Thirstr.Chat do
       end
     end
   end
+
+  # I-01 R-I01.23: `lh` is an 8-byte HMAC of a shared link under a key only the sender's phone
+  # has, so the server can count "same link to many people from this sender" without learning
+  # the link or comparing senders. Counted in Valkey for 24 h, never stored or logged.
+  @link_fanout 15
+  defp link_fanout(%Account{} = a, lh, events) when is_binary(lh) and byte_size(lh) == 16 do
+    if Regex.match?(~r/^[0-9a-f]{16}$/, lh) do
+      for _ <- events |> Enum.map(&elem(&1, 0)) |> Enum.uniq() do
+        case Thirstr.Valkey.hit("lh:#{a.id}:#{lh}", 1_000_000, 86_400) do
+          {:ok, @link_fanout} -> Thirstr.Signals.record(a, :link_fanout)
+          _ -> :ok
+        end
+      end
+    end
+
+    :ok
+  end
+
+  defp link_fanout(_, _, _), do: :ok
 
   @env_fields [:group_id, :kind, :key_package_id, :ciphertext, :created_at]
   # SR-13 (#153): envelopes up to this size (per device and send) ride the socket.

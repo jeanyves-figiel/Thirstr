@@ -100,6 +100,8 @@ defmodule ThirstrWeb.Router do
     post "/reports/:id/action", AdminController, :report_action
     get "/photos", AdminController, :photos
     post "/photos/:id", AdminController, :photo_decision
+    get "/linked", AdminController, :linked
+    post "/linked/:id", AdminController, :linked_decision
     get "/quarantine", AdminController, :quarantine
     post "/accounts/:id/action", AdminController, :account_action
     get "/appeals", AdminController, :appeals
@@ -334,6 +336,8 @@ defmodule ThirstrWeb.Router do
       post "/devices/link/:code/confirm", AccountDataController, :link_confirm
       get "/me/profiles/:id/linked-accounts", AccountDataController, :linked
       post "/me/linked-accounts", AccountDataController, :link_account
+      post "/me/linked-accounts/x/start", AccountDataController, :x_start
+      post "/me/linked-accounts/x/finish", AccountDataController, :x_finish
       patch "/me/linked-accounts/:id", AccountDataController, :update_linked
       post "/me/linked-accounts/:id/verify", AccountDataController, :verify_linked
       delete "/me/linked-accounts/:id", AccountDataController, :remove_linked

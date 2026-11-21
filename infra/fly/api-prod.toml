@@ -22,6 +22,8 @@ kill_timeout = 30
   SITE_HOST = "thirstr.fun"
   WELCOME_DEFAULT_CITY = "Zurich"
   S3_REGION = "auto"
+  # Google iOS OAuth client (public, not a secret): audience for Sign in with Google ID tokens (#25).
+  GOOGLE_CLIENT_IDS = "613900452555-cufeuuh30tsbea8j2rcv49s0d6vjspit.apps.googleusercontent.com"
 
 [http_service]
   internal_port = 4000

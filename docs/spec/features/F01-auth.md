@@ -14,7 +14,7 @@ Beta: passkey, Apple, Google, email magic link, device link by QR, recovery phra
 
 ## Rules
 - R-01.1 Passkey is the primary CTA. Apple/Google/Email secondary. **No phone number, no password, anywhere.**
-- R-01.2 OIDC: store only `SHA-256(provider‖sub‖server_pepper)`. Never email/name from the provider. Apple "Hide My Email" accepted.
+- R-01.2 OIDC: store only `SHA-256(provider‖sub‖server_pepper)`. Never email/name from the provider. Apple "Hide My Email" accepted. iOS (#25): Apple via the native sheet (no scopes); Google via authorization code + PKCE in the system browser with the iOS OAuth client (`openid` scope only, redirect `com.googleusercontent.apps.<id>:/oauthredirect`). Server accepts Google ID tokens with `iss` `https://accounts.google.com` or `accounts.google.com` and `aud` in `GOOGLE_CLIENT_IDS`.
 - R-01.3 Email magic link: email stored hashed; link valid 15 min, single use; response is always 202 (no account enumeration). An account made with Apple/Google/passkey can add a sign-in email later (`POST /me/email`, [RF-7](../required-fields.md)).
 - R-01.4 One account per verified human (enforced at F-03, not here).
 - R-01.5 Access token 15 min; refresh 30 d, bound to device key; rotate on use (re-use > 60 s after use revokes the device; within 60 s is a client race → 409, #116; the app runs one refresh at a time and signs out only on 401/403); revoke all on "Log out everywhere".

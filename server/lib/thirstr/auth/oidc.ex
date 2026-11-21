@@ -7,10 +7,11 @@ defmodule Thirstr.Auth.OIDC do
 
   @issuers %{
     "apple" =>
-      {"https://appleid.apple.com", "https://appleid.apple.com/auth/keys", :apple_client_ids},
+      {["https://appleid.apple.com"], "https://appleid.apple.com/auth/keys", :apple_client_ids},
+    # Google signs ID tokens with either issuer spelling.
     "google" =>
-      {"https://accounts.google.com", "https://www.googleapis.com/oauth2/v3/certs",
-       :google_client_ids}
+      {["https://accounts.google.com", "accounts.google.com"],
+       "https://www.googleapis.com/oauth2/v3/certs", :google_client_ids}
   }
 
   @dev_issuer "https://dev-oidc.thirstr.invalid"
@@ -32,7 +33,7 @@ defmodule Thirstr.Auth.OIDC do
   defp verify_token(provider, token) do
     cond do
       dev_issuer?() and peek_iss(token) == @dev_issuer ->
-        verify_with(token, [dev_jwk()], @dev_issuer, ["thirstr-dev"])
+        verify_with(token, [dev_jwk()], [@dev_issuer], ["thirstr-dev"])
 
       Map.has_key?(@issuers, provider) ->
         verify_remote(provider, token)
@@ -43,26 +44,26 @@ defmodule Thirstr.Auth.OIDC do
   end
 
   defp verify_remote(provider, token) do
-    {iss, jwks_url, aud_key} = @issuers[provider]
+    {issuers, jwks_url, aud_key} = @issuers[provider]
     auds = Application.fetch_env!(:thirstr, :oidc)[aud_key]
 
     with {:ok, %{status: 200, body: %{"keys" => keys}}} <-
            Req.get(jwks_url, retry: false, receive_timeout: 3000) do
-      verify_with(token, Enum.map(keys, &JOSE.JWK.from_map/1), iss, auds)
+      verify_with(token, Enum.map(keys, &JOSE.JWK.from_map/1), issuers, auds)
     end
   end
 
-  defp verify_with(token, jwks, iss, auds) do
+  defp verify_with(token, jwks, issuers, auds) do
     Enum.find_value(jwks, {:error, :bad_signature}, fn jwk ->
       case JOSE.JWT.verify_strict(jwk, ["RS256", "ES256"], token) do
-        {true, %JOSE.JWT{fields: claims}, _} -> check_claims(claims, iss, auds)
+        {true, %JOSE.JWT{fields: claims}, _} -> check_claims(claims, issuers, auds)
         _ -> nil
       end
     end)
   end
 
-  defp check_claims(%{"iss" => iss, "aud" => aud, "exp" => exp} = claims, iss, auds) do
-    if aud in auds and exp > System.system_time(:second),
+  defp check_claims(%{"iss" => iss, "aud" => aud, "exp" => exp} = claims, issuers, auds) do
+    if iss in issuers and aud in auds and exp > System.system_time(:second),
       do: {:ok, claims},
       else: {:error, :invalid_claims}
   end

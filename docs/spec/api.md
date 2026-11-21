@@ -35,26 +35,28 @@ Errors: `{ "error": { "code": "rate_limited", "message": "...", "retry_after": 3
 | PUT | /me/recovery | {public_key} → {on: true, …}; replaces the old key and deletes the old backup; 409 `key_in_use` |
 | DELETE | /me/recovery | → 204; deletes key and sealed backup |
 | GET · PUT | /me/recovery/vault | → {vault, updated_at} · {vault (base64 AES-256-GCM, ≤ 1 MB)} → {on, since, backup_at}; 404 none, 409 `recovery_off`; PUT 30/day |
-| GET | /me/backup | → {on, bytes, segments, media, updated_at, quota} (F-01 R-01.15, #146); 404 none |
-| POST | /me/backup/segments | {size (≤ 4.5 MiB), sha256} → {id, upload_url} (presigned PUT, 15 min); 409 `recovery_off`, 413 `quota`; 500 / day |
-| PUT | /me/backup/manifest | {manifest (base64 sealed, ≤ 256 KiB), segments: [id]} → {bytes, updated_at}; segments not listed are deleted after 24 h; 409 `segment_missing` |
-| GET | /me/backup/manifest | → {manifest, segments: [{id, size, url}]} (URLs 1 h) |
-| DELETE | /me/backup | → 204; deletes manifest and segments |
-| POST | /devices/transfer | {to_device_id, estimate_bytes} → {id} (old phone, after R-01.6; F-01 R-01.14); 409 `transfer_active`; ≤ 20 GiB |
-| POST | /devices/transfer/:id/chunks | {n, size (≤ 4.5 MiB)} → {upload_url} (15 min); then the new device gets `xfer.chunk {id, n, url}` on `device:<id>` |
-| GET | /devices/transfer/:id | → {state, chunks: [{n, url}], done} (new phone, resume after reconnect) |
-| POST | /devices/transfer/:id/ack | {n: [int]} → 204; deletes those chunks |
-| POST · DELETE | /devices/transfer/:id/done · /devices/transfer/:id | done (old phone, last chunk sent) · cancel (either phone): deletes all chunks |
+| GET | /me/backup | → {on, bytes, segments, updated_at, quota} (F-01 R-01.15, #146); 404 none |
+| POST | /me/backup/segments | {size (≤ 4.5 MiB), sha256 (base64, 32 B)} → {id, upload_url} (presigned PUT, 5 min, `content-type: application/octet-stream`); 409 `recovery_off`, 422 `quota` (2 GiB); 500 / day |
+| PUT | /me/backup/manifest | {manifest (base64 sealed, ≤ 256 KiB), segments: [id]} → status; new segments must be in storage with their declared size, else 409 `segment_missing`; committed segments not listed are deleted after 24 h |
+| GET | /me/backup/manifest | → {manifest, updated_at, segments: [{id, size, url}]} (URLs 1 h) |
+| DELETE | /me/backup | → 204; deletes manifest and segments (also on `DELETE /me/recovery` and `PUT /me/recovery`) |
+| POST | /devices/transfer | {link_code, estimate_bytes ≤ 20 GiB} → {id, to_device} (old phone, ≤ 2 h after its R-01.6 link; F-01 R-01.14). Cancels any earlier transfer of the account. 409 `not_ready` until the new phone has its session |
+| POST | /devices/transfer/:id/chunks | {n, size (≤ 4.5 MiB)} → {upload_url} (5 min). 409 `busy` with 8 chunks unacknowledged; 422 `quota` past 20 GiB |
+| POST | /devices/transfer/:id/chunks/:n/ready | → 204 once the object exists with that size; 409 `chunk_missing` otherwise |
+| GET | /devices/transfer/incoming | new phone → {id, state, estimate, bytes, sent, acked, total, chunks: [{n, size, url (15 min)}]} (ready chunks); 404 when none |
+| GET | /devices/transfer/:id | either phone → {id, state, estimate, bytes, sent, acked, total} (+ chunks for the new phone) |
+| POST | /devices/transfer/:id/ack | new phone {n: [int]} → 204; deletes those chunks |
+| POST · DELETE | /devices/transfer/:id/done · /devices/transfer/:id | done (old phone, {total}) · cancel (either phone): deletes all chunks |
 | GET | /me/devices | → {devices: [{id, platform, last_seen_day, current}]} |
 | DELETE | /me/devices/{id} | → 204 (signs that device out) |
-| POST | /devices/link | → {code, expires_in: 120} |
-| GET | /devices/link/{code} | → {state: pending\|claimed\|confirmed, platform?} |
+| POST | /devices/link | {xfer_pub?} → {code, expires_in: 120} (`xfer_pub`: one-time X25519 key, base64url, R-01.14) |
+| GET | /devices/link/{code} | → {state: pending\|claimed\|confirmed, platform?, xfer_pub?} (the new phone's key) |
 | POST | /devices/link/{code}/confirm | → 204 (after app lock / Face ID on the old device) |
 | GET | /devices/attest | → {attested, has_key, attested_at} for the calling device (#25) |
 | POST | /devices/attest/challenge | → {challenge (base64url, 43 chars), expires_in: 300}; single use, bound to the device; 20/h |
 | POST | /devices/attest | {key_id, attestation (base64), challenge} → {attested: true}; iOS App Attest, once per install. 422 `attestation_invalid` / `challenge` |
 | POST | /devices/assert | {assertion (base64), challenge} → {attested: true}; at most daily. 409 `not_attested`, 422 `assertion_invalid` / `challenge` |
-| POST | /auth/device-link | no auth, 10/min/IP. {code, platform} → {claim}; {code, claim} → 202 {state} until confirmed, then Session |
+| POST | /auth/device-link | no auth, 10/min/IP. {code, platform, xfer_pub?} → {claim, xfer_pub?} (old phone's key); {code, claim} → 202 {state} until confirmed, then Session |
 
 Sign-up calls (passkey register, OIDC, email verify) carry `age_confirmed: true` (R-01.12) and `platform`. Every request carries `x-thirstr-install` (random per install, hashed server-side) used only for the R-02.3 under-age flag. Session response: `{access_token, refresh_token, expires_in, account: Me}`.
 
@@ -259,6 +261,23 @@ Connect: `wss://<api host>/socket/websocket?token=<access token>&vsn=2.0.0`, the
 **Envelopes over the socket (SR-13, #153).** Join `user:me` with `{env: true}`: this device's new envelopes come as `message.env {messages: [...]}` (same objects as `GET /mls/messages`) when one send's envelopes for the device total ≤ 48 KB, else `message.pull` (content-free); the account-wide `message.new` is not sent to that socket. The client stores each message (or its pending copy) before acking with `ack {ids}` (≤ 500) → reply `{acked: n}`; same rule and deletion as `POST /mls/messages/ack`. Nothing changes for durability: envelopes stay on the server until acked, and the app still pulls over REST at start, on foreground, on reconnect and when a socket step fails. Saves the GET (and the REST ack) per message while the app is open.
 
 Rate limits (beta defaults, per account): messages to new contacts 30/h (unverified: 0), taps 100/day, location updates 1/30 s, pin set 6/h, party create 3/day, report 20/day.
+
+
+### Help & support (F-22, #178)
+| Method | Path | Body → Response |
+|---|---|---|
+| POST | /help/votes | {article, lang, helpful, reason?, note? ≤ 200} → 204; no auth needed, no account stored; 30 / day per install |
+| POST | /support/requests | {topic, message (20–4 000), attachments?: [upload_id] ≤ 2, app_details?, reply_email?} → 201 {id, ref}; signed out: reply_email required; 3 open / 5 per 24 h; 429 `support_limit` |
+| POST | /support/uploads | {size ≤ 2 MB, sha256} → {id, upload_url} (presigned PUT, 15 min, JPEG only) |
+| GET | /support/requests · /support/requests/{id} | → list `[{id, ref, topic, status, last, updated_at, unread}]` · thread `{…, messages: [{from, body, attachments, at}]}` |
+| POST | /support/requests/{id}/messages · /solve | {body} → 201 · → 204 (reopen by message within 14 d) |
+| POST | /feedback | {type: idea\|off\|love, part?, text (10–1 000), app} → 202; scrubbed + queued (R-22.31–34); 5 / 24 h |
+| POST | /auth/recovery/claim | (signed in with any method) → {claim_id, challenge}; 409 `claim_active`; 429 |
+| POST | /auth/recovery/claim/{id}/selfie | {liveness_result (signed), match: {passed, model, threshold}, attestation} → {state, hold_ends_at}; 401 `recovery_check_failed` (attempts left) |
+| GET · DELETE | /auth/recovery/claim/{id} | → {state, hold_ends_at} · cancel own claim |
+| POST | /me/recovery/claims/{id}/cancel | from another device: {device_auth, liveness_result, match} → 204; refused without a passing selfie |
+| POST | /auth/recovery/claim/{id}/complete | → tokens + {signed_out, removed_methods}; only when state `ready` |
+Push types `support_reply`, `recovery_claim` use the generic payload (§ Push payloads).
 
 ## Push payloads
 Beta (no notification service extension yet): a **visible, generic** alert, identical for every event type:

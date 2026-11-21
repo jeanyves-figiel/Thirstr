@@ -46,17 +46,17 @@ jobs:
       EXPO_PUBLIC_ENV: dev
       EXPO_PUBLIC_API_URL: http://10.0.2.2:4000
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
       - run: npm ci
       - run: npx expo prebuild --platform android --no-install
       - name: Allow cleartext HTTP to the runner (this E2E APK only)
@@ -67,7 +67,7 @@ jobs:
           grep -o 'usesCleartextTraffic="[a-z]*"' "$f"
       - name: Release APK (x86_64)
         run: cd android && ./gradlew --no-daemon assembleRelease -PreactNativeArchitectures=x86_64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-apk
           path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
@@ -96,10 +96,12 @@ jobs:
     steps:
       - name: Skip profiles not asked for
         id: want
-        run: echo "run=${{ (inputs.profiles || 'all') == 'all' || inputs.profiles == matrix.profile }}" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
+        env:
+          WANT: ${{ (inputs.profiles || 'all') == 'all' || inputs.profiles == matrix.profile }}
+        run: echo "run=$WANT" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         if: steps.want.outputs.run == 'true'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         if: steps.want.outputs.run == 'true'
         with:
           name: e2e-apk
@@ -109,7 +111,7 @@ jobs:
         run: |
           sudo ip addr add 10.0.2.2/32 dev lo   # same address the emulator uses for the runner
           docker compose -f docker-compose.yml -f infra/e2e/compose.e2e.yml up -d api
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         if: steps.want.outputs.run == 'true'
         with:
           node-version: 22
@@ -119,7 +121,7 @@ jobs:
         if: steps.want.outputs.run == 'true'
         working-directory: apps/testbot
         run: npm ci && npm run build
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         if: steps.want.outputs.run == 'true'
         with:
           distribution: temurin
@@ -146,7 +148,9 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
       - name: ${{ matrix.profile }} flows
         if: steps.want.outputs.run == 'true'
-        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PROFILE: ${{ matrix.profile }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: ${{ matrix.api }}
           target: default
@@ -158,17 +162,19 @@ jobs:
           force-avd-creation: true
           disable-animations: true
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none ${{ matrix.net }}
-          script: ./scripts/device-matrix/android-run.sh ${{ matrix.profile }} ${{ runner.temp }}/apk/app-release.apk ${{ runner.temp }}/out
+          script: ./scripts/device-matrix/android-run.sh "$PROFILE" "$RUNNER_TEMP/apk/app-release.apk" "$RUNNER_TEMP/out"
       - name: Budgets
         if: always() && steps.want.outputs.run == 'true'
-        run: python3 scripts/device-matrix/budgets.py ${{ matrix.profile }} "$RUNNER_TEMP/out/metrics.json" | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: python3 scripts/device-matrix/budgets.py "$PROFILE" "$RUNNER_TEMP/out/metrics.json" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Collect logs
         if: always() && steps.want.outputs.run == 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/out"
           cp "$RUNNER_TEMP/testbot.log" "$RUNNER_TEMP/out/" 2>/dev/null || true
           docker compose logs api > "$RUNNER_TEMP/out/api.log" 2>&1 || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && steps.want.outputs.run == 'true'
         with:
           name: device-matrix-${{ matrix.profile }}
@@ -183,13 +189,13 @@ jobs:
       EXPO_PUBLIC_API_URL: https://staging.thirstr.fun
       EXPO_PUBLIC_ENV: staging
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: 17
@@ -219,7 +225,7 @@ jobs:
       - name: Budgets
         if: always()
         run: python3 scripts/device-matrix/budgets.py ios-old "$RUNNER_TEMP/out/metrics.json" | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: device-matrix-ios-old
@@ -247,20 +253,20 @@ jobs:
           if [ "$HAS_TESTLAB" != true ]; then
             echo "::notice::Firebase Test Lab not set up yet (variables GCP_WIF_PROVIDER, GCP_SA_EMAIL, FIREBASE_PROJECT_ID); skipping real device."
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         if: env.HAS_TESTLAB == 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         if: env.HAS_TESTLAB == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         if: env.HAS_TESTLAB == 'true'
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
         if: env.HAS_TESTLAB == 'true'
       - name: Staging release APK (arm64)
         if: env.HAS_TESTLAB == 'true'
@@ -269,19 +275,21 @@ jobs:
           npm ci
           npx expo prebuild --platform android --no-install
           cd android && ./gradlew --no-daemon assembleRelease -PreactNativeArchitectures=arm64-v8a
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         if: env.HAS_TESTLAB == 'true'
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SA_EMAIL }}
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
         if: env.HAS_TESTLAB == 'true'
       - name: Robo test on the most low-end physical phone
         if: env.HAS_TESTLAB == 'true'
+        env:
+          TESTLAB_DEVICE: ${{ vars.TESTLAB_DEVICE }}
         run: |
           mkdir -p "$RUNNER_TEMP/out"
           apk=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
-          dev="${{ vars.TESTLAB_DEVICE }}"
+          dev="$TESTLAB_DEVICE"
           [ -n "$dev" ] || dev=$(gcloud firebase test android models list --project "$PROJECT" --format=json | python3 scripts/device-matrix/testlab-pick.py)
           echo "Device: $dev"
           gcloud firebase test android run --project "$PROJECT" --type robo --app "$apk" --device "$dev" \
@@ -302,7 +310,7 @@ jobs:
       - name: Budgets
         if: always() && env.HAS_TESTLAB == 'true'
         run: python3 scripts/device-matrix/budgets.py android-real "$RUNNER_TEMP/out/metrics.json" | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && env.HAS_TESTLAB == 'true'
         with:
           name: device-matrix-android-real

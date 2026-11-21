@@ -31,26 +31,30 @@ jobs:
     timeout-minutes: 60
     environment: staging  # staging secrets only
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Guard
         env:
           GH_TOKEN: ${{ github.token }}
+          CONFIRM: ${{ inputs.confirm }}
+          REPO: ${{ github.repository }}
         run: |
-          [ "${{ inputs.confirm }}" = "staging" ] || { echo "::error::confirm must be 'staging'"; exit 1; }
+          [ "$CONFIRM" = "staging" ] || { echo "::error::confirm must be 'staging'"; exit 1; }
           for wf in deploy-staging.yml promote-prod.yml; do
-            n=$(gh api "repos/${{ github.repository }}/actions/workflows/$wf/runs?status=in_progress" --jq .total_count)
-            q=$(gh api "repos/${{ github.repository }}/actions/workflows/$wf/runs?status=queued" --jq .total_count)
+            n=$(gh api "repos/$REPO/actions/workflows/$wf/runs?status=in_progress" --jq .total_count)
+            q=$(gh api "repos/$REPO/actions/workflows/$wf/runs?status=queued" --jq .total_count)
             [ "$n" = 0 ] && [ "$q" = 0 ] || { echo "::error::$wf is running; no chaos during a deploy/promotion"; exit 1; }
           done
       - name: Run ${{ inputs.experiment }}
         env:
           FLY_TOKEN: ${{ secrets.FLY_TOKEN }}
           OUT: ${{ runner.temp }}/chaos
-        run: ./scripts/chaos/chaos.sh "${{ inputs.experiment }}" "${{ inputs.duration }}"
+          EXPERIMENT: ${{ inputs.experiment }}
+          DURATION: ${{ inputs.duration }}
+        run: ./scripts/chaos/chaos.sh "$EXPERIMENT" "$DURATION"
       - name: Summary
         if: always()
-        run: cat "${{ runner.temp }}/chaos/summary.md" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+        run: cat "$RUNNER_TEMP/chaos/summary.md" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: chaos-${{ inputs.experiment }}

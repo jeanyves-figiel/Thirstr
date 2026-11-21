@@ -39,6 +39,9 @@ defmodule Thirstr.Recovery do
   def put_key(%Account{id: id} = a, %{"public_key" => pk}) do
     case unb64(pk) do
       {:ok, <<_::binary-32>> = pub} ->
+        # R-01.15: the chat backup was sealed with the old words; the phone uploads a new one.
+        Thirstr.ChatBackup.delete(a)
+
         Repo.insert!(%Key{account_id: id, public_key: pub},
           on_conflict: [
             set: [
@@ -66,7 +69,8 @@ defmodule Thirstr.Recovery do
 
   def put_key(_, _), do: {:error, {:validation, %{public_key: ["required"]}}}
 
-  def delete(%Account{id: id}) do
+  def delete(%Account{id: id} = a) do
+    Thirstr.ChatBackup.delete(a)
     Repo.delete_all(from(k in Key, where: k.account_id == ^id))
     :ok
   end

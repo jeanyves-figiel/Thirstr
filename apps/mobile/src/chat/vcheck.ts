@@ -95,14 +95,19 @@ const open = (v: Vc, now: number) => {
 const ofPeer = (peer: string) => Object.values(all).filter((v) => v.peer === peer);
 
 /** R-18.7: one open check per chat (either way), 3 asks per chat per 24 h, 1 h after a decline. */
-export function canAsk(peer: string, now = Date.now()): boolean {
+export type AskBlock = 'open' | 'declined' | 'limit';
+/** Why a new ask isn't possible right now (null = it is). The chat ⋯ row stays visible and says so (#159 regression). */
+export function askBlock(peer: string, now = Date.now()): AskBlock | null {
   const list = ofPeer(peer);
-  if (list.some((v) => open(v, now))) return false;
+  if (list.some((v) => open(v, now))) return 'open';
   const mine = list.filter((v) => v.dir === 'out' && !v.rid.endsWith('m'));
-  if (mine.filter((v) => now - v.at < 24 * 3600_000).length >= PER_DAY) return false;
+  if (mine.filter((v) => now - v.at < 24 * 3600_000).length >= PER_DAY) return 'limit';
   const lastDecline = mine.filter((v) => v.state === 'declined').sort((a, b) => b.at - a.at)[0];
-  return !lastDecline || now - lastDecline.at >= ASK_AGAIN_MS;
+  return lastDecline && now - lastDecline.at < ASK_AGAIN_MS ? 'declined' : null;
 }
+export const canAsk = (peer: string, now = Date.now()) => askBlock(peer, now) === null;
+/** Chat ⋯ lists "Video check ‹name›" in every 1:1 chat on a supported phone unless the server kill switch (`video_check`) is off. */
+export const menuShown = (o: { available: boolean; on: boolean; group: boolean }) => o.available && o.on && !o.group;
 
 export const openFor = (peer: string, now = Date.now()) => ofPeer(peer).find((v) => open(v, now));
 

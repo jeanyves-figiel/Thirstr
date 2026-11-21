@@ -25,8 +25,8 @@ const fr: S = {
   off: 'Désactivé',
   offSub: 'Tout se charge en entier',
   whileOn: 'Quand il est activé',
-  rules: ['Petites photos dans Explorer et les listes ; taille réelle en ouvrant un profil', 'Rien n’est chargé à l’avance', 'Les grandes photos et vidéos du chat se chargent quand vous touchez', 'Les vidéos envoyées partent en 720p'],
-  never: 'Les messages, les alertes de sécurité et votre position ne sont jamais ralentis.',
+  rules: ['Petites photos dans Explorer et les listes ; taille réelle en ouvrant un profil', 'Rien n’est chargé à l’avance', 'Les grandes photos et vidéos du chat se chargent quand tu touches', 'Les vidéos envoyées partent en 720p'],
+  never: 'Les messages, les alertes de sécurité et ta position ne sont jamais ralentis.',
   sumAutoOn: 'Auto · activé',
   sumAutoOff: 'Auto · désactivé en Wi-Fi',
 };

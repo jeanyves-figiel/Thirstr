@@ -23,6 +23,7 @@ Status: draft v0.1 · 2026-11-17 · Source of truth before any code. Product rat
 | — | [Threat model & security plan](security.md) |
 | — | [CI/CD, environments & operations](ops.md) |
 | — | [Scalability, message reliability & phone cache (review 2026-11-21)](scalability-and-reliability.md) |
+| — | [Scale-out design for 1M users (EN-03, #162)](scale-out-1m.md) |
 | — | [Enterprise readiness: plan, roadmap & costs](enterprise-readiness.md) |
 | — | [Test strategy](testing.md) |
 | — | [Admin & moderation console](admin-console.md) |
@@ -50,6 +51,7 @@ Status: draft v0.1 · 2026-11-17 · Source of truth before any code. Product rat
 | F-19 | [Gestures & haptics](features/F19-gestures.md) |
 | F-20 | [Travel plans](features/F20-travel.md) (#188) |
 | F-21 | [Moments: temporary photos](features/F21-moments.md) (#212) |
+| F-22 | [Help & support: help center, contact, account recovery, feedback](features/F22-support.md) (#178) |
 | I-01 | [Social post sharing (X, Bluesky, OnlyFans, JustFor.Fans)](integrations/I01-social-share.md) |
 | I-02 | [GDPR export import & profile share link](integrations/I02-import-share-link.md) |
 | I-03 | [Platform services: push, maps, passkeys, attestation, stores](integrations/I03-platform.md) |

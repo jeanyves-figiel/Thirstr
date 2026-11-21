@@ -85,6 +85,9 @@ defmodule Thirstr.Accounts do
       |> Enum.flat_map(&[&1, Thirstr.Profiles.thumb_of(&1)])
       # F-21 R-21.23: Moments files go too
       |> Kernel.++(Thirstr.Moments.keys_of(a.id))
+      # F-01 R-01.15: chat backup segments
+      |> Kernel.++(Thirstr.ChatBackup.keys_of(a.id))
+      |> Kernel.++(Thirstr.Transfer.keys_of(a.id))
 
     Multi.new()
     |> Multi.delete(:account, a)

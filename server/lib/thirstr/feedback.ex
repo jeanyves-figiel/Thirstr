@@ -179,10 +179,43 @@ defmodule Thirstr.Feedback do
 
   @doc "Retention: rows older than 30 days; held texts too."
   def sweep do
+    %{num_rows: dropped} =
+      Repo.query!(
+        "UPDATE feedback SET state = 'dropped', text_scrubbed = NULL WHERE state = 'queued' AND created_at < now() - interval '24 hours'",
+        []
+      )
+
+    if dropped > 0,
+      do: :telemetry.execute([:thirstr, :feedback, :dropped], %{count: dropped}, %{})
+
+    if configured?(), do: requeue()
+
     %{num_rows: n} =
       Repo.query!("DELETE FROM feedback WHERE created_on < current_date - 30", [])
 
     n
+  end
+
+  @doc "A token is set (Fly secret GITHUB_FEEDBACK_TOKEN)."
+  def configured? do
+    cfg = Application.get_env(:thirstr, :feedback_github, [])
+    is_binary(cfg[:token]) and cfg[:token] != "" and is_binary(cfg[:repo])
+  end
+
+  # Queued rows whose job was cancelled while no token was set; unique per id, so no duplicates.
+  defp requeue do
+    Repo.query!(
+      """
+      SELECT f.id::text FROM feedback f
+      WHERE f.state = 'queued' AND f.created_at < now() - interval '10 minutes'
+        AND NOT EXISTS (SELECT 1 FROM oban_jobs j WHERE j.worker = 'Thirstr.Jobs.FeedbackIssue'
+          AND j.args->>'id' = f.id::text AND j.state IN ('available','scheduled','executing','retryable'))
+      LIMIT 100
+      """,
+      []
+    ).rows
+    |> List.flatten()
+    |> Enum.each(&(%{id: &1} |> Thirstr.Jobs.FeedbackIssue.new() |> Oban.insert()))
   end
 
   defp names(%Account{id: aid}) do

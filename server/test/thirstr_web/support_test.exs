@@ -169,7 +169,8 @@ defmodule ThirstrWeb.SupportTest do
       refute b =~ ~r/\d{2}:\d{2}/
     end
 
-    test "new accounts wait a day; not configured → job errors (retries)", %{conn: conn} do
+    test "new accounts wait a day; not configured → job cancelled, row kept, text dropped after 24 h",
+         %{conn: conn} do
       {c, _} = member(conn)
 
       c
@@ -186,6 +187,12 @@ defmodule ThirstrWeb.SupportTest do
 
       [[id]] = Repo.query!("SELECT id::text FROM feedback").rows
       assert {:error, :not_configured} = Feedback.file(id)
+      assert {:cancel, :not_configured} = perform_job(Thirstr.Jobs.FeedbackIssue, %{id: id})
+      assert [["queued"]] = Repo.query!("SELECT state FROM feedback").rows
+
+      Repo.query!("UPDATE feedback SET created_at = now() - interval '25 hours'")
+      Feedback.sweep()
+      assert [["dropped", nil]] = Repo.query!("SELECT state, text_scrubbed FROM feedback").rows
     end
 
     test "held words stay for the admin" do

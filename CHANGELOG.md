@@ -14,6 +14,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 - **Place chips readable over the map** (app, #250, F-04 R-04.20): Clubs, Saunas, Parties and Gyms chips that are off now have a solid background, so a party or venue marker under them no longer shows through (e.g. a "14:02" party behind Gyms).
 
 ### Added
+- **Sign in with Google on iPhone** (app + server, #25, F-01 R-01.2, I-03): the Google button now shows on iOS and opens Google's own sign-in sheet (system browser, PKCE, `openid` only: we get an anonymous id, never your email or name). Server accepts both Google issuer spellings; `GOOGLE_CLIENT_IDS` set on staging and prod. While Google's consent screen is in Testing, only listed test users can sign in. New: `expo-auth-session`, `expo-web-browser`.
 - **Friend perks** (app + server, #247, F-07 R-07.44–R-07.49): being friends now does more. All perks travel only inside the encrypted 1:1 chat; the server never learns who is friends with whom, and ending a friendship takes them back.
   - **Moments for Friends**: new audience next to Everyone, Chats and Favorites (server accepts `friends`, ids only).
   - **Private album "Open to all friends"**: one switch shares it with every friend, new ones too; unfriend, block or off revokes and rotates (hand shares stay).

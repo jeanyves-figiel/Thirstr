@@ -20,6 +20,8 @@ kill_timeout = 30
   ECTO_IPV6 = "true"
   WELCOME_DEFAULT_CITY = "Zurich"
   S3_REGION = "auto"
+  # Google iOS OAuth client (public, not a secret): audience for Sign in with Google ID tokens (#25).
+  GOOGLE_CLIENT_IDS = "613900452555-cufeuuh30tsbea8j2rcv49s0d6vjspit.apps.googleusercontent.com"
   # Apple Team ID (public, not a secret): enables /.well-known/apple-app-site-association
   # for iOS passkeys (#31).
   APPLE_TEAM_ID = "U7VAR53G86"

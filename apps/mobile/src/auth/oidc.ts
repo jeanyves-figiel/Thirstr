@@ -1,15 +1,16 @@
 import { Platform } from 'react-native';
 import { api, platform, saveSession, Session } from '../api/client';
+import { googleIdToken } from './google';
 
 // Which sign-in methods this build offers (S-02). DEV (web, EXPO_PUBLIC_ENV=dev) uses the
 // server's dev issuer for Apple/Google. Native iOS uses the real Sign in with Apple sheet.
-// Google and email link need server config (Google client IDs, SMTP, #26): opt-in per build.
+// Google: native on iOS (#25, I-03); elsewhere opt-in per build. Email link needs SMTP (#26).
 const devAuth = process.env.EXPO_PUBLIC_ENV === 'dev';
 const flag = (v: string | undefined) => v === '1' || v === 'true';
 
 export const authMethods = {
   apple: devAuth || Platform.OS === 'ios',
-  google: devAuth || flag(process.env.EXPO_PUBLIC_AUTH_GOOGLE),
+  google: devAuth || Platform.OS === 'ios' || flag(process.env.EXPO_PUBLIC_AUTH_GOOGLE),
   email: devAuth || Platform.OS === 'web' || flag(process.env.EXPO_PUBLIC_AUTH_EMAIL),
 };
 
@@ -28,7 +29,8 @@ async function devToken(provider: string) {
 }
 
 async function nativeToken(provider: 'apple' | 'google') {
-  if (provider !== 'apple' || Platform.OS !== 'ios') throw new Error('unsupported');
+  if (Platform.OS !== 'ios') throw new Error('unsupported');
+  if (provider === 'google') return googleIdToken();
   const Apple = await import('expo-apple-authentication');
   try {
     // No scopes: we never ask Apple for name or email (R-01.2).

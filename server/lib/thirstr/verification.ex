@@ -10,8 +10,14 @@ defmodule Thirstr.Verification do
      epoch + 1. The spent-token table holds sha256(token) only.
 
   Failures: 3 in 24 h → 24 h cooldown (R-03.10). Credentials expire after 12 months (R-03.7).
+
+  #270: a passed result is only a hint. With `:verification_requires_attest` (staging + prod), it
+  must come with device proof over `"<nonce>.<blinded>"` from this session's device: an App Attest
+  assertion (iOS) or a Play Integrity token (Android), `Thirstr.DeviceAttest.prove/3`. A scripted
+  client without a genuine app on a genuine device gets no signature. Issuance is also capped per
+  device (3 a day), on top of the per-account cooldown.
   """
-  alias Thirstr.{Repo, Valkey}
+  alias Thirstr.{DeviceAttest, Repo, Valkey}
   alias Thirstr.Accounts.Account
 
   # #131: blink dropped from the pool (too short to catch on still photos; client still accepts it).
@@ -42,18 +48,57 @@ defmodule Thirstr.Verification do
 
   # ------------------------------------------------------------------ result + blind issuance
 
-  @doc "POST /verification/attest {nonce, passed, blinded}: consumes the nonce; signs only on pass."
-  def issue(%Account{} = a, %{"nonce" => nonce} = p) when is_binary(nonce) do
+  @doc """
+  POST /verification/attest {nonce, passed, blinded, assertion | integrity_token}: consumes the
+  nonce; signs only on pass with device proof (#270).
+  """
+  def issue(%Account{} = a, device_id, %{"nonce" => nonce} = p) when is_binary(nonce) do
     with :ok <- not_cooling(a),
          %{account: id} <- Valkey.take_term("vnonce:" <> nonce),
          true <- id == a.id do
-      if p["passed"] == true, do: sign(p["blinded"]), else: fail(a)
+      if p["passed"] == true, do: issue_passed(device_id, nonce, p), else: fail(a)
     else
+      {:error, _} = e -> e
       _ -> {:error, {:validation, %{nonce: ["expired or already used"]}}}
     end
   end
 
-  def issue(_, _), do: {:error, {:validation, %{nonce: ["required"]}}}
+  def issue(_, _, _), do: {:error, {:validation, %{nonce: ["required"]}}}
+
+  @per_device_day 3
+
+  defp issue_passed(device_id, nonce, p) do
+    with :ok <- device_proof(device_id, nonce, p),
+         :ok <- device_quota(device_id) do
+      sign(p["blinded"])
+    end
+  end
+
+  defp device_proof(device_id, nonce, p) do
+    if Application.get_env(:thirstr, :verification_requires_attest, false) do
+      case DeviceAttest.prove(device_id, nonce <> "." <> to_string(p["blinded"]), p) do
+        :ok ->
+          :ok
+
+        {:error, reason} ->
+          {:error,
+           {:unprocessable, "attestation_required",
+            "This check needs the Thirstr app on a real phone (#{reason}). Update the app and try again."}}
+      end
+    else
+      :ok
+    end
+  end
+
+  defp device_quota(device_id) do
+    case Valkey.hit("vdev:" <> to_string(device_id), 1_000_000, 24 * 3600) do
+      {:ok, n} when n > @per_device_day ->
+        {:error, {:forbidden, "Too many checks from this phone today. Try again tomorrow."}}
+
+      _ ->
+        :ok
+    end
+  end
 
   defp sign(blinded) when is_binary(blinded) do
     with {:ok, bin} <- Base.url_decode64(blinded, padding: false),

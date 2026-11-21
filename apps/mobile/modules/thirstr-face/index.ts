@@ -10,7 +10,7 @@ export type FaceReading = { faces: number; yaw?: number; pitch?: number; roll?: 
  */
 export type ClipMatch = { photoFaces: number; frames: number[] };
 
-type Native = { analyze(uri: string): Promise<FaceReading>; matchClip?(clipUri: string, photoUrls: string[]): Promise<ClipMatch> };
+type Native = { analyze(uri: string): Promise<FaceReading>; matchClip?(clipUri: string, photoUrls: string[]): Promise<ClipMatch>; faceBoxes?(uri: string): Promise<number[][]> };
 
 const native = requireOptionalNativeModule<Native>('ThirstrFace');
 
@@ -19,3 +19,7 @@ export const analyzeFace = (uri: string): Promise<FaceReading> => (native ? nati
 export const faceMatchAvailable = !!native?.matchClip;
 export const matchClip = (clipUri: string, photoUrls: string[]): Promise<ClipMatch> =>
   native?.matchClip ? native.matchClip(clipUri, photoUrls) : Promise.reject(new Error('unavailable'));
+
+/** F-21 R-21.2 (#221): face boxes [x, y, w, h] (0…1, top-left origin, largest first) for "Blur faces". */
+export const faceBoxesAvailable = !!native?.faceBoxes;
+export const faceBoxes = (uri: string): Promise<number[][]> => (native?.faceBoxes ? native.faceBoxes(uri) : Promise.reject(new Error('unavailable')));

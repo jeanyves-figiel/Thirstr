@@ -38,6 +38,35 @@ public class ThirstrFaceModule: Module {
       }
     }
 
+    // F-21 R-21.2 (#221): every face box in an upright still (Moment composer "Blur faces").
+    // Normalized 0…1, origin top-left, largest first. Numbers only; the photo stays on the phone.
+    AsyncFunction("faceBoxes") { (uri: String, promise: Promise) in
+      guard let url = URL(string: uri), url.isFileURL,
+            let data = try? Data(contentsOf: url),
+            let image = UIImage(data: data),
+            let cg = image.cgImage else {
+        promise.reject("E_IMAGE", "Could not read the image")
+        return
+      }
+      let o = ThirstrFaceModule.orientation(image.imageOrientation)
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          let handler = VNImageRequestHandler(cgImage: cg, orientation: o, options: [:])
+          let rects = VNDetectFaceRectanglesRequest()
+          rects.revision = VNDetectFaceRectanglesRequestRevision3
+          try handler.perform([rects])
+          let boxes = (rects.results ?? [])
+            .map { $0.boundingBox }
+            .sorted { $0.width * $0.height > $1.width * $1.height }
+            .prefix(20)
+            .map { b in [Double(b.minX), Double(1 - b.maxY), Double(b.width), Double(b.height)] }
+          promise.resolve(Array(boxes))
+        } catch {
+          promise.reject("E_VISION", error.localizedDescription)
+        }
+      }
+    }
+
     // F-18 R-18.15 (#185): clip frames vs the peer's public photos, on this phone only.
     AsyncFunction("matchClip") { (clipUri: String, photoUrls: [String], promise: Promise) in
       guard let clip = URL(string: clipUri), clip.isFileURL else {

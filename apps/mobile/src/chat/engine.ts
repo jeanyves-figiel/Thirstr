@@ -19,6 +19,7 @@ import * as vc from './vcheck';
 import { vcx } from '../i18n/vcheck';
 import { ppl } from '../i18n/people';
 import { getLocal } from '../me/localFields';
+import { setBadge, type MomentsBadge } from '../moments/api';
 
 export type Ttl = '24h' | '7d' | 'never';
 export const TTL_S: Record<Ttl, number | null> = {
@@ -46,11 +47,17 @@ export type MediaRef = {
 export type AlbumItem = { blob: string; key: string; iv: string; mime: string; w?: number; h?: number; dur?: number };
 
 export type Re = { id: string; n: string; s: string };
+/**
+ * F-21 R-21.11 (#221): reply to a Moment. `th` = tiny JPEG (base64, ≤ 96 px wide) that only travels
+ * inside this E2EE message; it is dropped from both phones at `exp` (the Moment's expiry, ms).
+ * The Moment belongs to the peer when I wrote the message, to me when the peer did.
+ */
+export type MomentQuote = { id: string; exp: number; th?: string; c?: string };
 
 /** Plaintext inside MLS application messages (R-07.4). */
 export type Payload =
   /** F-19 G1 (#187): `re` = the message this one replies to (id, sender name as the writer saw it, ≤ 80-char snippet). */
-  | { t: 'text'; text: string; re?: Re }
+  | { t: 'text'; text: string; re?: Re; mo?: MomentQuote }
   /** `k` = index of a built-in quick reply (R-07.31): the reader shows it in their own language. */
   | { t: 'quick_reply'; text: string; k?: number }
   | { t: 'media'; media: MediaRef }
@@ -318,6 +325,8 @@ function connect() {
       typing[id] = Date.now();
       emit('typing:' + id);
     });
+    // #221 R-21.9: ring changes for the profiles on my screen (server checks who may see what).
+    ch.on('moments.ring', (p: { profile_id: string; moments: MomentsBadge }) => setBadge(p.profile_id, p.moments));
     ch.on('tap.new', () => emit('taps'));
     ch.on('tap.mutual', () => emit('taps'));
     // B3: party / activity / club membership changed: hosts re-sync their group chats.
@@ -325,6 +334,7 @@ function connect() {
     ch.join().receive('ok', () => {
       pull();
       drain();
+      if (watched) ch.push('moments.watch', watched);
     });
     chan = ch;
   });
@@ -934,6 +944,26 @@ export async function openConv(mine: string, peer: string, hint?: Partial<Conv>)
   return c;
 }
 
+/** R-21.11 (#221): reply to a peer's Moment from the viewer; the quote travels inside the E2EE message. */
+export async function replyToMoment(mine: string, peer: string, name: string, text: string, mo: MomentQuote) {
+  const c = await openConv(mine, peer, { name });
+  return send(c.id, { t: 'text', text: text.slice(0, 2000), mo });
+}
+
+/** R-21.11 (#221): drops expired Moment thumbnails from a chat's stored messages (both phones do this). */
+export function purgeMomentQuotes(cid: string, now = Date.now()) {
+  return edit(cid, (list) => {
+    const put = list
+      .filter((m) => m.p.t === 'text' && m.p.mo?.th && m.p.mo.exp <= now)
+      .map((m) => {
+        const p = m.p as Extract<Payload, { t: 'text' }>;
+        const { th: _th, ...mo } = p.mo!;
+        return { ...m, p: { ...p, mo } };
+      });
+    return { put };
+  });
+}
+
 export async function setConv(id: string, patch: Partial<Pick<Conv, 'starred' | 'muted' | 'archived' | 'receipts' | 'translate'>>) {
   if (!convs[id]) return;
   Object.assign(convs[id], patch);
@@ -1353,6 +1383,23 @@ export async function markRead(cid: string) {
     await kv.set('read:' + l.id, true);
     send(cid, { t: 'read', upTo: l.id }, { silent: true }).catch(() => {});
   }
+}
+
+// ------------------------------------------------------------------ live rings (#221)
+
+let watched: { ids: string[]; intents: string[] } | null = null;
+let watchTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Profiles whose rings are on screen (≤ 60). Debounced 1.5 s; sent again after a reconnect. */
+export function watchMoments(ids: string[], intents: string[]) {
+  const next = { ids: [...new Set(ids)].slice(0, 60).sort(), intents: [...intents].sort() };
+  if (watched && JSON.stringify(watched) === JSON.stringify(next)) return;
+  watched = next;
+  if (watchTimer) clearTimeout(watchTimer);
+  watchTimer = setTimeout(() => {
+    watchTimer = null;
+    if (chan && watched) chan.push('moments.watch', watched);
+  }, 1500);
 }
 
 let lastTyping = 0;

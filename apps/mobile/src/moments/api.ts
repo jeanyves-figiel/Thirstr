@@ -1,5 +1,8 @@
 // F-21 Moments (#212): API calls, upload, batched views (R-21.28). Spec: docs/spec/features/F21-moments.md.
+import { useSyncExternalStore } from 'react';
+import { Platform } from 'react-native';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { File, Paths } from 'expo-file-system';
 import { api, putBlob } from '../api/client';
 import type { Mode } from '../api/types';
 import { makeThumb } from '../api/photoUpload';
@@ -103,13 +106,20 @@ export function onSeen(fn: () => void) {
   };
 }
 
+/** Notifies Moments row, rings and cards (seen on this phone, or a live ring change #221). */
+let version = 0;
+const changed = () => {
+  version++;
+  subs.forEach((f) => f());
+};
+
 /** Marks a Moment seen on this phone at once; the server learns in batches (max every 10 s). */
 export function markSeen(id: string, profileId?: string) {
   if (seen.has(id)) return;
   seen.add(id);
   if (profileId) seenPeople.add(profileId);
   pending.push(id);
-  subs.forEach((f) => f());
+  changed();
   timer ??= setTimeout(flush, 10_000);
 }
 
@@ -142,3 +152,65 @@ export function minutesLeft(iso: string, now = Date.now()) {
 
 /** R-21.22: expired Moments vanish on the phone too, no network needed. */
 export const alive = <T extends { expires_at: string }>(list: T[], now = Date.now()) => list.filter((m) => new Date(m.expires_at).getTime() > now);
+
+// ------------------------------------------------------------------ live rings (#221, R-21.9)
+
+/** Ring badges pushed over the socket since the last list load; they win over the card's copy. */
+const live = new Map<string, MomentsBadge>();
+
+/** Socket event `moments.ring`: a watched profile's Moments changed (already filtered by the server). */
+export function setBadge(profileId: string, b: MomentsBadge) {
+  live.set(profileId, b);
+  // A new unseen Moment makes the ring colourful again even if all older ones were watched.
+  if (b?.unseen) seenPeople.delete(profileId);
+  changed();
+}
+
+/** Ring for a profile: the live update if one arrived, else what the list or profile payload said. */
+export const badgeOf = (profileId: string, fallback: MomentsBadge | undefined): MomentsBadge => (live.has(profileId) ? live.get(profileId)! : (fallback ?? null));
+
+/** Cards with their live ring; unchanged cards keep their identity (memoized tiles stay put). `_version` = useRings(), for memo deps. */
+export const withRings = <T extends { id: string; moments?: MomentsBadge }>(list: T[], _version?: number): T[] =>
+  list.map((c) => {
+    if (!live.has(c.id)) return c;
+    const b = live.get(c.id)!;
+    return b === c.moments ? c : { ...c, moments: b };
+  });
+
+/** Re-renders when any ring or seen state changes on this phone. */
+export function useRings() {
+  return useSyncExternalStore(onSeen, () => version);
+}
+
+/** Fresh lists carry fresh badges: forget the pushed copies for those profiles. */
+export function clearBadges(ids: string[]) {
+  ids.forEach((id) => live.delete(id));
+}
+
+// ------------------------------------------------------------------ quoted reply (#221, R-21.11)
+
+/**
+ * Tiny copy of a Moment for a chat reply: 96 px wide JPEG as base64, made on the phone from the
+ * 480 px copy. It only travels inside the E2EE message and is dropped at the Moment's expiry.
+ */
+export async function quoteThumb(url: string): Promise<string | undefined> {
+  try {
+    let src = url;
+    let tmp: File | null = null;
+    if (Platform.OS !== 'web') {
+      tmp = new File(Paths.cache, `mq-${Date.now()}.jpg`);
+      src = (await File.downloadFileAsync(url, tmp)).uri;
+    }
+    const ctx = ImageManipulator.manipulate(src);
+    ctx.resize({ width: 96 });
+    const img = await ctx.renderAsync();
+    const out = await img.saveAsync({ format: SaveFormat.JPEG, compress: 0.5, base64: true });
+    tmp?.delete();
+    return out.base64 && out.base64.length <= 16_000 ? out.base64 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Only well-formed, small base64 JPEGs from a peer are shown. */
+export const quoteImage = (th: string | undefined) => (th && th.length <= 16_000 && /^[A-Za-z0-9+/]+=*$/.test(th) ? `data:image/jpeg;base64,${th}` : null);

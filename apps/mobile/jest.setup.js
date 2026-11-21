@@ -49,3 +49,16 @@ jest.mock('react-native-reanimated', () => {
 // #177 Data saver: NetInfo has no native module in Jest.
 jest.mock('@react-native-community/netinfo', () => require('@react-native-community/netinfo/jest/netinfo-mock.js'));
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+
+// #221: Skia (Moment Blur tool) has no native side in Jest; the pure blur logic is tested on its own.
+jest.mock('@shopify/react-native-skia', () => ({
+  Blur: () => null,
+  Canvas: () => null,
+  Group: () => null,
+  Image: () => null,
+  ClipOp: { Intersect: 1 },
+  ImageFormat: { JPEG: 3 },
+  TileMode: { Clamp: 0 },
+  Skia: {},
+  useImage: () => null,
+}));

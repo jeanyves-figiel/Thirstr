@@ -16,6 +16,32 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 6,
+    date: '2026-11-21',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'moments',
+        to: { route: 'MomentNew' },
+        text: {
+          en: ['Blur in Moments', 'Blur faces or paint over what to hide.'],
+          fr: ['Flou dans les Moments', 'Floute les visages ou peins dessus.'],
+          de: ['Unschärfe in Moments', 'Gesichter oder Stellen verwischen.'],
+        },
+      },
+      {
+        tone: 'hookup',
+        glyph: 'flame',
+        to: tab('Explore'),
+        text: {
+          en: ['Reply to a Moment', 'Your reply shows the Moment in chat.'],
+          fr: ['Répondre à un Moment', 'Ta réponse montre le Moment au chat.'],
+          de: ['Auf Moments antworten', 'Deine Antwort zeigt den Moment.'],
+        },
+      },
+    ],
+  },
+  {
     id: 5,
     date: '2026-11-21',
     lines: [

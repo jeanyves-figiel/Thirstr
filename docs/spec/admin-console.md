@@ -24,7 +24,7 @@ Internal web app (`/server/apps/admin`, Phoenix LiveView). Implements back offic
 |---|---|---|---|
 | A-01 | Report queue | reports sorted by severity (minor safety, violence, CSAM, scam, spam, other) then age; SLA timer | open → A-02 |
 | A-02 | Report detail | reason, reporter note, franked messages/media the reporter attached, public profile snapshot, prior actions on account (counts), account age, trust signals (verified, vouches, attestation) | dismiss, warn, remove content, suspend (1/3/7 d), ban, escalate; reason code required |
-| A-03 | Photo review | AI-flagged public photos (F-15 R-15.10) below confidence threshold | approve, reject (reason), mark explicit → private-only |
+| A-03 | Photo review | AI-flagged public photos (F-15 R-15.10) below confidence threshold; borderline Moments (`review`, F-21 R-21.24, #221) still in time | approve, reject (reason), mark explicit → private-only; Moments: approve (live for the time left) / reject (deleted) |
 | A-04 | Quarantine | accounts in shadow quarantine (F-15) with signals | release, extend, ban |
 | A-05 | Appeals | user appeals of bans/rejections | uphold, overturn; user notified in app |
 | A-06 | Verification appeals | failed/cooldown cases (no images stored) | grant re-try, reset cooldown |

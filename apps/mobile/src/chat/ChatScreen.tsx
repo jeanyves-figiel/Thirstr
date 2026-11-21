@@ -2,7 +2,7 @@ import { a11yLabel, daysUntil, rangeLabel, shortLabel, TravelLabel } from '../tr
 import { usePeerTrip } from '../travel/peerTrips';
 import { tr } from '../i18n/travel';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, FlatList, Keyboard, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Dimensions, FlatList, Image, Keyboard, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
 import { useSession } from '../app/session';
@@ -37,6 +37,8 @@ import { toast } from '../ui/Toast';
 import * as Safety from '../safety/safety';
 import * as Online from './friendOnline';
 import { hitSlot, MsgRow, ReactionBar, useChatGestures, type Hold } from './MsgGestures';
+import { mx as momx } from '../i18n/moments';
+import * as Moments from '../moments/api';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void; setOptions: (o: object) => void };
 /** #210 draft: text placed in the composer, not sent ("I'm in" on a Tonight plan). */
@@ -141,6 +143,11 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
   // R-07.28: language of the first translated message, for the teal note at the top of the chat.
   const [trFrom, setTrFrom] = useState<string | null>(null);
   const onTranslated = useCallback((from: string) => setTrFrom((cur) => cur ?? from), []);
+
+  // R-21.11 (#221): drop Moment thumbnails that have expired since the chat was last open.
+  useEffect(() => {
+    if (cid) void E.purgeMomentQuotes(cid);
+  }, [cid]);
 
   // Open by profile id (Profile › Message): from my one profile (R-06.1).
   useEffect(() => {
@@ -294,6 +301,7 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
   };
   // Quoted message above a reply (F-19 G1). Tapping it scrolls to the original when it is still here.
   const quoteOf = (m: E.Msg, mine: boolean) => {
+    if (m.p.t === 'text' && m.p.mo) return momentQuote(m.p.mo, m.from === 'me', mine);
     if (m.p.t !== 'text' || !m.p.re) return null;
     const re = m.p.re;
     const orig = visible.findIndex((v) => v.m.id === re.id);
@@ -327,6 +335,34 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
     E.requestFriend(conv.id).catch((e) => setProblem(errorText(e)));
   };
   const who = (m: E.Msg) => (m.from === 'me' ? tx.chat.you : group ? (m.by && conv.names?.[m.by]) || '…' : conv.name);
+
+  // F-21 R-21.11 (#221): reply to a Moment. Thumbnail while it is live, then "Moment expired".
+  const momentQuote = (mo: E.MomentQuote, fromMe: boolean, mine: boolean) => {
+    const now = Date.now();
+    const img = mo.exp > now ? Moments.quoteImage(mo.th) : null;
+    const owner = fromMe ? conv.peer : me.profile?.id;
+    const title = fromMe ? momx.quoteTheirs(conv.name) : momx.quoteMine;
+    const sub = mo.exp > now ? [mo.c ? `“${mo.c}”` : null, momx.quoteLeft(Moments.minutesLeft(new Date(mo.exp).toISOString(), now))].filter(Boolean).join(' · ') : momx.quoteExpiredSub;
+    const ink = mine ? color.onAccent : color.fgPrimary;
+    return (
+      <Pressable
+        testID="moment-quote"
+        accessibilityRole="button"
+        accessibilityLabel={`${mo.exp > now ? title : momx.quoteExpired}. ${sub}`}
+        disabled={mo.exp <= now || !owner || group}
+        onPress={() => owner && navigation.navigate('Moments', { queue: [{ id: owner, name: fromMe ? conv.name : '', age: 0, photo: null }], index: 0, mode: trMode, self: !fromMe })}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, padding: 5, marginBottom: 6, borderRadius: 12, backgroundColor: mine ? 'rgba(23,20,46,0.22)' : color.bgOverlay }}
+      >
+        <View style={{ width: 34, height: 52, borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(23,20,46,0.3)', alignItems: 'center', justifyContent: 'center' }}>
+          {img ? <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} /> : <Icon.Timer size={16} c={ink} />}
+        </View>
+        <View style={{ flexShrink: 1 }}>
+          <Text style={{ ...type.caption, fontSize: 11.5, color: ink }} numberOfLines={1}>{mo.exp > now ? title : momx.quoteExpired}</Text>
+          <Text style={{ ...type.meta, fontSize: 11, color: ink, opacity: 0.85 }} numberOfLines={2}>{sub}</Text>
+        </View>
+      </Pressable>
+    );
+  };
 
   const chatSettings = (
     <>

@@ -38,7 +38,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { MomentsRow } from '../moments/MomentsRow';
 import * as Moments from '../moments/api';
 import * as People from '../chat/people';
-import { convWith } from '../chat/engine';
+import { convWith, watchMoments } from '../chat/engine';
 import { useFriendLocs } from '../chat/friendLoc';
 import { ppl } from '../i18n/people';
 import { away, filterMap, keep, restoreShow, Show, SHOW_KEY, showIds, wantMore } from './show';
@@ -236,6 +236,7 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
         ([g, t, m, vis]) => {
           setVisiting(vis);
           setErr(null);
+          Moments.clearBadges(g.items.map((c) => c.id));
           setItems(g.items);
           setNext(g.next);
           setFurtherFrom(g.further_from);
@@ -446,7 +447,14 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   const favIds = useMemo(() => People.favList().map((f) => f.peer), [peopleTick]); // eslint-disable-line react-hooks/exhaustive-deps
   const friendIds = useMemo(() => People.friendList('yes'), [peopleTick]); // eslint-disable-line react-hooks/exhaustive-deps
   const ids = useMemo(() => showIds(show, favIds, friendIds), [show, favIds, friendIds]);
-  const shown = useMemo(() => (items ? keep(items, ids) : items), [items, ids]);
+  // #221 R-21.9: rings pushed over the socket win over the list's copy until the next load.
+  const ringsV = Moments.useRings();
+  const ringed = useMemo(() => (items ? Moments.withRings(items, ringsV) : items), [items, ringsV]);
+  const shown = useMemo(() => (ringed ? keep(ringed, ids) : ringed), [ringed, ids]);
+  const watchKey = (items ?? []).slice(0, 60).map((c) => c.id).join(',');
+  useEffect(() => {
+    if (watchKey) watchMoments(watchKey.split(','), intents);
+  }, [watchKey, intents]);
   // #247 R-07.47: friends who share their spot with me (E2EE), drawn like Area people.
   const friendLocs = useFriendLocs();
   const shownMap = useMemo(() => {
@@ -749,7 +757,7 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
                   {/* F-21 D-21a B; #250: Moments row on top of the grid in both stops (the strip shows it). */}
                   {!look ? (
                     <MomentsRow
-                      items={items}
+                      items={ringed ?? []}
                       myId={own?.id ?? 'me'}
                       myPhoto={own?.photos.find((x) => x.slot === 0)?.thumb_url ?? own?.photos.find((x) => x.slot === 0)?.url ?? null}
                       myLive={myLive}

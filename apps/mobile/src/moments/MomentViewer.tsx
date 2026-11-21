@@ -1,7 +1,7 @@
 import React, { useEffect, useReducer, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Image, Keyboard, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenCapture from 'expo-screen-capture';
@@ -9,6 +9,7 @@ import { File, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import type { Mode } from '../api/types';
 import { useSession } from '../app/session';
+import * as E from '../chat/engine';
 import { mx } from '../i18n/moments';
 import { tx } from '../i18n/app';
 import { color, font, radius, space, type } from '../theme/tokens';
@@ -37,6 +38,8 @@ export function MomentViewerScreen({ route, navigation }: { route: { params: Par
   const [reveal, setReveal] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState(false);
   const [seenOpen, setSeenOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [typing, setTyping] = useState(false);
   const progress = useSharedValue(0);
   const { pi, mi, list } = st;
   const person = queue[pi];
@@ -66,7 +69,7 @@ export function MomentViewerScreen({ route, navigation }: { route: { params: Par
   }, [pi, self, mode, queue]);
 
   // Progress bar + auto-advance (UI thread); hold, menus and spicy blur pause it.
-  const hold = paused || menu || seenOpen;
+  const hold = paused || menu || seenOpen || typing;
   const blurred = !!shown && !self && !!(shown as Moment).spicy && me?.settings?.explicit_from_strangers !== 'allow' && !reveal[shown.id];
   const shownId = shown?.id;
   useEffect(() => {
@@ -89,10 +92,14 @@ export function MomentViewerScreen({ route, navigation }: { route: { params: Par
     return () => cancelAnimation(progress);
   }, [shownId, hold, blurred, progress, st.restart]);
   const barStyle = useAnimatedStyle(() => ({ width: `${progress.get() * 100}%` }));
+  // The reply field rides on top of the keyboard.
+  const kb = useAnimatedKeyboard();
+  const footStyle = useAnimatedStyle(() => ({ bottom: Math.max(insets.bottom + space.m, kb.height.get() + space.s) }));
 
-  // R-21.18: Android blocks capture; iOS tells the poster.
+  // R-21.18: Android FLAG_SECURE. iOS (#221): screenshots come out black and recording or mirroring
+  // shows a black frame (UIScreen.isCaptured); the poster is still told about screenshots.
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    if (Platform.OS === 'web') return;
     ScreenCapture.preventScreenCaptureAsync('moments').catch(() => undefined);
     return () => {
       ScreenCapture.allowScreenCaptureAsync('moments').catch(() => undefined);
@@ -135,6 +142,25 @@ export function MomentViewerScreen({ route, navigation }: { route: { params: Par
     });
   };
   const visible = list ?? [];
+
+  // R-21.11 (#221): the reply is a normal E2EE chat message carrying a tiny copy of this Moment.
+  const sendReply = async () => {
+    const text = draft.trim();
+    const m = shown as Moment | undefined;
+    const mine = me?.profile?.id;
+    if (!text || !m || !mine || self) return;
+    setDraft('');
+    Keyboard.dismiss();
+    try {
+      const th = await M.quoteThumb(m.thumb_url ?? m.url);
+      await E.replyToMoment(mine, person.id, person.name, text, { id: m.id, exp: new Date(m.expires_at).getTime(), ...(th ? { th } : {}), ...(m.caption ? { c: m.caption.slice(0, 80) } : {}) });
+      feel('success');
+      toast(mx.sentTo(person.name));
+    } catch {
+      setDraft(text);
+      toast(tx.common.retry);
+    }
+  };
 
   const saveToPhone = async (m: Moment) => {
     try {
@@ -236,12 +262,20 @@ export function MomentViewerScreen({ route, navigation }: { route: { params: Par
             </View>
           ) : null
         ) : (
-          <View style={{ position: 'absolute', left: space.m, right: space.m, bottom: insets.bottom + space.m, flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
-            <Pressable accessibilityRole="button" accessibilityLabel={mx.replyTo(person.name)} onPress={() => navigation.navigate('Chat', { profileId: person.id, name: person.name })} style={{ flex: 1, height: 46, borderRadius: radius.pill, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.55)', paddingHorizontal: space.l, justifyContent: 'center' }}>
-              <Text numberOfLines={1} style={{ ...type.meta, color: color.fgSoft }}>
-                {mx.replyTo(person.name)}
-              </Text>
-            </Pressable>
+          <Animated.View style={[{ position: 'absolute', left: space.m, right: space.m, flexDirection: 'row', gap: space.s, alignItems: 'center' }, footStyle]}>
+            <TextInput
+              testID="moment-reply"
+              value={draft}
+              onChangeText={(t) => setDraft(t.slice(0, 500))}
+              onFocus={() => setTyping(true)}
+              onBlur={() => setTyping(false)}
+              onSubmitEditing={sendReply}
+              returnKeyType="send"
+              placeholder={mx.replyTo(person.name)}
+              placeholderTextColor={color.fgSoft}
+              accessibilityLabel={mx.replyTo(person.name)}
+              style={{ ...type.meta, flex: 1, height: 46, borderRadius: radius.pill, borderWidth: 1.5, borderColor: typing ? color.fgPrimary : 'rgba(255,255,255,0.55)', paddingHorizontal: space.l, color: color.fgPrimary, backgroundColor: typing ? 'rgba(23,20,46,0.55)' : 'transparent' }}
+            />
             <Pressable
               testID="moment-fire"
               accessibilityRole="button"
@@ -257,10 +291,10 @@ export function MomentViewerScreen({ route, navigation }: { route: { params: Par
             >
               <Icon.Flame c={color.onAccent} fill={color.onAccent} size={22} />
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={mx.openChat} onPress={() => navigation.navigate('Chat', { profileId: person.id, name: person.name })} style={roundBig}>
-              <Icon.Send c={color.fgPrimary} />
+            <Pressable testID="moment-send" accessibilityRole="button" accessibilityLabel={draft.trim() ? mx.sendReply : mx.openChat} onPress={draft.trim() ? sendReply : () => navigation.navigate('Chat', { profileId: person.id, name: person.name })} style={[roundBig, draft.trim() ? { backgroundColor: color.fgPrimary } : null]}>
+              <Icon.Send c={draft.trim() ? color.onAccent : color.fgPrimary} />
             </Pressable>
-          </View>
+          </Animated.View>
         )}
 
         <Sheet visible={menu} onClose={() => setMenu(false)} title={person.name}>

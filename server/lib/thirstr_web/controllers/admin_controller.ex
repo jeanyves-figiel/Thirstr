@@ -324,10 +324,37 @@ defmodule ThirstrWeb.AdminController do
         """
       end)
 
+    moments =
+      Thirstr.Moments.review_queue()
+      |> Enum.map_join("", fn m ->
+        """
+        <div class="card"><label class="ph"><img src="#{e(m.url)}" onclick="this.classList.toggle('show')"><span>Moment · #{if m.main_ok, do: "main ok", else: "not main ok"} · expires #{e(Calendar.strftime(m.expires_at, "%H:%M"))} UTC</span></label>
+          #{if m.caption, do: ~s(<p class="muted">“#{e(m.caption)}”</p>), else: ""}
+          <form method="post" action="/admin/moments/#{m.id}">
+            <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
+            <button name="decision" value="approve">Approve</button>
+            <button name="decision" value="reject">Reject</button>
+          </form></div>
+        """
+      end)
+
     page(conn, "Photos", """
     #{nav()}<h1>A-03 Photo review</h1>
     #{if list == "", do: ~s(<p class="muted">Nothing queued.</p>), else: list}
+    <h2>Moments (borderline, hidden until decided or expired)</h2>
+    #{if moments == "", do: ~s(<p class="muted">Nothing queued.</p>), else: moments}
     """)
+  end
+
+  def moment_decision(conn, %{"id" => id, "decision" => d}) when d in ~w(approve reject) do
+    case Thirstr.Moments.review(id, d) do
+      :ok ->
+        audit(conn.assigns.admin, "moment_" <> d, id, nil)
+        redirect(conn, to: "/admin/photos")
+
+      _ ->
+        send_resp(conn, 404, "")
+    end
   end
 
   def photo_decision(conn, %{"id" => id, "decision" => d}) when d in ~w(approve reject) do

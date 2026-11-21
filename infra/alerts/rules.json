@@ -7,7 +7,7 @@
       "title": "API down",
       "sev": 1,
       "type": "http",
-      "url": "https://api.thirstr.fun/health",
+      "url": "https://api.thirstr.fun/v1/health",
       "expect_status": 200,
       "for_min": 4
     },

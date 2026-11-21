@@ -13,7 +13,7 @@ Common commands (`-a thirstr-api-prod` unless noted):
 - Dashboards: Fly Grafana (`fly-metrics.net`, org `personal`), metrics in `docs/runbooks/monitoring.md`.
 
 ## api-down
-**Meaning:** `https://api.thirstr.fun/health` (does `SELECT 1`) failed or did not return 200 for 4 min, checked from GitHub (outside Fly). App and site are down for everyone.
+**Meaning:** `https://api.thirstr.fun/v1/health` (does `SELECT 1`) failed or did not return 200 for 4 min, checked from GitHub (outside Fly). App and site are down for everyone.
 1. `fly status -a thirstr-api-prod`: machine stopped or crash-looping? `fly logs` for the boot error.
 2. DB: `fly status -a thirstr-db-prod`. Health fails if Postgres is down; restart the DB machine.
 3. Just deployed? Roll back to the previous digest.

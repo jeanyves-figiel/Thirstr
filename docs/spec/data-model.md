@@ -46,7 +46,7 @@ Indexes: (account_id), (city_id, last_day). Deleted by `ExpirySweep` (every 15 m
 | account_id · at | rows older than 30 d swept by `ExpirySweep` |
 
 ### moments (F-21, #212)
-| id uuid · account_id · profile_id · storage_key · thumb_key · caption ≤ 80 · caption_style · audience (everyone, chats, favorites) · intents text[] · main_ok bool · status (uploading, live, review, rejected, hidden) · reject_reason · ttl_s · expires_at · created_at |
+| id uuid · account_id · profile_id · storage_key · thumb_key · caption ≤ 80 · caption_style · audience (everyone, chats, favorites) · intents text[] · main_ok bool · status (uploading, live, review, rejected, hidden) · reject_reason · hash_state · hash_checked_at · hash_provider (#179) · ttl_s · expires_at · created_at |
 Indexes: (profile_id, status, expires_at), (account_id, created_at), (expires_at). No location of any kind. Hard-deleted with their files by `ExpirySweep` at `expires_at` (uploads never published: after 1 h); files deleted with the account.
 
 ### moment_audience · moment_views · moment_mutes (F-21)
@@ -82,7 +82,7 @@ B1 stores the SV fields in the `fields` jsonb rather than one column each; `hook
 Audience-restricted values (health, socials, limits, boundaries card) are **not** stored here; they are sent E2EE to chat partners (F-06 R-06.6).
 
 ### photos
-| id · profile_id · slot (0–4) · storage_key · thumb_key (480 px copy, set only when it passed the classifier on its own, SR-10) · status enum(pending, ok_main, ok_public, rejected) · reject_reason · review_state · classifier_score jsonb (`main_ok` = passes strict check; only these show in Friends/Sport) · created_at |
+| id · profile_id · slot (0–4) · storage_key · thumb_key (480 px copy, set only when it passed the classifier on its own, SR-10) · status enum(pending, ok_main, ok_public, rejected) · reject_reason · review_state · classifier_score jsonb (`main_ok` = passes strict check; only these show in Friends/Sport) · hash_state enum(no_match, match, unchecked, retry) null · hash_checked_at · hash_provider (#179, R-15.43) · created_at |
 
 ### location_cells (one row per visible profile, overwritten)
 | profile_id pk · level enum(city, area, exact) · cell_r10 null (#197, Precise only) · precise bool (#197) · cell_r9 · cell_r8 · cell_r7 · cell_r5 (bigint = `h3index::bigint`; City stores r5 only) · updated_at · hide_from_hidden bool · display_res smallint (10/9/8/7/5; 10 only when precise and ≥ 3 visible in the r9 cell; k-anonymity, widened each minute when < 5 people share the cell) |
@@ -120,6 +120,11 @@ Address/door code: E2EE message to accepted guests, never in DB.
 ### vouches (from_account, to_profile, created_at; unique pair) — weight computed by SQL `vouch_count(profile)`: 1 for 6 months, linear to 0 at 12, reciprocal pairs × 0.5, max 20 (F-18)
 ### reports (id, reporter_account, target_account, target_profile, reason, context, note (500), franked jsonb {messages: [{t, text, at}]} (franking-verified only), severity 1–6, state enum(open, actioned, dismissed), action, created_at, resolved_at; one open report per reporter × target × reason)
 ### moderation_actions (id, target_account, action enum(quarantine, warn, remove_photo, hide_field, suspend, ban, release), reason, actor, created_at, ends_at (suspend), report_id, appeal_state enum(open, upheld, overturned), appeal_text, seen)
+### csam_cases (#179, F-15 R-15.44–48)
+| id uuid · state enum(open, confirmed, false_positive) · source enum(hash, classifier, report) · provider · match_ref · target_account · photo_id / moment_id / report_id (one) · sha256 bytea · evidence_key (in `evidence/`, AES-256-GCM, key wrapped) · snapshot jsonb (public profile at upload) · decided_by · decided_at · hold_until (default created_at + 1 y; legal hold extends) · created_at |
+### csam_filings (case_id, authority enum(ncmec, fedpol, hotline, art18_police, europol), country, external_ref, filed_by, filed_at)
+### hash_blocklist (sha256 bytea pk, case_id, created_at) — exact-bytes re-upload block; kept after the case's evidence expires
+### mod_time (moderator, day, tier, seconds) — wellbeing counters (R-15.53), no content
 ### server_keys (name pk, der, created_at) — `verify_rsa`: F-03 blind-signature issuer key (RSA 3072), generated on first use
 ### spent_tokens (hash pk = sha256(token), created_at) — redeemed verification tokens, no link to the account (R-03.4)
 ### admin_audit (id bigserial, actor, action, object_hash (sha256 prefix of the object id), reason, at) — append-only (DB rules drop UPDATE/DELETE), R-AD.4

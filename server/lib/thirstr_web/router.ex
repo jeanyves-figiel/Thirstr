@@ -103,7 +103,18 @@ defmodule ThirstrWeb.Router do
   scope "/admin", ThirstrWeb do
     pipe_through [:admin, :admin_auth]
     post "/logout", AdminController, :logout
-    get "/", AdminController, :reports
+    # F-15 R-15.51–53 (#179, #286): one prioritised queue, CSAM cases, legal filings, wellbeing
+    get "/", ModController, :queue
+    get "/cases", ModController, :cases
+    get "/cases/:id", ModController, :case_detail
+    post "/cases/:id/decision", ModController, :case_decision
+    post "/cases/:id/view", ModController, :case_view
+    post "/cases/:id/filings", ModController, :add_filing
+    get "/cases/:id/pack", ModController, :pack
+    post "/photos/:id/escalate", ModController, :escalate_photo
+    post "/reveal", ModController, :reveal
+    get "/pause", ModController, :pause
+    get "/me", ModController, :my_day
     get "/reports/:id", AdminController, :report
     post "/reports/:id/action", AdminController, :report_action
     get "/photos", AdminController, :photos

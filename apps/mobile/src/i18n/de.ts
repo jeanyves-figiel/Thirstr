@@ -186,7 +186,7 @@ export const de: Partialize<AppStrings> = {
     add: 'Foto hinzufügen',
     checking: 'Wird geprüft…',
     pending: 'In Prüfung',
-    rejected: { too_explicit: 'Zu explizit für diesen Platz', no_person: 'Wir müssen eine Person sehen' },
+    rejected: { too_explicit: 'Zu explizit für diesen Platz', no_person: 'Wir müssen eine Person sehen', unusable: 'Dieses Foto kann nicht verwendet werden' },
   },
   settings: {
     title: 'Einstellungen',

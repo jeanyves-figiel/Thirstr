@@ -145,30 +145,42 @@ if config_env() == :prod do
     http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: String.to_integer(env.("PORT", "4000"))],
     secret_key_base: secret_key_base
 
-  # Sign-in links (F-01 R-01.3, #26): EU SMTP relay, STARTTLS with full certificate checks.
-  # Runbook: docs/runbooks/email.md. Without SMTP_HOST, email sign-in is off on this env.
+  # Sign-in links (F-01 R-01.3, #26): Amazon SES API (SES_REGION) or an SMTP relay with full
+  # certificate checks. Runbook: docs/runbooks/email.md. With neither, email sign-in is off.
   config :thirstr, :mail_from, env.("MAIL_FROM", "hello@thirstr.fun")
 
-  if smtp = System.get_env("SMTP_HOST") do
-    config :thirstr, Thirstr.Mailer,
-      adapter: Swoosh.Adapters.SMTP,
-      relay: smtp,
-      port: String.to_integer(env.("SMTP_PORT", "587")),
-      username: System.get_env("SMTP_USER"),
-      password: System.get_env("SMTP_PASSWORD"),
-      tls: :always,
-      auth: :always,
-      no_mx_lookups: true,
-      retries: 2,
-      tls_options: [
-        verify: :verify_peer,
-        cacerts: :public_key.cacerts_get(),
-        server_name_indication: String.to_charlist(smtp),
-        depth: 4,
-        versions: [:"tlsv1.2", :"tlsv1.3"],
-        customize_hostname_check: [
-          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+  cond do
+    # Amazon SES HTTPS API (#26): eu-central-2 (Zurich) has no SMTP endpoint, only the API.
+    ses_region = System.get_env("SES_REGION") ->
+      config :thirstr, Thirstr.Mailer,
+        adapter: Swoosh.Adapters.AmazonSES,
+        region: ses_region,
+        access_key: System.fetch_env!("SES_ACCESS_KEY_ID"),
+        secret: System.fetch_env!("SES_SECRET_ACCESS_KEY")
+
+    smtp = System.get_env("SMTP_HOST") ->
+      config :thirstr, Thirstr.Mailer,
+        adapter: Swoosh.Adapters.SMTP,
+        relay: smtp,
+        port: String.to_integer(env.("SMTP_PORT", "587")),
+        username: System.get_env("SMTP_USER"),
+        password: System.get_env("SMTP_PASSWORD"),
+        tls: :always,
+        auth: :always,
+        no_mx_lookups: true,
+        retries: 2,
+        tls_options: [
+          verify: :verify_peer,
+          cacerts: :public_key.cacerts_get(),
+          server_name_indication: String.to_charlist(smtp),
+          depth: 4,
+          versions: [:"tlsv1.2", :"tlsv1.3"],
+          customize_hostname_check: [
+            match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+          ]
         ]
-      ]
+
+    true ->
+      :ok
   end
 end

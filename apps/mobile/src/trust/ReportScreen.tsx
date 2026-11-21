@@ -1,15 +1,21 @@
+import { getLocales } from 'expo-localization';
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { api, ApiError } from '../api/client';
 import * as E from '../chat/engine';
 import { tx } from '../i18n/app';
+import { dsa } from '../i18n/dsa';
 import { color, font, space, type } from '../theme/tokens';
-import { Banner, Button, Check, ErrorText, Field, Section, SectionLabel, StickyCta, Toggle } from '../ui';
+import { Banner, Button, Check, Chip, Chips, ErrorText, Field, Section, SectionLabel, Sheet, StickyCta, Toggle } from '../ui';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void };
 type Params = { profileId: string; cid?: string; messageIds?: string[]; context?: string };
 
 const REASONS = ['spam_bot', 'scam', 'underage', 'harassment', 'non_consensual', 'hate', 'impersonation', 'other'];
+// R-15.24 types, in the order shown; the reason a type maps to when "It's illegal" is picked.
+export const LEGAL_TYPES = ['csam', 'intimate_images', 'threats', 'hate_speech', 'fraud', 'impersonation', 'ip', 'other'];
+const ILLEGAL = 'illegal';
+const COUNTRIES = ['CH', 'DE', 'FR', 'AT', 'IT', 'ES', 'NL', 'BE', 'GB', 'US'];
 
 const label = (m: E.Msg) => {
   const p = m.p as { t: string; text?: string };
@@ -17,6 +23,8 @@ const label = (m: E.Msg) => {
 };
 
 // S-50 Report (F-15 R-15.9): reason, optional note, optional franked messages, block offered.
+// S-50b (#170, R-15.23–R-15.26): "It's illegal" or "This may also be illegal" adds a second step
+// with what the DSA asks of a notice (Art. 16(2)); the receipt shows the reference.
 export function ReportScreen({ navigation, route }: { navigation: Nav; route: { params: Params } }) {
   const { profileId, cid, messageIds, context } = route.params;
   const [reason, setReason] = useState<string | null>(null);
@@ -26,7 +34,15 @@ export function ReportScreen({ navigation, route }: { navigation: Nav; route: { 
   const [block, setBlock] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [also, setAlso] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [country, setCountry] = useState((getLocales()[0]?.regionCode ?? 'CH').toUpperCase());
+  const [moreCountries, setMoreCountries] = useState(false);
+  const [legalType, setLegalType] = useState<string | null>(null);
+  const [explanation, setExplanation] = useState('');
+  const [goodFaith, setGoodFaith] = useState(false);
+  const illegal = reason === ILLEGAL || also;
 
   useEffect(() => {
     if (!cid) return;
@@ -39,10 +55,18 @@ export function ReportScreen({ navigation, route }: { navigation: Nav; route: { 
     setErr(null);
     try {
       const messages = theirs.filter((m) => picked.has(m.id)).map((m) => ({ plain: m.raw, fk: m.fk }));
-      await api('POST', '/reports', { profile_id: profileId, reason, note: note.trim() || undefined, context: context ?? (cid ? 'chat' : 'profile'), messages });
+      const legal = illegal ? { illegal: true, legal_type: legalType, country, explanation: explanation.trim(), good_faith: goodFaith } : {};
+      const r = await api<{ ref?: string }>('POST', '/reports', {
+        profile_id: profileId,
+        reason: reason === ILLEGAL ? 'other' : reason,
+        note: note.trim() || undefined,
+        context: context ?? (cid ? 'chat' : 'profile'),
+        messages,
+        ...legal,
+      });
       if (block) await api('POST', `/profiles/${profileId}/block`).catch(() => {});
       if (block && cid) await E.setConv(cid, { archived: true });
-      setDone(true);
+      setDone(r.ref ?? '');
     } catch (e) {
       setErr(e instanceof ApiError ? (Object.values(e.fields ?? {})[0]?.[0] ?? e.message) : tx.common.error);
     } finally {
@@ -50,11 +74,66 @@ export function ReportScreen({ navigation, route }: { navigation: Nav; route: { 
     }
   };
 
-  if (done) {
+  const finish = () => navigation.goBack();
+
+  // R-15.26 receipt: reference + where the outcome shows up.
+  if (done !== null) {
     return (
-      <View style={{ flex: 1, backgroundColor: color.bgBase, padding: space.l, gap: space.l }}>
-        <Banner tone="trust" text={tx.report.sent} />
-        <Button testID="report-done" title={tx.common.done} onPress={() => navigation.goBack()} />
+      <View style={{ flex: 1, backgroundColor: color.bgBase }}>
+        <Sheet visible onClose={finish} title={dsa.received} closeLabel={tx.common.close}>
+          <View testID="report-receipt" style={{ gap: space.m }}>
+            <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: color.trustTint, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ ...type.title, color: color.trust }}>✓</Text>
+            </View>
+            <Text style={{ ...type.body, color: color.fgSecondary }}>{done ? dsa.refLine(done) : tx.report.sent}</Text>
+            <Button testID="report-done" title={tx.common.done} onPress={finish} />
+          </View>
+        </Sheet>
+      </View>
+    );
+  }
+
+  if (step === 2) {
+    const shown = moreCountries ? COUNTRIES.concat(country).filter((c, i, a) => a.indexOf(c) === i) : [country];
+    const ok = !!legalType && explanation.trim().length >= 20 && goodFaith;
+    const nPicked = theirs.filter((m) => picked.has(m.id)).length;
+    return (
+      <View style={{ flex: 1, backgroundColor: color.bgBase }}>
+        <ScrollView showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: 220 }}>
+          <Text accessibilityRole="header" style={{ ...type.display, color: color.fgPrimary }}>
+            {dsa.step2}
+          </Text>
+          <View style={{ gap: space.s }}>
+            <SectionLabel>{dsa.where}</SectionLabel>
+            <Chips>
+              {shown.map((c) => (
+                <Chip key={c} label={c} on={c === country} fill={color.danger} onPress={() => setCountry(c)} />
+              ))}
+              {!moreCountries ? <Chip label={dsa.change} on={false} onPress={() => setMoreCountries(true)} /> : null}
+            </Chips>
+          </View>
+          <View style={{ gap: space.s }}>
+            <SectionLabel>{dsa.kind}</SectionLabel>
+            <Chips>
+              {LEGAL_TYPES.map((t) => (
+                <Chip key={t} label={dsa.types[t]} on={legalType === t} fill={color.danger} onPress={() => setLegalType(t)} />
+              ))}
+            </Chips>
+          </View>
+          <Field testID="report-explanation" label={dsa.what} hint={dsa.whatHint} value={explanation} onChangeText={setExplanation} maxLength={1000} multiline />
+          <View style={{ gap: space.s }}>
+            <SectionLabel>{dsa.about}</SectionLabel>
+            <Chips>
+              <Chip label={dsa.aboutProfile} on fill={color.trust} onPress={() => {}} />
+              {nPicked ? <Chip label={dsa.aboutMsgs(nPicked)} on fill={color.trust} onPress={() => {}} /> : null}
+            </Chips>
+          </View>
+          <Check label={dsa.goodFaith} on={goodFaith} onPress={() => setGoodFaith((v) => !v)} />
+          <ErrorText text={err} />
+        </ScrollView>
+        <StickyCta>
+          <Button testID="report-send" title={tx.report.send} fill={color.danger} busy={busy} disabled={!ok} onPress={send} />
+        </StickyCta>
       </View>
     );
   }
@@ -71,7 +150,13 @@ export function ReportScreen({ navigation, route }: { navigation: Nav; route: { 
           {REASONS.map((r) => (
             <Radio key={r} label={tx.report.reasons[r]} on={reason === r} onPress={() => setReason(r)} />
           ))}
+          <Radio label={dsa.illegal} sub={dsa.illegalSub} on={reason === ILLEGAL} onPress={() => setReason(ILLEGAL)} />
         </Section>
+        {reason && reason !== ILLEGAL ? (
+          <Section>
+            <Toggle label={dsa.alsoIllegal} value={also} tone={color.danger} onChange={setAlso} />
+          </Section>
+        ) : null}
       </View>
       <Field testID="report-note" label={tx.report.note} value={note} onChangeText={setNote} maxLength={500} multiline />
       {theirs.length ? (
@@ -101,16 +186,23 @@ export function ReportScreen({ navigation, route }: { navigation: Nav; route: { 
       <ErrorText text={err} />
     </ScrollView>
       <StickyCta>
-        <Button testID="report-send" title={tx.report.send} fill={color.danger} busy={busy} disabled={!reason} onPress={send} />
+        {illegal ? (
+          <Button testID="report-next" title={dsa.next} disabled={!reason} onPress={() => setStep(2)} />
+        ) : (
+          <Button testID="report-send" title={tx.report.send} fill={color.danger} busy={busy} disabled={!reason} onPress={send} />
+        )}
       </StickyCta>
     </View>
   );
 }
 
-function Radio({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+function Radio({ label, sub, on, onPress }: { label: string; sub?: string; on: boolean; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={label} onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, minHeight: 56 }}>
-      <Text style={{ ...type.headline, fontFamily: font.bold, color: color.fgPrimary, flex: 1 }}>{label}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={{ ...type.headline, fontFamily: font.bold, color: sub ? color.danger : color.fgPrimary }}>{label}</Text>
+        {sub ? <Text style={{ ...type.meta, color: color.fgMuted }}>{sub}</Text> : null}
+      </View>
       <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: on ? color.danger : color.navInactive, alignItems: 'center', justifyContent: 'center' }}>
         {on ? <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: color.danger }} /> : null}
       </View>

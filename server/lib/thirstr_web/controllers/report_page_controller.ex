@@ -205,6 +205,8 @@ defmodule ThirstrWeb.ReportPageController do
     """
   end
 
+  # Every interpolated value in the page goes through e/1 (Plug.HTML.html_escape/1).
+  # sobelow_skip ["XSS.SendResp"]
   defp send_html(conn, status, html) do
     conn
     |> put_resp_header("content-security-policy", @csp)

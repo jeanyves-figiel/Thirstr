@@ -759,8 +759,6 @@ const en = {
     units: 'Distance units',
     unitOpts: { km: 'km', mi: 'miles' } as Record<string, string>,
     haptics: 'Haptics',
-    dataSaver: 'Data saver',
-    dataSaverSub: 'Thumbnails only on mobile data',
     language: 'Language',
     languageSub: 'Uses your phone’s language. Change it in system settings.',
     privacy: 'Privacy policy',

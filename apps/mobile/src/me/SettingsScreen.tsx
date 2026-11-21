@@ -12,6 +12,8 @@ import { wn } from '../i18n/whatsnew';
 import { color, font, radius, space, type } from '../theme/tokens';
 import { ErrorText, Icon } from '../ui';
 import { type Prefs, prefs, setPrefs } from './prefs';
+import { saverSummary, useDataSaver } from '../app/dataSaver';
+import { sv } from '../i18n/saver';
 import { Group, IconTile, Row, Seg, SwitchRow, useSettings } from './settings/parts';
 
 type Nav = { navigate: (s: string, p?: object) => void };
@@ -27,6 +29,7 @@ const INDEX: [string, string][] = [
   ...[S.safeMode, S.appLock, tx.prefs.verification, S.blocked, mod.list.row, S.notices].map((l) => [l, 'SafetySettings'] as [string, string]),
   ...[tx.signInEmail.row, tx.devices.title, tx.exportData.title, S.pause, S.logoutAll, S.delete].map((l) => [l, 'AccountSettings'] as [string, string]),
   [wn.title, 'WhatsNew'],
+  [sv.title, 'DataSaverSettings'],
 ];
 
 // S-61 Settings hub v3 (#102, F-17 R-17.10): 5 categories with live summaries, App + About inline.
@@ -35,6 +38,7 @@ export function SettingsScreen({ navigation }: { navigation: Nav }) {
   const { st } = useSettings();
   const [q, setQ] = useState('');
   const [pf, setPf] = useState<Prefs>(prefs());
+  const ds = useDataSaver();
   const [lic, setLic] = useState(false);
   const [blocked, setBlocked] = useState<number | null>(null);
   const [devices, setDevices] = useState<number | null>(null);
@@ -106,6 +110,7 @@ export function SettingsScreen({ navigation }: { navigation: Nav }) {
               <Text style={{ flex: 1, ...type.body, fontFamily: font.medium, fontSize: 16, color: color.fgPrimary }}>{tx.prefs.units}</Text>
               <Seg compact tone={color.bgInverse} label={tx.prefs.units} value={pf.units} options={[['km', tx.prefs.unitOpts.km], ['mi', tx.prefs.unitOpts.mi]]} onChange={(v) => setPrefs({ units: v }).then(setPf)} />
             </View>
+            <Row testID="settings-data-saver" title={sv.title} value={saverSummary(ds.mode, ds.saving)} onPress={() => navigation.navigate('DataSaverSettings')} />
             {Platform.OS !== 'web' ? <SwitchRow title={tx.prefs.haptics} value={pf.haptics} onChange={(v) => setPrefs({ haptics: v }).then(setPf)} /> : null}
             <Row title={tx.prefs.language} sub={tx.prefs.languageSub} onPress={() => Linking.openSettings().catch(() => {})} />
           </Group>

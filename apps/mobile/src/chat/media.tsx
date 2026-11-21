@@ -17,6 +17,7 @@ import * as Lib from './library';
 import * as MediaCache from './mediaCache';
 import { PhotoViewer } from '../ui/PhotoViewer';
 import * as Video from './video';
+import { SMALL_PHOTO, saving, useDataSaver } from '../app/dataSaver';
 import { VideoMark, VideoPlayer } from './VideoPlayer';
 
 export type SendOpts = { once: boolean; expiry: '1h' | '24h' | '7d' | 'keep'; save: boolean };
@@ -125,7 +126,7 @@ async function sendOne(conv: E.Conv, src: Source, opts: SendOpts) {
   const ref = await uploadEncrypted(photo.bytes, { ttl_s: exp ?? undefined });
   await E.send(conv.id, {
     t: 'media',
-    media: { ...ref, mime: photo.mime, w: photo.w, h: photo.h, once: opts.once || undefined, exp: exp ? Date.now() + exp * 1000 : undefined, save: opts.save || undefined },
+    media: { ...ref, mime: photo.mime, w: photo.w, h: photo.h, size: photo.bytes.length + 16, once: opts.once || undefined, exp: exp ? Date.now() + exp * 1000 : undefined, save: opts.save || undefined },
   });
   if (src.kind === 'recent') await Recent.touch(src.r.id, conv.id).catch(() => {});
   else await Recent.keep(photo.bytes, { mime: photo.mime, w: photo.w, h: photo.h }, conv.id).catch(() => {});
@@ -153,13 +154,17 @@ export function videoProblem(kind: Video.VideoError['kind']) {
 
 // iOS: the system exports picked and recorded videos at 1080p H.265 (R-08.17). Android keeps the file;
 // the 50 MB cap still applies.
-const VIDEO_PICK = { videoMaxDuration: Video.MAX_S, videoExportPreset: ImagePicker.VideoExportPreset.HEVC_1920x1080 } as const;
+// R-17.16: with Data saver on, the export is 720p (the system's 720p preset is H.264).
+const VIDEO_PICK = () => ({
+  videoMaxDuration: Video.MAX_S,
+  videoExportPreset: saving() ? ImagePicker.VideoExportPreset.H264_1280x720 : ImagePicker.VideoExportPreset.HEVC_1920x1080,
+});
 const asSource = (a: ImagePicker.ImagePickerAsset): Source =>
   a.type === 'video' ? { kind: 'video', uri: a.uri, w: a.width, h: a.height, dur: a.duration ? a.duration / 1000 : undefined } : { kind: 'uri', uri: a.uri, w: a.width, h: a.height };
 
 /** System picker (no library access needed), up to `limit` photos and videos (#138). */
 export async function pickPhotos(limit = 10): Promise<Source[]> {
-  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 1, exif: false, allowsMultipleSelection: true, selectionLimit: limit, orderedSelection: true, ...VIDEO_PICK });
+  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 1, exif: false, allowsMultipleSelection: true, selectionLimit: limit, orderedSelection: true, ...VIDEO_PICK() });
   if (r.canceled) return [];
   return r.assets.map(asSource);
 }
@@ -171,7 +176,7 @@ export async function pickPhotos(limit = 10): Promise<Source[]> {
 export async function takePhoto(): Promise<Source | null> {
   const p = await ImagePicker.requestCameraPermissionsAsync();
   if (!p.granted) return null;
-  const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 1, exif: false, videoQuality: ImagePicker.UIImagePickerControllerQualityType.High, ...VIDEO_PICK });
+  const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 1, exif: false, videoQuality: ImagePicker.UIImagePickerControllerQualityType.High, ...VIDEO_PICK() });
   if (r.canceled || !r.assets[0]) return null;
   return asSource(r.assets[0]);
 }
@@ -201,7 +206,12 @@ export function MediaBubble({ m, media, mine, cid, conv }: { m: E.Msg; media: E.
   // View-once, or auto-delete after viewing (Settings, always in Safe Mode: F-14).
   const once = (!!media.once || prefs().autoDelete || !!me.safe_mode_active) && !mine;
   const gone = expired || (once && m.opened);
-  const autoload = !gone && !once && policy !== 'block';
+  // R-17.16: with Data saver on, only small photos load by themselves; the rest wait for a tap.
+  const { saving } = useDataSaver();
+  const [asked, setAsked] = useState(false);
+  const small = media.size != null && media.size <= SMALL_PHOTO;
+  const held = saving && !small && !asked && !mine;
+  const autoload = !gone && !once && policy !== 'block' && !held;
 
   const video = Video.isVideo(media);
   useEffect(() => {
@@ -264,6 +274,22 @@ export function MediaBubble({ m, media, mine, cid, conv }: { m: E.Msg; media: E.
           }}
         />
       </>
+    );
+  }
+
+  if (held && !uri) {
+    const mb = media.size != null ? `${(media.size / 1048576).toFixed(1)} MB` : null;
+    return (
+      <Pressable
+        testID="saver-photo"
+        accessibilityRole="button"
+        accessibilityLabel={`${mx.saverLoad}${mb ? ', ' + mb : ''}`}
+        onPress={() => setAsked(true)}
+        style={{ width: w, height: h, borderRadius: radius.sm, overflow: 'hidden', backgroundColor: color.bgOverlay, alignItems: 'center', justifyContent: 'center', gap: space.xs }}
+      >
+        <Text style={{ ...type.headline, color: color.fgPrimary }}>⬇ {mx.saverLoad}</Text>
+        <Text style={{ ...type.meta, color: color.fgSecondary }}>{mb ? mx.saverPhoto(mb) : mx.saverOn}</Text>
+      </Pressable>
     );
   }
 

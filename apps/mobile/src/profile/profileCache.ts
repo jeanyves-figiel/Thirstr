@@ -7,6 +7,7 @@ import { Image } from 'react-native';
 import { kv } from '../chat/kv';
 import { api, ApiError } from '../api/client';
 import type { Mode, ProfileView } from '../api/types';
+import { saving } from '../app/dataSaver';
 
 const MAX = 24;
 const cache = new Map<string, ProfileView>();
@@ -98,6 +99,7 @@ export function fetchProfile(id: string, mode: Mode, trip?: string): Promise<Pro
 /** Fetch ahead: data and first photo of a neighbour. Errors are ignored (the swipe retries on arrival). */
 export function warmProfile(id: string, mode: Mode, trip?: string): Promise<ProfileView | null> {
   const have = cachedProfile(id, mode, trip);
+  if (saving()) return Promise.resolve(have ?? null); // R-17.16: nothing loaded ahead
   const p = have ? Promise.resolve(have) : fetchProfile(id, mode, trip);
   return p.then(
     (v) => {

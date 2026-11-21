@@ -28,6 +28,7 @@ import { toast } from '../ui/Toast';
 import { quickLevel } from '../explore/level';
 import { LensPreviewScreen } from '../me/LensPreviewScreen';
 import { SettingsScreen } from '../me/SettingsScreen';
+import { DataSaverSettings } from '../me/settings/DataSaverScreen';
 import { AccountSettings, ChatSettings, DeleteAccount, NotificationSettings, PrivacySettings, SafetySettings } from '../me/settings/screens';
 import { TapsScreen } from '../me/TapsScreen';
 import { TripsScreen } from '../travel/TripsScreen';
@@ -45,6 +46,7 @@ import { CheckinDueScreen, CheckinStartScreen } from '../safety/CheckinScreens';
 import { LockGate } from '../safety/LockGate';
 import { SafeModeAuto } from '../safety/SafeModeAuto';
 import { loadPrefs } from '../me/prefs';
+import { startDataSaver } from './dataSaver';
 import { feel } from '../ui/haptics';
 import { dx } from '../i18n/date';
 import { LiveBar, SafetyQuickScreen, useCheckin } from '../safety/live';
@@ -356,6 +358,7 @@ export function Main() {
   // Hosts keep party / activity / club group chats in step with their member lists.
   React.useEffect(() => {
     loadPrefs();
+    startDataSaver();
     resyncHostGroups().catch(() => {});
     return on('scene', () => {
       resyncHostGroups().catch(() => {});
@@ -393,6 +396,7 @@ export function Main() {
           <Stack.Screen name="Settings" component={SettingsScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="PrivacySettings" component={PrivacySettings} options={sub} />
           <Stack.Screen name="ChatSettings" component={ChatSettings} options={sub} />
+          <Stack.Screen name="DataSaverSettings" component={DataSaverSettings} options={sub} />
           <Stack.Screen name="NotificationSettings" component={NotificationSettings} options={sub} />
           <Stack.Screen name="SafetySettings" component={SafetySettings as React.ComponentType} options={sub} />
           <Stack.Screen name="AccountSettings" component={AccountSettings as React.ComponentType} options={sub} />

@@ -30,7 +30,7 @@ GitHub secrets: repo → Settings → Secrets and variables → Actions.
 - **Google / email link**: hidden on native until Google client IDs and SMTP exist (#26). Flip with `EXPO_PUBLIC_AUTH_GOOGLE=1` / `EXPO_PUBLIC_AUTH_EMAIL=1` in the workflow `env`.
 
 ## App extensions (#119)
-- `apps/mobile/targets/safety-live` is a widget extension (date check-in Live Activity), added at `expo prebuild` by `@bacons/apple-targets`. Bundle ID `app.thirstr.safetylive`; automatic signing (`-allowProvisioningUpdates` + API key) registers it and makes its profile on the first build. It signs with `APPLE_TEAM_ID` (read into `ios.appleTeamId` by `app.config.js`).
+- `apps/mobile/targets/safety-live` is a widget extension (date check-in Live Activity), added at `expo prebuild` by `@bacons/apple-targets`. Bundle ID `app.thirstr.safetylive`; automatic signing cannot register a new bundle ID, so the workflow step "Register app extension bundle IDs" (`.github/scripts/asc-ensure-bundle-ids.mjs`) creates it through the API key first; automatic signing then makes its profiles. A new extension = add its ID to that step. It signs with `APPLE_TEAM_ID` (read into `ios.appleTeamId` by `app.config.js`).
 - Swift in `targets/safety-live/SafetyAttributes.swift` must stay identical to `modules/thirstr-safety/ios/SafetyAttributes.swift` (a Jest test checks).
 
 ## Troubleshooting

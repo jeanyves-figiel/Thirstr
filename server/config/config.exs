@@ -28,7 +28,9 @@ config :thirstr, Oban,
        # F-15 R-15.43 (#179): photos whose hash check failed
        {"*/2 * * * *", Thirstr.Jobs.HashRetry},
        # F-12 R-12.9: weekly OSM venue import (no-op unless :places osm_import is on)
-       {"30 3 * * 1", Thirstr.Jobs.PlaceImport}
+       {"30 3 * * 1", Thirstr.Jobs.PlaceImport},
+       # EN-21 (#180): usage + Fly cost snapshot, budget alert
+       {"10 2 * * *", Thirstr.Jobs.CostSnapshot}
      ]}
   ]
 

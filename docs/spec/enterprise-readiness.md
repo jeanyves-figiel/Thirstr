@@ -23,7 +23,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 - Backups + PITR (SR-01 #141: live on staging 2026-11-21, restore drill passed; prod after owner OK 2026-11-21), key escrow (#158). Runbook: `docs/runbooks/db-backups.md`.
 - **EN-01** (#160) HA Postgres: primary + synchronous standby (`fra`) + async replica (`ams`), automatic failover (Fly Managed Postgres if it supports h3, else Patroni/repmgr on Fly machines); app connects via a failover-aware address. Read replica serves Explore/places reads.
 - **EN-02** (#161) Multi-region inside the EU: API in `fra` + `ams` (later `cdg`/`waw`), Valkey replica per region, Tigris with EU placement (#27). Region failure = degraded, not down.
-- **EN-03** (#162) Scale-out plan for 1M: partition `mls_messages` (by day / device hash), `location_cells` hot set in memory (ETS/Valkey), PgBouncer when nodes × pool > 300 connections, evaluate dedicated EU hardware (Hetzner) for the DB at 1M (exit path, #23).
+- **EN-03** (#162) Scale-out plan for 1M: partition `mls_messages` (by day / device hash), `location_cells` hot set in memory (ETS/Valkey), PgBouncer when nodes × pool > 300 connections, evaluate dedicated EU hardware (Hetzner) for the DB at 1M (exit path, #23). Design: [`scale-out-1m.md`](scale-out-1m.md) (hash partitions by device for the queue, range partitions for TTL tables, ETS then Valkey hot set, PgBouncer at 80 % of `max_connections`, DB decision points at 100k and 1M MAU).
 
 ### B. Observability, SLOs, on-call
 - Metrics + alerts (SR-07).

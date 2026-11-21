@@ -628,7 +628,7 @@ defmodule ThirstrWeb.AdminController do
   @doc false
   def nav do
     """
-    <nav><a href="/admin">Queue</a><a href="/admin/cases">Hash hits &amp; cases</a><a href="/admin/photos">Photos</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a>
+    <nav><a href="/admin">Queue</a><a href="/admin/cases">Hash hits &amp; cases</a><a href="/admin/photos">Photos</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a><a href="/admin/costs">Costs</a>
     <a href="/admin/appeals">Appeals</a><a href="/admin/me">My day</a><a href="/admin/audit">Audit</a>
     <form method="post" action="/admin/logout" style="display:inline"><input type="hidden" name="_csrf_token" value="#{get_csrf_token()}"><button>Sign out</button></form></nav>
     """

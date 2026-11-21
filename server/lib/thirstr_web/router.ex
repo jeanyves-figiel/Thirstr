@@ -130,6 +130,11 @@ defmodule ThirstrWeb.Router do
     post "/places/venues/:id/:action", AdminController, :venue_hidden
     post "/places/events", AdminController, :add_event
     post "/places/events/:id/remove", AdminController, :remove_event
+    # A-11 Costs & capacity (EN-21, #180)
+    get "/costs", AdminCostsController, :index
+    post "/costs/items", AdminCostsController, :add_item
+    post "/costs/items/:id", AdminCostsController, :item_action
+    post "/costs/settings", AdminCostsController, :save_settings
   end
 
   # iOS passkeys / universal links (I-03). Apple fetches this without auth.

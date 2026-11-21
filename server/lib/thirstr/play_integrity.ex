@@ -39,29 +39,21 @@ defmodule Thirstr.PlayIntegrity do
     certs = cfg[:cert_digests] || []
     ts = to_int(req["timestampMillis"])
 
-    cond do
-      req["requestHash"] != request_hash ->
-        {:error, :request_hash}
-
-      req["requestPackageName"] != pkg or app["packageName"] != pkg ->
-        {:error, :package}
-
-      not app_ok?(app["appRecognitionVerdict"], cfg) ->
-        {:error, :app}
-
-      not Enum.any?(dev, &(&1 in ~w(MEETS_DEVICE_INTEGRITY MEETS_STRONG_INTEGRITY))) ->
-        {:error, :device}
-
-      is_nil(ts) or abs(now_ms - ts) > @max_age_ms ->
-        {:error, :stale}
-
-      certs != [] and not Enum.any?(app["certificateSha256Digest"] || [], &(&1 in certs)) ->
-        {:error, :certificate}
-
-      true ->
-        :ok
+    with :ok <- ok(req["requestHash"] == request_hash, :request_hash),
+         :ok <- ok(req["requestPackageName"] == pkg and app["packageName"] == pkg, :package),
+         :ok <- ok(app_ok?(app["appRecognitionVerdict"], cfg), :app),
+         :ok <-
+           ok(Enum.any?(dev, &(&1 in ~w(MEETS_DEVICE_INTEGRITY MEETS_STRONG_INTEGRITY))), :device),
+         :ok <- ok(is_integer(ts) and abs(now_ms - ts) <= @max_age_ms, :stale) do
+      ok(
+        certs == [] or Enum.any?(app["certificateSha256Digest"] || [], &(&1 in certs)),
+        :certificate
+      )
     end
   end
+
+  defp ok(true, _), do: :ok
+  defp ok(_, reason), do: {:error, reason}
 
   defp app_ok?("PLAY_RECOGNIZED", _), do: true
   defp app_ok?("UNRECOGNIZED_VERSION", cfg), do: cfg[:allow_unrecognized] == true

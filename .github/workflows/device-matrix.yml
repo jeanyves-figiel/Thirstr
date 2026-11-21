@@ -1,0 +1,227 @@
+# EN-16 (#175): device test matrix (testing.md › Device matrix). Nightly + manual. No paid device farm:
+# Android emulators (low-end + 3G, mid) against a hermetic DEV stack on the runner, and an old-iPhone
+# simulator over 3G against staging (signed out, read-only). Budgets: apps/mobile/e2e/budgets.json.
+name: Device matrix
+
+on:
+  # Also on PRs that change the matrix itself (flows, scripts, budgets, this file).
+  pull_request:
+    paths:
+      - apps/mobile/e2e/**
+      - scripts/device-matrix/**
+      - infra/e2e/**
+      - .github/workflows/device-matrix.yml
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      profiles:
+        description: Profiles to run
+        type: choice
+        options: [all, android-low, android-mid, ios-old]
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: device-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MAESTRO_VERSION: ${{ vars.MAESTRO_VERSION }}  # empty = latest (pin via repo variable if a release breaks)
+  MAESTRO_CLI_NO_ANALYTICS: "1"
+  MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: "true"
+
+jobs:
+  android-build:
+    if: ${{ (inputs.profiles || 'all') == 'all' || startsWith(inputs.profiles, 'android') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      # E2E-only build: DEV sign-in issuer, API on the runner as seen from the emulator.
+      EXPO_PUBLIC_ENV: dev
+      EXPO_PUBLIC_API_URL: http://10.0.2.2:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      - name: Allow cleartext HTTP to the runner (this E2E APK only)
+        run: |
+          f=android/app/src/main/AndroidManifest.xml
+          if grep -q 'usesCleartextTraffic' "$f"; then sed -i 's/android:usesCleartextTraffic="false"/android:usesCleartextTraffic="true"/' "$f"
+          else sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$f"; fi
+          grep -o 'usesCleartextTraffic="[a-z]*"' "$f"
+      - name: Release APK (x86_64)
+        run: cd android && ./gradlew --no-daemon assembleRelease -PreactNativeArchitectures=x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e2e-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 3
+
+  android:
+    needs: android-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: android-low
+            api: 30
+            device: Galaxy Nexus  # 720×1280, 320 dpi
+            ram: 2048M
+            cores: 2
+            net: -netspeed umts -netdelay umts
+          - profile: android-mid
+            api: 35
+            device: pixel_6  # 1080×2400, 420 dpi
+            ram: 4096M
+            cores: 4
+            net: -netspeed full -netdelay none
+    steps:
+      - name: Skip profiles not asked for
+        id: want
+        run: echo "run=${{ (inputs.profiles || 'all') == 'all' || inputs.profiles == matrix.profile }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.want.outputs.run == 'true'
+      - uses: actions/download-artifact@v4
+        if: steps.want.outputs.run == 'true'
+        with:
+          name: e2e-apk
+          path: ${{ runner.temp }}/apk
+      - name: Hermetic backend (DEV stack, no staging)
+        if: steps.want.outputs.run == 'true'
+        run: |
+          sudo ip addr add 10.0.2.2/32 dev lo   # same address the emulator uses for the runner
+          docker compose -f docker-compose.yml -f infra/e2e/compose.e2e.yml up -d api
+      - uses: actions/setup-node@v4
+        if: steps.want.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/testbot/package-lock.json
+      - name: Build Testbot
+        if: steps.want.outputs.run == 'true'
+        working-directory: apps/testbot
+        run: npm ci && npm run build
+      - uses: actions/setup-java@v4
+        if: steps.want.outputs.run == 'true'
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install Maestro
+        if: steps.want.outputs.run == 'true'
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Wait for API, start Testbot
+        if: steps.want.outputs.run == 'true'
+        run: |
+          for i in $(seq 120); do curl -fs http://localhost:4000/v1/health && break; sleep 5; done
+          curl -fsS http://localhost:4000/v1/health || { docker compose logs api | tail -80; exit 1; }
+          cd apps/testbot
+          API_URL=http://localhost:4000 TESTBOT_KEY=e2e-device-matrix-testbot-key-0001 BOTS=testbot \
+            BOT_DATA_DIR="$RUNNER_TEMP/bot" BOT_POLL_MS=3000 nohup npm start > "$RUNNER_TEMP/testbot.log" 2>&1 &
+          for i in $(seq 60); do grep -q "test bots up" "$RUNNER_TEMP/testbot.log" && break; sleep 2; done
+          tail -5 "$RUNNER_TEMP/testbot.log"
+      - name: Enable KVM
+        if: steps.want.outputs.run == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: ${{ matrix.profile }} flows
+        if: steps.want.outputs.run == 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: default
+          arch: x86_64
+          profile: ${{ matrix.device }}
+          ram-size: ${{ matrix.ram }}
+          cores: ${{ matrix.cores }}
+          disk-size: 6000M
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none ${{ matrix.net }}
+          script: ./scripts/device-matrix/android-run.sh ${{ matrix.profile }} ${{ runner.temp }}/apk/app-release.apk ${{ runner.temp }}/out
+      - name: Budgets
+        if: always() && steps.want.outputs.run == 'true'
+        run: python3 scripts/device-matrix/budgets.py ${{ matrix.profile }} "$RUNNER_TEMP/out/metrics.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Collect logs
+        if: always() && steps.want.outputs.run == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          cp "$RUNNER_TEMP/testbot.log" "$RUNNER_TEMP/out/" 2>/dev/null || true
+          docker compose logs api > "$RUNNER_TEMP/out/api.log" 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.want.outputs.run == 'true'
+        with:
+          name: device-matrix-${{ matrix.profile }}
+          path: ${{ runner.temp }}/out
+          retention-days: 14
+
+  ios-old:
+    if: ${{ (inputs.profiles || 'all') == 'all' || inputs.profiles == 'ios-old' }}
+    runs-on: xcode-27  # same image as TestFlight builds (#73)
+    timeout-minutes: 75
+    env:
+      EXPO_PUBLIC_API_URL: https://staging.thirstr.fun
+      EXPO_PUBLIC_ENV: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Newest release Xcode
+        run: |
+          x=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE 'beta|_rc|release.?candidate' | sort -V | tail -1)
+          if [ -n "$x" ]; then sudo xcode-select -s "$x"; fi
+          xcodebuild -version
+      - name: Build for simulator (Release)
+        working-directory: apps/mobile
+        run: |
+          npm ci
+          npx expo prebuild --platform ios --clean
+          xcodebuild build -workspace ios/Thirstr.xcworkspace -scheme Thirstr -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/build.log" 2>&1 && ok=0 || ok=$?
+          grep -nE "error:|\*\* BUILD" "$RUNNER_TEMP/build.log" | head -40
+          exit "$ok"
+      - name: Install Maestro
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: ios-old flows (3G, staging, signed out)
+        run: |
+          app=$(ls -d "$RUNNER_TEMP"/dd/Build/Products/Release-iphonesimulator/*.app | head -1)
+          ./scripts/device-matrix/ios-run.sh "$app" "$RUNNER_TEMP/out"
+      - name: Budgets
+        if: always()
+        run: python3 scripts/device-matrix/budgets.py ios-old "$RUNNER_TEMP/out/metrics.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: device-matrix-ios-old
+          path: ${{ runner.temp }}/out
+          retention-days: 14

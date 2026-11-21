@@ -1,6 +1,6 @@
 # Runbook: Fly.io environments (D-03)
 
-Created 2026-11-17 in Fly org `personal`, region `fra` (EU only, enforced by `scripts/check-fly-regions.sh`).
+Created 2026-11-17 in Fly org `personal`, region `fra` (EU only, enforced by `scripts/check-fly-regions.sh`). Move to the dedicated org `thirstr`: `fly-org-move.md`. Access, tokens, rotation, break-glass: `access.md`.
 
 | App | Role | Notes |
 |---|---|---|
@@ -15,8 +15,8 @@ Created 2026-11-17 in Fly org `personal`, region `fra` (EU only, enforced by `sc
 - Rotate: set new value on the dependent app and the API in one change, then restart both.
 
 ## GitHub (owner setup)
-- Environments `staging` and `production`; `production` requires reviewer **jeanyves-figiel** (D-14).
-- Secret `FLY_TOKEN` (org-scoped deploy token) in both environments. Workflows map it to `FLY_API_TOKEN`.
+- Environments `staging` and `production`. (D-14 planned a required reviewer on `production`; not configured today, promotions are gated by the owner's per-change OK instead.)
+- Secret `FLY_TOKEN` per environment: Fly **deploy tokens** for that environment's apps only, 90-day expiry, minted by `scripts/ops/fly-ci-tokens.sh` (EN-09, `access.md` §2). Until both exist, the old repo-wide org token is the fallback. Workflows map it to `FLY_API_TOKEN`.
 
 ## Domain (#34)
 Registrar + DNS: GoDaddy (owner account). Records (TTL 1 h):

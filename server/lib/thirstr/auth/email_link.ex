@@ -88,6 +88,12 @@ defmodule Thirstr.Auth.EmailLink do
 
   def verify(_), do: {:error, :validation}
 
-  defp valid_email?(e),
-    do: byte_size(e) <= 254 and Regex.match?(~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, e)
+  # RFC 2606 reserved TLDs never get mail: smoke tests and probes use them, so nothing is sent
+  # (no SES bounce, no reputation hit) while the endpoint still answers 202 like for any address.
+  @reserved_tlds [".invalid", ".test", ".example", ".localhost"]
+
+  defp valid_email?(e) do
+    byte_size(e) <= 254 and Regex.match?(~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, e) and
+      not String.ends_with?(e, @reserved_tlds)
+  end
 end

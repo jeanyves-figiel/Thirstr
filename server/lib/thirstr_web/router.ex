@@ -326,6 +326,12 @@ defmodule ThirstrWeb.Router do
       delete "/me/recovery", AccountDataController, :recovery_delete
       get "/me/recovery/vault", AccountDataController, :vault_get
       put "/me/recovery/vault", AccountDataController, :vault_put
+      # R-01.15 opt-in chat backup (#146)
+      get "/me/backup", AccountDataController, :backup_status
+      post "/me/backup/segments", AccountDataController, :backup_segment
+      get "/me/backup/manifest", AccountDataController, :backup_get
+      put "/me/backup/manifest", AccountDataController, :backup_commit
+      delete "/me/backup", AccountDataController, :backup_delete
       # #25 device attestation (iOS App Attest)
       get "/devices/attest", AccountDataController, :attest_status
       post "/devices/attest/challenge", AccountDataController, :attest_challenge
@@ -333,6 +339,15 @@ defmodule ThirstrWeb.Router do
       post "/devices/assert", AccountDataController, :assert
       get "/devices/link/:code", AccountDataController, :link_status
       post "/devices/link/:code/confirm", AccountDataController, :link_confirm
+      # R-01.14 history transfer to a new phone (#146)
+      post "/devices/transfer", AccountDataController, :xfer_create
+      get "/devices/transfer/incoming", AccountDataController, :xfer_incoming
+      get "/devices/transfer/:id", AccountDataController, :xfer_get
+      delete "/devices/transfer/:id", AccountDataController, :xfer_cancel
+      post "/devices/transfer/:id/chunks", AccountDataController, :xfer_chunk
+      post "/devices/transfer/:id/chunks/:n/ready", AccountDataController, :xfer_ready
+      post "/devices/transfer/:id/ack", AccountDataController, :xfer_ack
+      post "/devices/transfer/:id/done", AccountDataController, :xfer_finish
       get "/me/profiles/:id/linked-accounts", AccountDataController, :linked
       post "/me/linked-accounts", AccountDataController, :link_account
       patch "/me/linked-accounts/:id", AccountDataController, :update_linked

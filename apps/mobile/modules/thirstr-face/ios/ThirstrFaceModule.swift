@@ -67,6 +67,23 @@ public class ThirstrFaceModule: Module {
       }
     }
 
+    // F-03 R-03.2 (#232): own selfie stills vs own public photos, on this phone only.
+    AsyncFunction("matchStills") { (stillUris: [String], photoUrls: [String], promise: Promise) in
+      let stills = stillUris.compactMap { URL(string: $0) }.filter { $0.isFileURL }
+      guard !stills.isEmpty else {
+        promise.reject("E_STILL", "Stills must be local files")
+        return
+      }
+      let photos = photoUrls.compactMap { URL(string: $0) }.filter { $0.scheme == "https" }
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          promise.resolve(try FaceMatch.matchStills(stills: stills, photos: photos))
+        } catch {
+          promise.reject("E_MATCH", error.localizedDescription)
+        }
+      }
+    }
+
     // F-18 R-18.15 (#185): clip frames vs the peer's public photos, on this phone only.
     AsyncFunction("matchClip") { (clipUri: String, photoUrls: [String], promise: Promise) in
       guard let clip = URL(string: clipUri), clip.isFileURL else {

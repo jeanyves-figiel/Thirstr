@@ -1,0 +1,11 @@
+# EN-08 (#244): GitHub Actions are pinned to commit SHAs; Dependabot proposes bumps
+# (SHA + version comment) once a month, grouped in one PR. Add a CHANGELOG.md line before merging.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

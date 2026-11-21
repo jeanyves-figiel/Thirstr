@@ -1,0 +1,34 @@
+# EN-04 (#163) weekly SLO review (docs/spec/slos.md › 5, runbook docs/runbooks/slo-review.md).
+# Read-only Prometheus queries; posts the report on the pinned "SLO weekly review" issue (label `slo`).
+name: SLO weekly report
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging # FLY_TOKEN; no deploy happens
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
+          STATUS_JSON: https://raw.githubusercontent.com/${{ github.repository }}/status-data/status.json
+        run: ./scripts/ops/slo-report.sh | tee report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Post on the review issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create slo --repo "$GITHUB_REPOSITORY" --color A78BFA --description "SLO weekly review (EN-04)" --force >/dev/null
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --label slo --state open --json number --jq '.[0].number // empty')
+          [[ -n "$n" ]] || n=$(gh issue create --repo "$GITHUB_REPOSITORY" --label slo --title "SLO weekly review" \
+            --body "One comment per week from \`slo-report.yml\`. Spec and error budget policy: docs/spec/slos.md. Runbook: docs/runbooks/slo-review.md." | grep -o '[0-9]*$')
+          gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file report.md

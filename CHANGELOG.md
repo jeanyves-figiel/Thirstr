@@ -7,6 +7,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 ## [Unreleased]
 
 ### Specified
+- **Costs & capacity console page** (spec, #180, EN-21, admin-console.md A-11, [mockup](https://claude.ai/artifact/AYpnZS5bqyXaDWMfkHSAPz)): monthly cost per vendor (Fly from the Machines API with a read-only token, other vendors as manual items: monthly, yearly ÷ 12 or one-off), cost per MAU, budget alert email via Amazon SES at 80 % and 100 %, capacity forecast from SR-12 numbers and measured growth. No new vendor or spend.
 - **Chat history on a new phone** (spec, #146, F-01 R-01.14–R-01.15, F-07 R-07.13): after linking a new phone, the old phone can move all chats (or the last 12 months), with photos and videos, end-to-end encrypted, checked by a 6-digit code on both screens. Optional **Chat backup** (off by default), sealed with a key only the recovery phrase unlocks, daily on Wi-Fi and power. API and data model added; build follows the mockup pick.
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.
 

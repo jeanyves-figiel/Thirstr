@@ -96,6 +96,7 @@ export function ChatBackupSettings({ navigation }: { navigation: Nav }) {
       </Group>
       {on ? (
         <Group hint={bx.rules}>
+          <SwitchRow testID="backup-media" title={bx.media} sub={bx.mediaSub} value={!!p.media} onChange={(v) => B.setMedia(v).then(load)} />
           <SwitchRow testID="backup-cellular" title={bx.cellular} sub={p.cellular ? bx.cellularOn : bx.cellularOff} value={p.cellular} onChange={(v) => B.setCellular(v).then(load)} />
         </Group>
       ) : (

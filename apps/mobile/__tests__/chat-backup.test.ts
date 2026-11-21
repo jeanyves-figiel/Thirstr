@@ -9,6 +9,7 @@ const mockPhone: { convs: Record<string, unknown>[]; msgs: Record<string, Record
 let mockVaultKey: Uint8Array | null = new Uint8Array(32).fill(7);
 let mockN = 0;
 let mockLoaded: Promise<void> = Promise.resolve();
+const mockMedia = new Map<string, Uint8Array>();
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('../src/app/dataSaver', () => ({ unmetered: () => true }));
@@ -21,6 +22,11 @@ jest.mock('../src/chat/kv', () => ({
     get: async (k: string) => mockStore.get(k) ?? null,
     set: async (k: string, v: unknown) => void (v === null ? mockStore.delete(k) : mockStore.set(k, v)),
   },
+}));
+jest.mock('../src/chat/mediaCache', () => ({
+  sizeOf: async (b: string) => mockMedia.get(b)?.length ?? 0,
+  get: async (b: string) => mockMedia.get(b) ?? null,
+  put: async (b: string, ct: Uint8Array) => void mockMedia.set(b, ct),
 }));
 jest.mock('../src/chat/engine', () => ({
   TTL_S: { '24h': 86400, '7d': 604800, never: null },
@@ -81,6 +87,7 @@ beforeEach(() => {
   mockServer.segs = [];
   mockPhone.imported = [];
   mockVaultKey = new Uint8Array(32).fill(7);
+  mockMedia.clear();
   mockPhone.convs = [conv('a'), conv('b'), conv('quick', '24h')];
   mockPhone.msgs = {
     a: [msg('a1'), msg('a2'), msg('once', { p: { t: 'media', media: { blob: 'x', key: 'k', iv: 'i', mime: 'image/jpeg', once: true } } })],
@@ -161,6 +168,33 @@ describe('#146 chat backup (R-01.15)', () => {
     expect((await run)?.rows).toBe(0);
     expect(mockServer.segs).toHaveLength(1);
     mockLoaded = Promise.resolve();
+  });
+
+  it('#259: photos and videos go in sealed parts when switched on, and come back on a fresh phone', async () => {
+    const big = new Uint8Array(5 * 1024 * 1024).map((_, i) => i % 251);
+    mockMedia.set('p1', big);
+    mockPhone.msgs.b.push(msg('pic', { at: 5, p: { t: 'media', media: { blob: 'p1', key: 'k', iv: 'i', mime: 'image/jpeg' } } }));
+    await B.turnOn();
+    expect(mockServer.segs).toHaveLength(1); // media off by default
+    await B.setMedia(true);
+    await B.backupNow();
+    expect(mockServer.segs).toHaveLength(4); // rows + index + 2 parts
+    const head = big.slice(0, 64).join(',');
+    for (const id of mockServer.segs) expect(mockObjects.get(id)!.slice(12, 76).join(',')).not.toBe(head); // sealed, not plain
+
+    mockMedia.clear();
+    const got = await B.restore();
+    expect(got.media).toBe(1);
+    expect(mockMedia.get('p1')).toEqual(big);
+
+    await B.setMedia(false);
+    await B.backupNow();
+    expect(mockServer.segs).toHaveLength(1); // parts and index no longer listed (server purges)
+  });
+
+  it('#259: newest media first within the room left', () => {
+    const w = (blob: string, at: number, size: number) => ({ blob, at, size });
+    expect(B.pickMedia([w('old', 1, 60), w('new', 3, 60), w('mid', 2, 30)], 160).map((x) => x.blob)).toEqual(['new', 'mid']);
   });
 
   it('daily on Wi-Fi only when on', async () => {

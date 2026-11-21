@@ -746,14 +746,6 @@ const en = {
     notProven: 'Not proven yet',
     remove: 'Remove',
   },
-  share: {
-    title: 'Share link',
-    hint: 'A link and QR for your bio on other apps. It shows your blurred main photo and name only.',
-    create: 'Create link',
-    rotate: 'New link (old one stops working)',
-    off: 'Turn off link',
-    send: 'Share',
-  },
   prefs: {
     app: 'App',
     units: 'Distance units',

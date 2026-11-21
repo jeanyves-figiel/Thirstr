@@ -31,6 +31,8 @@ defmodule Thirstr.Jobs.ExpirySweep do
     Thirstr.ChatBackup.sweep()
     # F-01 R-01.14: history transfers idle 2 h or finished
     Thirstr.Transfer.sweep()
+    # F-15 R-15.47 (#287): CSAM evidence 1 year after the case unless on legal hold
+    Thirstr.Moderation.Evidence.sweep()
     :ok
   end
 end

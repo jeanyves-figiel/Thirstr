@@ -122,10 +122,45 @@ defmodule ThirstrWeb.ModConsoleTest do
       })
       |> html_response(200)
 
-    assert html2 =~ "-hashhit"
+    # R-15.47: opened from the sealed evidence store, inline, never a storage URL.
+    [b64] = Regex.run(~r/data:image;base64,([A-Za-z0-9+\/=]+)/, html2, capture: :all_but_first)
+    assert Base.decode64!(b64) =~ "-hashhit"
+    [[ekey]] = Repo.query!("SELECT evidence_key FROM csam_cases").rows
+    assert ekey == "evidence/" <> cid
+    {:ok, sealed} = Thirstr.Storage.get(ekey)
+    refute sealed =~ "hashhit"
 
     assert [["verify match"]] =
              Repo.query!("SELECT reason FROM admin_audit WHERE action = 'case_image_view'").rows
+  end
+
+  test "evidence is deleted after its hold, kept on legal hold", %{admin: admin, bad: bad} do
+    cid = hash_hit(bad)
+    c = admin_conn(admin)
+    html = c |> recycle() |> get("/admin/cases/#{cid}") |> html_response(200)
+
+    c
+    |> recycle()
+    |> post("/admin/cases/#{cid}/decision", %{_csrf_token: csrf(html), decision: "confirm"})
+
+    Repo.query!("UPDATE csam_cases SET hold_until = now() - interval '1 day'")
+
+    assert [{"csam_evidence_1y", 1}] =
+             Enum.filter(Thirstr.Retention.overdue(), &(elem(&1, 0) == "csam_evidence_1y"))
+             |> Enum.map(fn {r, n} -> {r, min(n, 1)} end)
+
+    c
+    |> recycle()
+    |> post("/admin/cases/#{cid}/decision", %{_csrf_token: csrf(html), decision: "hold"})
+    |> redirected_to()
+
+    Thirstr.Moderation.Evidence.sweep()
+    assert [[k]] = Repo.query!("SELECT evidence_key FROM csam_cases").rows
+    assert k
+
+    Repo.query!("UPDATE csam_cases SET hold_until = now() - interval '1 day'")
+    Thirstr.Moderation.Evidence.sweep()
+    assert [[nil]] = Repo.query!("SELECT evidence_key FROM csam_cases").rows
   end
 
   test "false positive releases the account and sends the photo to a person", %{

@@ -112,6 +112,8 @@ if config_env() == :prod or System.get_env("HASH_MATCH_PROVIDER") do
   config :thirstr, :hash_match, provider
   config :thirstr, :photodna_key, System.get_env("PHOTODNA_KEY")
   config :thirstr, :photodna_url, System.get_env("PHOTODNA_URL")
+  # F-15 R-15.47: evidence key (32 bytes, base64). Unset = derived from SECRET_KEY_BASE.
+  config :thirstr, :evidence_key, System.get_env("EVIDENCE_KEY")
 end
 
 s3 = URI.parse(env.("S3_ENDPOINT", "http://localhost:9000"))

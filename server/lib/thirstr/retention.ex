@@ -27,7 +27,9 @@ defmodule Thirstr.Retention do
     {"backup_segments_24h", "chat_backup_segments",
      "NOT committed AND created_at < now() - interval '25 hours'"},
     {"chat_backup_idle", "chat_backups", "updated_at < now() - interval '211 days'"},
-    {"transfer_2h", "device_transfers", "updated_at < now() - interval '2 hours 20 minutes'"}
+    {"transfer_2h", "device_transfers", "updated_at < now() - interval '2 hours 20 minutes'"},
+    {"csam_evidence_1y", "csam_cases",
+     "evidence_key IS NOT NULL AND state <> 'open' AND hold_until < now() - interval '1 hour'"}
   ]
 
   @queries for {rule, from, where} <- @rules,

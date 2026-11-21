@@ -64,6 +64,17 @@ defmodule Thirstr.Storage do
   @doc "Object bytes for server-side checks (hash match, F-15 R-15.42). Public images are ≤ 15 MB."
   def get(key), do: adapter().get(key)
 
+  @doc "Server-side write (evidence store, F-15 R-15.47)."
+  def put(key, body, content_type), do: adapter().put(key, body, content_type)
+
+  def s3_put(key, body, content_type) do
+    case ExAws.S3.put_object(bucket(), key, body, content_type: content_type)
+         |> ExAws.request() do
+      {:ok, _} -> :ok
+      e -> e
+    end
+  end
+
   def s3_get(key) do
     case ExAws.S3.get_object(bucket(), key) |> ExAws.request() do
       {:ok, %{body: body}} -> {:ok, body}
@@ -100,13 +111,29 @@ defmodule Thirstr.Storage.S3 do
   @moduledoc false
   def head(key), do: Thirstr.Storage.s3_head(key)
   def get(key), do: Thirstr.Storage.s3_get(key)
+  def put(key, body, ct), do: Thirstr.Storage.s3_put(key, body, ct)
   def delete_many(keys), do: Thirstr.Storage.s3_delete_many(keys)
 end
 
 defmodule Thirstr.Storage.Fake do
   @moduledoc "Test adapter: every object exists with a small size."
   def head(_key), do: {:ok, %{size: 1234}}
-  # Bytes = the key, so tests can blocklist one exact "image".
-  def get(key), do: {:ok, "fake:" <> key}
+  # Written objects are kept in memory; anything else reads as "fake:<key>" so tests can
+  # blocklist one exact "image".
+  def get(key) do
+    case :ets.whereis(__MODULE__) != :undefined && :ets.lookup(__MODULE__, key) do
+      [{_, body}] -> {:ok, body}
+      _ -> {:ok, "fake:" <> key}
+    end
+  end
+
+  def put(key, body, _ct) do
+    if :ets.whereis(__MODULE__) == :undefined,
+      do: :ets.new(__MODULE__, [:named_table, :public, :set])
+
+    :ets.insert(__MODULE__, {key, body})
+    :ok
+  end
+
   def delete_many(_keys), do: :ok
 end

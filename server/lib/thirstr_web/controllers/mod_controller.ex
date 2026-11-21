@@ -284,11 +284,11 @@ defmodule ThirstrWeb.ModController do
 
   defp load_case(id) do
     with {:ok, _} <- Ecto.UUID.cast(id),
-         [[cid, st, src, prov, ref, aid, key, snap, at, hold, by, dat, sha]] <-
+         [[cid, st, src, prov, ref, aid, key, snap, at, hold, by, dat, sha, dek]] <-
            q(
              """
              SELECT id::text, state, source, provider, match_ref, target_account::text, evidence_key,
-                    snapshot, created_at, hold_until, decided_by, decided_at, sha256
+                    snapshot, created_at, hold_until, decided_by, decided_at, sha256, evidence_dek
              FROM csam_cases WHERE id = $1
              """,
              [Nearby.dump(id)]
@@ -306,7 +306,8 @@ defmodule ThirstrWeb.ModController do
         hold: hold,
         by: by,
         decided_at: dat,
-        sha: sha
+        sha: sha,
+        dek: dek
       }
     else
       _ -> nil
@@ -352,7 +353,8 @@ defmodule ThirstrWeb.ModController do
         <p>SHA-256 <code>#{e(sha_hex(c.sha))}</code></p>
         <p>Opened #{DateTime.to_iso8601(c.at)} · SLA #{ThirstrWeb.AdminController.sla(1, c.at)}</p>
         <p>Profile at upload: <b>#{e(snap["display_name"] || "—")}</b>, #{e(snap["age"] || "")} · slot #{e(snap["slot"] || "—")}</p>
-        <p>Evidence kept until #{Date.to_iso8601(DateTime.to_date(c.hold))}</p>
+        <form method="post" action="/admin/cases/#{c.id}/decision">#{csrf}<button name="decision" value="hold">Legal hold +1 year</button></form>
+        <p>Evidence #{if c.key, do: "sealed, kept until #{Date.to_iso8601(DateTime.to_date(c.hold))}", else: "deleted (retention)"}</p>
         #{decision}
       </div>
     </div>
@@ -495,6 +497,22 @@ defmodule ThirstrWeb.ModController do
     end
   end
 
+  # Legal hold (R-15.47): keeps the evidence a year longer than today's deadline, e.g. on a
+  # preservation request.
+  def case_decision(conn, %{"id" => id, "decision" => "hold"}) do
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         %{num_rows: 1} <-
+           Repo.query!(
+             "UPDATE csam_cases SET hold_until = greatest(hold_until, now()) + interval '1 year' WHERE id = $1 AND evidence_key IS NOT NULL",
+             [Nearby.dump(id)]
+           ) do
+      audit(conn.assigns.admin, "case_legal_hold", id, nil)
+      redirect(conn, to: "/admin/cases/#{id}")
+    else
+      _ -> send_resp(conn, 404, "")
+    end
+  end
+
   def case_decision(conn, _), do: send_resp(conn, 422, "")
 
   defp apply_decision("confirm", id, aid, _photo_id, sha, _actor) do
@@ -523,9 +541,16 @@ defmodule ThirstrWeb.ModController do
   def case_view(conn, %{"id" => id, "reason" => reason, "confirm" => "yes"})
       when byte_size(reason) > 3 do
     case load_case(id) do
-      %{key: key} = c when is_binary(key) ->
+      %{key: key, dek: dek} = c when is_binary(key) and is_binary(dek) ->
         audit(conn.assigns.admin, "case_image_view", id, String.slice(reason, 0, 200))
-        page(conn, "Case", case_page(c, Storage.presigned_get(key, 60)))
+
+        case Thirstr.Moderation.Evidence.open(key, dek) do
+          {:ok, bytes} ->
+            page(conn, "Case", case_page(c, "data:image;base64," <> Base.encode64(bytes)))
+
+          _ ->
+            send_resp(conn, 500, "Evidence could not be opened")
+        end
 
       _ ->
         send_resp(conn, 404, "")

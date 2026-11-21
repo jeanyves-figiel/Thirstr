@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 5
     environment: github-pages
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           sparse-checkout: |
             status
@@ -57,12 +57,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          L() { gh label create "$1" --repo "${{ github.repository }}" --color "$2" --description "$3" --force >/dev/null; }
+          L() { gh label create "$1" --repo "$GITHUB_REPOSITORY" --color "$2" --description "$3" --force >/dev/null; }
           L incident FF4D6D "Shown on status.thirstr.fun"; L maintenance A78BFA "Planned maintenance on status.thirstr.fun"
           L investigating FFC93C "Incident state"; L identified FFC93C "Incident state"; L monitoring 3DD6C3 "Incident state"
           for s in 1 2 3 4; do L "sev-$s" 39346A "Incident severity (incident-response.md)"; done
           for c in sign chat explore media push site; do L "affects:$c" 2E2A55 "Status page component"; done
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - name: Probe + incidents
@@ -71,7 +71,9 @@ jobs:
           # optional repo secret: read-only Fly token (Notifications row + month p95 tiles); without it they are hidden
           FLY_PROM_TOKEN: ${{ secrets.FLY_PROM_TOKEN }}
           STATUS_AUTO_INCIDENT: ${{ vars.STATUS_AUTO_INCIDENT || '1' }}
-        run: node status/probe.mjs data ${{ (github.event_name == 'issues' || github.event_name == 'issue_comment' || github.event_name == 'push') && '--no-probe' || '' }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          case "$EVENT" in issues|issue_comment|push) node status/probe.mjs data --no-probe ;; *) node status/probe.mjs data ;; esac
       - name: Save history
         run: |
           cd data
@@ -89,8 +91,8 @@ jobs:
       # Publishing waits for the owner to enable Pages (runbook status-page.md) and set repo variable STATUS_PAGE=on;
       # probes and history run from the first merge.
       - if: vars.STATUS_PAGE == 'on'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: _site
       - if: vars.STATUS_PAGE == 'on'
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

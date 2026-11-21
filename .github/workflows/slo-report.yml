@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 10
     environment: staging # FLY_TOKEN; no deploy happens
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Report
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
@@ -27,8 +27,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh label create slo --repo "${{ github.repository }}" --color A78BFA --description "SLO weekly review (EN-04)" --force >/dev/null
-          n=$(gh issue list --repo "${{ github.repository }}" --label slo --state open --json number --jq '.[0].number // empty')
-          [[ -n "$n" ]] || n=$(gh issue create --repo "${{ github.repository }}" --label slo --title "SLO weekly review" \
+          gh label create slo --repo "$GITHUB_REPOSITORY" --color A78BFA --description "SLO weekly review (EN-04)" --force >/dev/null
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --label slo --state open --json number --jq '.[0].number // empty')
+          [[ -n "$n" ]] || n=$(gh issue create --repo "$GITHUB_REPOSITORY" --label slo --title "SLO weekly review" \
             --body "One comment per week from \`slo-report.yml\`. Spec and error budget policy: docs/spec/slos.md. Runbook: docs/runbooks/slo-review.md." | grep -o '[0-9]*$')
-          gh issue comment "$n" --repo "${{ github.repository }}" --body-file report.md
+          gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file report.md

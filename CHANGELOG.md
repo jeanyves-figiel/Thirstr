@@ -7,6 +7,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 ## [Unreleased]
 
 ### Specified
+- **Scale-out design for 1M users** (docs, #162, EN-03): `docs/spec/scale-out-1m.md`. Load model, `mls_messages` hash partitions by device (16) with an expand-only switch, range partitions for TTL tables, ETS then Valkey hot location set, PgBouncer rule and Oban changes, DB hardware decision points (Fly vs Hetzner, #23). Each step has a metric trigger; no infra spend.
 - **Chat history on a new phone** (spec, #146, F-01 R-01.14–R-01.15, F-07 R-07.13): after linking a new phone, the old phone can move all chats (or the last 12 months), with photos and videos, end-to-end encrypted, checked by a 6-digit code on both screens. Optional **Chat backup** (off by default), sealed with a key only the recovery phrase unlocks, daily on Wi-Fi and power. API and data model added; build follows the mockup pick.
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.
 

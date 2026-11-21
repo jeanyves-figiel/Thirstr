@@ -228,13 +228,16 @@ jobs:
 
   # Real low-end Android phone on Firebase Test Lab (owner pick 2026-11-21: free Spark tier, ≤ 5 physical
   # runs/day, Google-hosted). Robo crawl of a staging build, signed out. Skips until the Firebase
-  # project exists (secret FIREBASE_TESTLAB_SA + variable FIREBASE_PROJECT_ID, testing.md › Real devices).
+  # project exists (variables GCP_WIF_PROVIDER, GCP_SA_EMAIL, FIREBASE_PROJECT_ID; keyless, testing.md › Real devices).
   android-real:
     if: ${{ github.event_name != 'pull_request' && ((inputs.profiles || 'all') == 'all' || inputs.profiles == 'android-real') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write  # keyless: GitHub OIDC → Workload Identity Federation, no JSON key
     env:
-      HAS_TESTLAB: ${{ secrets.FIREBASE_TESTLAB_SA != '' && vars.FIREBASE_PROJECT_ID != '' }}
+      HAS_TESTLAB: ${{ vars.GCP_WIF_PROVIDER != '' && vars.FIREBASE_PROJECT_ID != '' }}
       PROJECT: ${{ vars.FIREBASE_PROJECT_ID }}
       EXPO_PUBLIC_ENV: staging
       EXPO_PUBLIC_API_URL: https://staging.thirstr.fun
@@ -242,7 +245,7 @@ jobs:
       - name: Firebase Test Lab configured?
         run: |
           if [ "$HAS_TESTLAB" != true ]; then
-            echo "::notice::Firebase Test Lab not set up yet (secret FIREBASE_TESTLAB_SA, variable FIREBASE_PROJECT_ID); skipping real device."
+            echo "::notice::Firebase Test Lab not set up yet (variables GCP_WIF_PROVIDER, GCP_SA_EMAIL, FIREBASE_PROJECT_ID); skipping real device."
           fi
       - uses: actions/checkout@v4
         if: env.HAS_TESTLAB == 'true'
@@ -269,7 +272,8 @@ jobs:
       - uses: google-github-actions/auth@v2
         if: env.HAS_TESTLAB == 'true'
         with:
-          credentials_json: ${{ secrets.FIREBASE_TESTLAB_SA }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
       - uses: google-github-actions/setup-gcloud@v2
         if: env.HAS_TESTLAB == 'true'
       - name: Robo test on the most low-end physical phone

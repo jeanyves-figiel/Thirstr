@@ -31,6 +31,7 @@ import { LensPreviewScreen } from '../me/LensPreviewScreen';
 import { SettingsScreen } from '../me/SettingsScreen';
 import { DataSaverSettings } from '../me/settings/DataSaverScreen';
 import { ChatBackupSettings, RestoreWordsScreen } from '../me/settings/ChatBackupScreen';
+import { syncBackgroundBackup } from '../chat/backgroundBackup';
 import { backupIfDue as chatBackupIfDue } from '../chat/backup';
 import { AccountSettings, ChatSettings, DeleteAccount, NotificationSettings, PrivacySettings, SafetySettings } from '../me/settings/screens';
 import { TapsScreen } from '../me/TapsScreen';
@@ -262,6 +263,7 @@ function useAttestation() {
     ensureAttested();
     backupIfDue();
     chatBackupIfDue(); // R-01.15: daily, Wi-Fi unless allowed on mobile data
+    syncBackgroundBackup(); // #260: and from the OS on days the app isn't opened
     const s = AppState.addEventListener('change', (st) => {
       if (st === 'active') {
         ensureAttested();

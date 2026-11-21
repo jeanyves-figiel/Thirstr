@@ -7,6 +7,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 ## [Unreleased]
 
 ### Specified
+- **Profile share link + QR, tightened** (spec, #8, I-02 R-I02.1–R-I02.4e, S-80, [mockup](https://claude.ai/artifact/PmAkuXFdHgSc8RNaP1cHyV)): one Share sheet from the Me header; the public page shows only the name and an optional blur made on the phone (16 × 20 px, so the real photo never reaches the page); strict CSP, no Open Graph image or name, same dead-link page for every reason, CSPRNG slugs, rate limits; in-app open respects blocks; sharing other people's profiles removed. GDPR import stays v1.1.
 - **Chat history on a new phone** (spec, #146, F-01 R-01.14–R-01.15, F-07 R-07.13): after linking a new phone, the old phone can move all chats (or the last 12 months), with photos and videos, end-to-end encrypted, checked by a 6-digit code on both screens. Optional **Chat backup** (off by default), sealed with a key only the recovery phrase unlocks, daily on Wi-Fi and power. API and data model added; build follows the mockup pick.
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.
 

@@ -124,7 +124,7 @@ Address/door code: E2EE message to accepted guests, never in DB.
 ### spent_tokens (hash pk = sha256(token), created_at) — redeemed verification tokens, no link to the account (R-03.4)
 ### admin_audit (id bigserial, actor, action, object_hash (sha256 prefix of the object id), reason, at) — append-only (DB rules drop UPDATE/DELETE), R-AD.4
 ### linked_accounts (id uuid, profile_id, platform enum(x, bluesky, onlyfans, jff, instagram), handle (64), code, verified_at, checked_at, visibility enum(everyone, verified, chats), created_at)
-### profile_shares (slug pk (10), profile_id unique, created_at) — I-02 share link; rotate = new row
+### profile_shares (slug pk (10), profile_id unique, created_at, show_photo bool default true, preview bytea null (≤ 2 KB JPEG, ≤ 32 px, made on the phone), preview_photo_id uuid null) — I-02 share link; renew = new slug; preview shown only while `preview_photo_id` is still the `ok_main` photo
 ### mls_key_packages (id bigserial, profile_id, device_id, key_package bytea, last_resort bool, created_at) — single-use; ≤ 200 per (profile, device); one last-resort per (profile, device)
 ### mls_messages (id bigserial, to_profile_id, to_device_id, from_profile_id, group_id bytea, kind welcome|commit|app, key_package_id, ciphertext bytea, created_at) — deleted on ack, swept after 30 d
 ### franking_tags (message_id, tag bytea, created_at) — R-07.11 commitments, swept with messages

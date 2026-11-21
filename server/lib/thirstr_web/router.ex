@@ -46,6 +46,11 @@ defmodule ThirstrWeb.Router do
     }
   end
 
+  # F-22 (#178): help votes, contact form (signed in or out), screenshot uploads
+  pipeline :support_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "supp", limit: 60, window: 3600
+  end
+
   pipeline :email_limit do
     plug ThirstrWeb.Plugs.RateLimit, bucket: "email", limit: 5, window: 3600
   end
@@ -104,6 +109,16 @@ defmodule ThirstrWeb.Router do
     post "/accounts/:id/action", AdminController, :account_action
     get "/appeals", AdminController, :appeals
     post "/appeals/:id", AdminController, :appeal_decision
+    # A-12 support inbox (F-22, #178)
+    get "/support", AdminSupportController, :index
+    get "/support/macros", AdminSupportController, :macros
+    post "/support/macros", AdminSupportController, :put_macro
+    post "/support/macros/:id/delete", AdminSupportController, :delete_macro
+    get "/support/feedback", AdminSupportController, :feedback
+    post "/support/feedback/:id", AdminSupportController, :feedback_action
+    get "/support/:id", AdminSupportController, :show
+    post "/support/:id/reply", AdminSupportController, :reply
+    post "/support/:id/status", AdminSupportController, :status
     get "/audit", AdminController, :audit_log
     get "/delivery", AdminController, :delivery
     get "/places", AdminController, :places
@@ -165,6 +180,32 @@ defmodule ThirstrWeb.Router do
     scope "/auth" do
       pipe_through [:email_limit]
       post "/email/link", AuthController, :email_link
+    end
+
+    # F-22 (#178): help center votes + contact form also work signed out (S-84 → Contact)
+    scope "/" do
+      pipe_through [:support_limit, :maybe_auth]
+      post "/help/votes", SupportController, :vote
+      post "/support/requests", SupportController, :create
+      post "/support/uploads", SupportController, :upload
+    end
+
+    scope "/" do
+      pipe_through [:auth, :support_limit]
+      get "/support/requests", SupportController, :index
+      get "/support/requests/:id", SupportController, :show
+      post "/support/requests/:id/messages", SupportController, :message
+      post "/support/requests/:id/solve", SupportController, :solve
+      post "/feedback", SupportController, :feedback
+      # R-22.22 account recovery claims (no admin path, R-22.20)
+      post "/auth/recovery/claim", SupportController, :claim_start
+      get "/auth/recovery/claim", SupportController, :claim_current
+      get "/auth/recovery/claim/:id", SupportController, :claim_show
+      post "/auth/recovery/claim/:id/challenge", SupportController, :claim_challenge
+      post "/auth/recovery/claim/:id/selfie", SupportController, :claim_selfie
+      post "/auth/recovery/claim/:id/cancel", SupportController, :claim_cancel
+      delete "/auth/recovery/claim/:id", SupportController, :claim_withdraw
+      post "/auth/recovery/claim/:id/complete", SupportController, :claim_complete
     end
 
     scope "/" do

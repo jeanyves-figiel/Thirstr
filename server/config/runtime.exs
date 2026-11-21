@@ -58,6 +58,13 @@ config :thirstr,
   app_attest_allow_dev: System.get_env("DEPLOY_ENV") not in ["prod", "production"],
   # Admin console (admin-console.md, R-AD.12): owner account ids; empty = console off (404).
   admin_account_ids: String.split(System.get_env("ADMIN_ACCOUNT_IDS") || "", ",", trim: true),
+  # F-22 (#178): contact alerts go to this address (ImprovMX forwards it to the owner).
+  support_address: System.get_env("SUPPORT_ADDRESS") || "support@thirstr.fun",
+  # F-22 R-22.32: feedback → GitHub issues. Fine-grained token, Issues write, one repo. Unset = held.
+  feedback_github: [
+    token: System.get_env("GITHUB_FEEDBACK_TOKEN"),
+    repo: System.get_env("GITHUB_FEEDBACK_REPO") || "jeanyves-figiel/Thirstr"
+  ],
   # testing.md › Chat test bot: shared key for the bot service; unset = feature off (404).
   # Never honoured when DEPLOY_ENV is prod/production (Thirstr.TestBot.enabled?/0).
   testbot_key: System.get_env("TESTBOT_KEY"),

@@ -7,3 +7,4 @@ infra/tiles/*.pmtiles
 # marketing site build (W-01)
 server/priv/static/site/
 server/priv/geo/
+__pycache__/

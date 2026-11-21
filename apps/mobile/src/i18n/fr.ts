@@ -185,7 +185,7 @@ export const fr: Partialize<AppStrings> = {
     add: 'Ajouter une photo',
     checking: 'Vérification…',
     pending: 'En cours d’examen',
-    rejected: { too_explicit: 'Trop explicite pour cet emplacement', no_person: 'On doit voir une personne' },
+    rejected: { too_explicit: 'Trop explicite pour cet emplacement', no_person: 'On doit voir une personne', unusable: 'Cette photo ne peut pas être utilisée' },
   },
   settings: {
     title: 'Réglages',

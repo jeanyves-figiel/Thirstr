@@ -19,7 +19,9 @@ defmodule Thirstr.Flags do
     "travel" => true,
     "parties" => true,
     "translate" => true,
-    "web_push" => true
+    "web_push" => true,
+    # F-15 R-15.43 (#179): server-side kill switch for the pre-publish hash match (owner outage decision only)
+    "hash_match" => true
   }
   @table :thirstr_flags
   @ttl_ms 30_000

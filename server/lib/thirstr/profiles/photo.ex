@@ -15,6 +15,10 @@ defmodule Thirstr.Profiles.Photo do
     field :classifier_score, :map, default: %{}
     field :reject_reason, :string
     field :review_state, :string
+    # F-15 R-15.43 (#179): no_match | match | unchecked | retry
+    field :hash_state, :string
+    field :hash_checked_at, :utc_datetime_usec
+    field :hash_provider, :string
     timestamps()
   end
 end

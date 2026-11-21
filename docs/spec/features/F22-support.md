@@ -1,0 +1,89 @@
+# F-22 Help & support (EN-19, #178)
+
+[Mockup, approved 2026-11-21](https://claude.ai/artifact/8dj76bVvENgDfkLUHxGW83).
+
+## Purpose
+Members find answers in the app, reach a human when they need one, get a locked or stolen account back without anyone at Thirstr being able to hand it to the wrong person, and tell us what to build next. Budget €0 (decided 2026-11-21, #178): no helpdesk vendor in beta; a Zammad / EU helpdesk is revisited at open beta.
+
+## Scope
+Beta: help center (bundled articles, en/fr/de), contact form → `support@thirstr.fun` + admin inbox with saved replies, replies inside the app, account recovery with identity checks ("Get my account back"), feedback → GitHub issues. Out of scope: live chat, phone support, a public web help site (articles are written so they can be published on `thirstr.fun/help` later), SLAs for paid tiers.
+
+## User stories
+- As a member, I search "hide distance" and get the answer in two taps, offline, in my language.
+- As a member who can't sign in, I see every way back in, in the order that works best, before I'm asked to write to anyone.
+- As a member whose account was taken over, I prove it's me with a fresh selfie and get it back, and the person who took it can't stop me just by having my email.
+- As a member, I write to support from the app and the answer arrives in the app; my message never goes to anyone's personal inbox address.
+- As a member, I send an idea and know it reached the team, without my name or anything personal going with it.
+
+## Rules
+
+### Help center
+- R-22.1 **Entry points**: Settings hub row **Help & support** (S-61, above About, sky icon tile); sign-in screen link **Can't sign in?** (S-02 login mode, under "Lost your phone? Use recovery phrase", which moves into S-84); Settings search finds articles by title; Safety settings (S-70) footer "Safety tips" → the Safety category. Signed out, S-80 shows articles + Can't sign in + Contact (no feedback, no "Your requests").
+- R-22.2 **Articles ship inside the app** (`apps/mobile/src/help/articles/{en,fr,de}/*.md` + index), so the help center works offline, sends no request and leaks no reading history. Each article: id, category, title, 1-line summary, body (Markdown subset: headings, lists, bold, links to app screens as `thirstr://` deep links, e.g. "Open Location settings"), `updated` date, `related` ids. Missing translation → English with a small "English only" chip. CI checks every article exists in en/fr/de or is listed in `untranslated.json`, links resolve to known routes and bodies stay ≤ 600 words.
+- R-22.3 **Categories** (beta, ~30 articles): Getting started · Location & privacy · Chats & media · Safety · Profile & photos · Account & sign-in · Verification · Parties, plans & Tonight. Each has a colour tile (category feature colour) and 3–6 articles.
+- R-22.4 **Search**: on-device, accent- and case-insensitive prefix match on title (weight 3), summary (2), body (1), in the app language plus English; results as you type (≥ 2 chars), top 8. No match → "No article for ‹query›" + **Contact us** with the query prefilled.
+- R-22.5 **Article screen** (S-81): title, "Updated ‹date›", body, deep-link buttons (teal), related articles, **Was this helpful?** 👍 / 👎. 👎 asks "What was missing?" (chips: Didn't answer my question / Hard to follow / Out of date, optional 200-char note) and offers Contact us. Votes go to `POST /help/votes {article, lang, helpful, reason?}` with no account id (counts only, per article/lang/day); note goes through the R-22.15 scrubber and is kept 90 d.
+- R-22.6 **Top answers** on S-80: up to 4 articles chosen in the app bundle by the team; when the app knows the member just hit a problem (sign-in failed twice, photo rejected, verification cooldown, suspended), the matching article is pinned first ("Looks like you might need this").
+
+### Contact
+- R-22.7 **Contact form** (S-82): topic chips (required): **Account & sign-in**, **Safety or a person**, **Something's broken**, **Privacy & my data**, **Other**. Choosing a topic first shows up to 2 matching articles ("These usually help") with **Still need help** to continue. **Safety or a person** first offers Report (F-15) and, if a date check-in runs, the SOS sheet; the form is not a report channel and says so. **Privacy & my data** shows Download my data / Delete account and the DPO address `dpo@thirstr.fun` for formal GDPR requests.
+- R-22.8 Fields: message (20–4 000 chars, counter after 3 600), up to 2 screenshots (picker, re-encoded JPEG on the phone, EXIF stripped, ≤ 2 MB each, faces not blurred automatically: line "Screenshots go to Thirstr support only"), switch **Include app details** (on; expandable list of exactly what is sent: app version + build, iOS/Android major version, device family, language, location level (not the location), Safe Mode on/off, last 10 client error codes with times; never messages, names, location or contacts).
+- R-22.9 **How we answer**: in the app by default (Help › **Your requests**, a push "Support replied", and the requests row badge). Optional switch **Also email me** shows the sign-in email when the account has one (R-01.3), otherwise a field; the address is used only for this request and deleted with it. Signed out: an email is required (it is the only way back), and the form says the request is matched to no account.
+- R-22.10 **Send**: `POST /support/requests` → `{id, ref}` (ref = `T-` + 6 base32 chars). Confirmation screen: "Got it · T-4K7Q2M", expected reply time from R-22.13, "We'll never ask for your recovery words, codes or a selfie by message." Limits: 3 open requests per account, 5 sends / 24 h per account or install, signed-out 3 / 24 h per IP; over → "You already have N open requests" + link to them.
+- R-22.11 **Delivery**: the server stores the request (data-model › support_requests) and sends one email through Amazon SES from `support@thirstr.fun` to `support@thirstr.fun` (ImprovMX forwards to the owner, ops.md). The email contains topic, ref, language, app details and a link to the admin request (A-12); **the message body and screenshots stay on the server** and are read in the admin console (no personal data in the owner's mailbox beyond the ref). Reply-To is never the member's address.
+- R-22.12 **Replies** are written in A-12 and delivered in the app (and by email via SES from `support@` only if the member asked, R-22.9). The member can answer in the same thread from S-85; **Mark as solved** closes it, a closed thread reopens on a new message within 14 d. Thread view: member bubbles right (ink 2), support bubbles left with the Thirstr spark avatar and "Thirstr support", times, status chip (Open / Waiting for you / Solved).
+- R-22.13 **Response targets** (shown in the app, measured in A-12): Safety or a person ≤ 24 h, Account & sign-in ≤ 48 h, others ≤ 3 working days. Beta: one person, so the app shows "Usually within 2 days" for non-safety topics; targets tighten with the vendor at open beta (EN-20).
+- R-22.14 **Saved replies (macros)** in A-12: titled, per language (en/fr/de), with placeholders `{ref}`, `{article:<id>}` (inserts a deep link that opens the article in the app). Starter set: recovery ladder, verification cooldown, photo rejected, report received, data export, delete account, Safe Mode, bug acknowledged, feature noted, "we can't do that by message". Using a macro is audited like any reply.
+
+### Account recovery with identity checks ("Get my account back")
+- R-22.20 **No human path.** Nobody at Thirstr can sign a person in, add or remove a sign-in method, move an account to a new phone, change a recovery phrase or skip a check, whatever proof is sent by email or message. The admin console has no such action (AC-22.4). Support answers recovery requests only with the self-serve ladder (macro). Every help article, the contact confirmation and the recovery screens say: "Thirstr will never ask for your recovery words, sign-in codes or a selfie by message."
+- R-22.21 **Recovery ladder** (S-84, "Can't sign in?"): the screen lists, in this order, with one tap each: (1) **Another phone is still signed in** → device link (R-01.6); (2) **Recovery phrase** → S-02r (R-01.7); (3) **Your sign-in method still works**: Apple, Google, passkey from another device or the password manager, email link (R-01.1–3) → back to S-02 with a hint "Signing in on a new phone keeps your account; chats come back only from another phone or a chat backup"; (4) **Someone else got into my account** or **None of these work** → S-84b. Each row has a 1-line "what comes back" (e.g. phrase: "Profile, albums, notes, favorites; chats if backed up").
+- R-22.22 **Identity check** (S-84b–d), for (a) an account taken over by someone who has one of its sign-in methods, and (b) a member who signs in with a method but must cut off everything else (lost phone, shared email). Steps:
+  1. **Prove one sign-in method** (any of Apple, Google, passkey, email link, recovery phrase). This finds the account without any lookup by name, email or face, so there is no account enumeration.
+  2. **Fresh selfie check**: the F-03 liveness capture (R-03.1–R-03.3, App Attest assertion on iOS), then on-device face match (SFace, R-03.2 threshold) against the account's **current verified main photo and any earlier verified main photo from the last 30 days** (so an attacker who swapped the photo doesn't win). Images and templates never leave the phone (R-03.5); the server receives only the signed liveness + match result. Only verified accounts can use the check; an unverified account gets step 1 only and a 72 h hold.
+  3. **Hold** (S-84c): **24 h** if any other device of the account was used in the last 14 days, else **1 h**. During the hold every other device gets a push and, if the account has an email, an email: "Someone is getting back into your Thirstr account from a new phone. Not you? Open Thirstr › Cancel". **Cancel** on another device needs Face ID / passcode (R-01.6 `deviceAuth`) **and** the same selfie check; a cancel without a passing selfie is refused (so a thief holding the phone can't block the owner). Two passing claims at once → both frozen, the account is paused and the case goes to A-12 as **Recovery conflict** (support still can't hand it over: it can only release the freeze after one side withdraws, or keep it paused).
+  4. **Take back** (S-84d): at the end of the hold the claiming phone gets: every other device signed out and its queued messages dropped; every other sign-in method removed (Apple/Google link, other passkeys, email; the method used in step 1 stays); recovery phrase turned off (prompt to make new words, R-01.7); new passkey offered first; open Exact pins, Show me to friends and party hosting links stopped; a Notice "You took your account back on ‹date›". Chats on other phones are not readable from here (MLS): chats come back only from a chat backup (R-01.15).
+- R-22.23 **Limits**: one active claim per account; 3 selfie attempts per claim, then 24 h wait; 3 claims per 30 d; per install and per IP 5 claims / 24 h. A claim expires if the phone doesn't come back within 7 d after the hold. Failed checks answer the same `recovery_check_failed` (no hint whether the face or the liveness failed).
+- R-22.24 **Recovery phrase sign-in stays instant** (R-01.7): it already proves possession of a secret only the owner has; it signs out every other device as today.
+- R-22.25 **Ways back in** card (S-80 top for signed-in members with fewer than 2 ways; also in Settings › Account › Sign-in): "You have 1 way back in" with three checks: **Sign-in email or Apple/Google**, **Recovery phrase**, **Verified selfie** (enables the identity check); each row opens its setup. Hidden when ≥ 2 are on.
+- R-22.26 Everything in this section is audit-logged server side as events (claim started / selfie passed / failed / cancelled / completed / conflict) with account id, install id hash and time; no images, no face data. Kept 1 y (security).
+
+### Feedback → GitHub issues
+- R-22.30 **Send feedback** (S-83, signed-in only, from S-80 and from Settings › About): type chips **Idea** (lime), **Something's off** (coral), **I love this** (violet); text 10–1 000 chars; optional "Which part?" chip row (Explore, Chats, Profile, Location, Safety, Parties & plans, Other). No screenshots, no attachments. Copy above the field: "Goes to the team's tracker without your name. Don't include names, numbers or anything private."
+- R-22.31 **Privacy scrubber** (server, `Thirstr.Support.Scrub`, also used for R-22.5 notes): replaces emails, phone numbers (≥ 7 digits with separators), URLs and domains, `@handles`, IBAN / card-like digit runs, street-address patterns (number + street word in en/fr/de), GPS coordinates and any profile name of the sender's own profiles with `[removed]`; trims to 1 000 chars. Then the text is checked with the moderation text classifier (F-02 stand-in, #26); flagged (abuse, sexual content about a person) → kept in A-12 only, not sent to GitHub.
+- R-22.32 **Issue creation**: an Oban job (`support_feedback`, retries with backoff for 24 h) calls the GitHub REST API `POST /repos/jeanyves-figiel/Thirstr/issues` with a fine-grained token that can only write issues on that repo (`GITHUB_FEEDBACK_TOKEN`, Fly secret). Title: `[Feedback] ‹type›: ‹first 60 chars of scrubbed text›`. Body: scrubbed text, type, part, app version, platform + major OS, language, `fb-‹random 8›` id. Labels `feedback`, `from-app`, `fb:idea|off|love`, `area:‹part›`. **Never** account id, profile id, device id, IP, location, email or the request time to the second (date only).
+- R-22.33 The phone shows "Thanks, it's with the team" right away (the job runs later). No link to the issue is shown to the member, and the server keeps no mapping from issue to account: after creation the feedback row keeps only `{id, created_on, issue_number}` for 30 d (dedupe), the text is deleted.
+- R-22.34 Limits: 5 feedback / 24 h per account, account ≥ 24 h old; same scrubbed text twice in 7 d → kept once. If GitHub is down for 24 h the text is dropped and counted in a metric (`thirstr_feedback_dropped_total`).
+
+## States
+Help center: loading never (bundled), offline full. Contact: draft kept on the phone until sent or discarded; sending; sent; failed (Retry, draft kept). Request: open → waiting_for_member → solved (→ reopened within 14 d) → deleted 90 d after solved. Recovery claim: started → selfie_passed → holding → ready → completed | cancelled | expired | conflict.
+
+## Interactions
+- S-80 Help home, S-81 Article, S-82 Contact, S-82s Sent, S-83 Feedback, S-84 Can't sign in, S-84b Identity check, S-84c Hold, S-84d You're back in, S-85 Your requests / thread (screens.md).
+- Push types: `support_reply` (generic payload, api.md › Push payloads), `recovery_claim` (generic payload; the in-app banner explains).
+- Admin: A-12 Support inbox (admin-console.md).
+
+## Edge cases
+- Member suspended (F-15): help, contact and Your requests stay available; appeal is in Notices, and the contact form links to it.
+- Member in Safe Mode country (F-14): no push text change (already generic); email copies are off by default and the switch warns that email may be seen by others.
+- Signed-out request whose email matches an account: not linked (no enumeration); answers go by email only.
+- Claim while the account is paused: allowed; account stays paused after take back. Banned or deleted: claim refused with the same `recovery_check_failed`.
+- Face changed since verification (beard, weight): the check also accepts a match against any of the member's verified public photos from the last 30 d; repeated failure → article "Selfie check keeps failing" (light, glasses, angle) and Contact us; support can only explain, never override (R-22.20).
+- Two accounts same person (blocked by R-01.4 at verification): not a recovery case.
+
+## Privacy
+- Articles: zero network. Votes: no account id.
+- Requests: message and screenshots on the server (EU), owner reads them only in the admin console (audited), deleted 90 d after solved or with the account; included in Download my data (R-01.11); not used for anything else.
+- The owner's personal mailbox receives only: topic, ref, language, app details, A-12 link.
+- Feedback: scrubbed, anonymous, text deleted from our DB once the issue exists. The GitHub repo is private; feedback issues are visible to repo collaborators only.
+- Recovery: no biometric data leaves the phone; only pass/fail results and audit events.
+
+## Acceptance criteria
+- AC-22.1 Airplane mode: help home, search and every article open in en, fr and de.
+- AC-22.2 A sent request appears in A-12 with message + screenshots; the email at `support@` contains no message text, no screenshot and no member email.
+- AC-22.3 A reply written in A-12 shows in S-85 within 5 s while the app is open and as a push when closed.
+- AC-22.4 The admin console has no control that changes sign-in methods, devices, recovery phrase or account ownership (code review + test listing all admin routes).
+- AC-22.5 Identity check: a person with the account's email but a different face can't complete a claim; the owner with a matching selfie completes after the hold even if the other party still holds the email; a cancel without a passing selfie is refused.
+- AC-22.6 Network capture during the identity check shows no image or face template leaving the phone.
+- AC-22.7 Feedback "call me on +41 79 123 45 67 or a@b.ch, I'm Marc from Zürich" creates an issue whose body contains neither the number, the email nor the sender's profile name; the issue contains no account, device or IP identifier.
+- AC-22.8 All new strings exist in en/fr/de (i18n CI).

@@ -24,6 +24,7 @@ import { EditSectionScreen } from '../me/EditSectionScreen';
 import { MeScreen } from '../me/MeScreen';
 import { backOf, hiddenExpired, stayOf, untilFor } from '../me/hidden';
 import { gx } from '../i18n/gestures';
+import { sl } from '../i18n/shareLink';
 import { toast } from '../ui/Toast';
 import { quickLevel } from '../explore/level';
 import { LensPreviewScreen } from '../me/LensPreviewScreen';
@@ -311,15 +312,19 @@ function useCheckinWatch() {
   }, []);
 }
 
-/** I-02 R-I02.3: thirstr://p/{slug} and https://<site>/p/{slug} open the profile. */
+/** I-02 R-I02.3: thirstr://p/{slug} and https://<site>/p/{slug} open the profile (own link → Preview). */
 function useShareLinks() {
   React.useEffect(() => {
     const open = async (url: string | null | undefined) => {
       const m = url?.match(/(?:^thirstr:\/\/p\/|\/p\/)([a-z0-9]{10})(?:[/?#]|$)/);
       if (!m) return;
-      const r = await api<{ profile_id: string }>('GET', `/share/${m[1]}`).catch(() => null);
+      const r = await api<{ profile_id: string; own?: boolean }>('GET', `/share/${m[1]}`).catch(() => null);
       for (let i = 0; i < 20 && !nav.isReady(); i++) await new Promise((res) => setTimeout(res, 250));
-      if (r && nav.isReady()) nav.navigate('Profile', { id: r.profile_id });
+      if (!nav.isReady()) return;
+      // Same words for dead, blocked or hidden: nobody learns why (R-I02.3).
+      if (!r) toast(sl.unavailable);
+      else if (r.own) nav.navigate('LensPreview');
+      else nav.navigate('Profile', { id: r.profile_id });
     };
     Linking.getInitialURL().then(open);
     const s = Linking.addEventListener('url', (e) => open(e.url));

@@ -32,6 +32,7 @@ import { RingAvatar } from '../moments/Ring';
 import { watchedAll } from '../moments/api';
 import { mx } from '../i18n/moments';
 import { PhotoViewer } from '../ui/PhotoViewer';
+import { saving } from '../app/dataSaver';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void; setParams?: (p: Partial<Params>) => void };
 type Params = { id: string; preview?: 'stranger' | 'verified' | 'chats'; mode?: Mode; /** F-19 G10: grid order around this profile. */ ids?: string[]; /** F-20: opened while looking around this trip city */ trip?: string };
@@ -176,7 +177,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
   useEffect(() => {
     // Next photo ready before it is asked for.
     const nx = pics[page + 1];
-    if (nx) Image.prefetch(nx).catch(() => {});
+    if (nx && !saving()) Image.prefetch(nx).catch(() => {}); // R-17.16
   }, [pics, page]);
 
   // G9: tap the photo's left side = previous, elsewhere = next.

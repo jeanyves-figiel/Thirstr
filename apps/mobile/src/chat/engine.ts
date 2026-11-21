@@ -39,6 +39,8 @@ export type MediaRef = {
   save?: boolean;
   /** Videos (#138): length in seconds. */
   dur?: number;
+  /** Ciphertext size in bytes (#177, Data saver decides what loads by itself). */
+  size?: number;
 };
 /** Album item; videos (#138) carry `dur` (s) and their size. */
 export type AlbumItem = { blob: string; key: string; iv: string; mime: string; w?: number; h?: number; dur?: number };

@@ -46,3 +46,6 @@ jest.mock('react-native-reanimated', () => {
     FadeOut: { duration: () => ({}) },
   };
 });
+// #177 Data saver: NetInfo has no native module in Jest.
+jest.mock('@react-native-community/netinfo', () => require('@react-native-community/netinfo/jest/netinfo-mock.js'));
+jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));

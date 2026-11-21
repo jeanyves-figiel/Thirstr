@@ -11,11 +11,12 @@ Full tree: [concept/profile-and-settings.md §3](../../concept/profile-and-setti
 - R-17.6 "Who can message me": everyone verified (default) · only people I tapped · only people matching my filters.
 - R-17.7 "Hide from": age ranges, accounts < 7 days, unverified (default on).
 - R-17.8 Destructive actions (delete account, panic wipe setup) require biometrics.
-- R-17.16 **Data saver** (#177, decided 2026-11-21): Settings › App › **Data saver**: **Auto on mobile data** (default) / **Always** / **Off**. Device-only (key `app.dataSaver`). Auto is active on cellular and on any network the OS marks as metered or low-data (iOS Low Data Mode, Android Data Saver); Always also on Wi-Fi. When active:
+- R-17.16 **Data saver** (#177, decided 2026-11-21): Settings › App › **Data saver**: **Auto on mobile data** (default) / **Always** / **Off**. Device-only (`dataSaver` in the app preferences, `thirstr.prefs`). Auto is active on cellular and on any network the OS marks as metered or low-data (iOS Low Data Mode, Android Data Saver); Always also on Wi-Fi. When active:
   - Explore, grids, lists and Moments rings load the 480 px card copy (`-t`, SR-10) only; full photos load on open of a profile or viewer.
   - No prefetch: next profiles, Moments ahead, map tiles beyond the visible area, album covers off-screen.
   - Chat: photos ≤ 500 KB download on open of the chat; larger photos, videos and album items show a blurred placeholder with size and **Tap to load**. No video autoplay (Moments videos too).
-  - Videos you send on mobile data are transcoded at 720p (R-08.17 uses 1080p otherwise); photos keep full quality.
+  - Videos you send while it is active are exported at 720p (iOS system preset, H.264; R-08.17 uses 1080p H.265 otherwise); photos keep full quality.
+  - Chat media messages carry their ciphertext `size` (bytes) so the receiver can tell a small photo from a large one; older messages without it count as large.
   - Background jobs that move a lot wait for Wi-Fi: chat backup (R-01.15), media in history transfer asks first (R-01.14).
   - Never affects: messages, receipts, safety (check-in, SOS), location updates, push.
   - Settings row summary: "Auto · on now" / "Auto · off on Wi-Fi" / "Always" / "Off". Data saver active and a load was skipped → the placeholder says "Data saver" so the user knows why.

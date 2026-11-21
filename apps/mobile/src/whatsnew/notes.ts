@@ -16,6 +16,32 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 5,
+    date: '2026-11-21',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'spark',
+        to: { route: 'DataSaverSettings' },
+        text: {
+          en: ['Data saver', 'Lighter on mobile data, on by itself.'],
+          fr: ['Économiseur de données', 'Plus léger en 4G/5G, tout seul.'],
+          de: ['Datensparmodus', 'Sparsam mit mobilen Daten, automatisch.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'check',
+        to: tab('Chats'),
+        text: {
+          en: ['Big media on tap', 'Large chat photos load when you want.'],
+          fr: ['Gros médias au toucher', 'Grandes photos du chat à la demande.'],
+          de: ['Große Medien per Tipp', 'Große Chat-Fotos laden auf Wunsch.'],
+        },
+      },
+    ],
+  },
+  {
     id: 4,
     date: '2026-11-21',
     lines: [

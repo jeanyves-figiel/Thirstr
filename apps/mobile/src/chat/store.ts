@@ -65,6 +65,19 @@ export async function all<T extends Row>(cid: string): Promise<T[]> {
   return list.map((r) => ({ ...r })) as T[];
 }
 
+/**
+ * SR-15 (#155): the newest `n` messages for a fast first paint of a chat that isn't cached yet;
+ * the full list (`all`) follows. Doesn't fill the cache.
+ */
+export async function recent<T extends Row>(cid: string, n: number): Promise<T[]> {
+  const hit = cache.get(cid);
+  if (hit) return hit.slice(-n).map((r) => ({ ...r })) as T[];
+  return kv.tail<T>(prefix(cid), n);
+}
+
+/** True when `all(cid)` will answer from memory. */
+export const cached = (cid: string) => cache.has(cid);
+
 /** Inserts or replaces one message (keeps its arrival order on replace). */
 export async function put<T extends Row>(cid: string, m: T): Promise<T> {
   const list = (await all<T>(cid)) as Row[];

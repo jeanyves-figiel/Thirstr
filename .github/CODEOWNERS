@@ -1,0 +1,22 @@
+# EN-22 (#181): code owners. Docs: docs/team/two-person-rule.md.
+# Closed beta: one owner, so this only auto-requests review; "Require review from Code Owners"
+# stays OFF in branch protection until a second engineer exists (open beta), or every PR blocks.
+# When they join: add them to the default line, keep the owner on the infra/security paths below.
+
+*                               @jeanyves-figiel
+
+# Two-person paths (infra, deploy, security, secrets handling, data retention, auth, crypto)
+/.github/                       @jeanyves-figiel
+/infra/                         @jeanyves-figiel
+/scripts/                       @jeanyves-figiel
+/docker-compose.yml             @jeanyves-figiel
+/server/priv/repo/migrations/   @jeanyves-figiel
+/server/lib/thirstr/retention.ex @jeanyves-figiel
+/server/lib/thirstr/accounts/   @jeanyves-figiel
+/server/lib/thirstr_web/plugs/  @jeanyves-figiel
+/server/lib/thirstr_web/router.ex @jeanyves-figiel
+/server/lib/thirstr/auth/      @jeanyves-figiel
+/core/                          @jeanyves-figiel
+/docs/runbooks/                 @jeanyves-figiel
+/docs/team/                     @jeanyves-figiel
+/docs/spec/security.md          @jeanyves-figiel

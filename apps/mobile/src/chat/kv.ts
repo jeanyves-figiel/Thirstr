@@ -50,6 +50,24 @@ export const kv = {
     const rows = await (await open()).getAllAsync<{ v: string }>('SELECT v FROM kv WHERE k >= ? AND k < ?', prefix, upper(prefix));
     return rows.map((r) => JSON.parse(r.v) as T);
   },
+  /**
+   * SR-15 (#155): the newest `n` values under `prefix` by their `at` / `seq` fields, sorted in
+   * SQLite (no JS parse of the whole chat). Oldest first. Falls back to a full read if the
+   * build's SQLite lacks JSON functions.
+   */
+  async tail<T>(prefix: string, n: number): Promise<T[]> {
+    const d = await open();
+    const rows = await d
+      .getAllAsync<{ v: string }>(
+        "SELECT v FROM kv WHERE k >= ? AND k < ? ORDER BY json_extract(v, '$.at') DESC, json_extract(v, '$.seq') DESC LIMIT ?",
+        prefix,
+        upper(prefix),
+        n,
+      )
+      .catch(() => null);
+    if (rows) return rows.map((r) => JSON.parse(r.v) as T).reverse();
+    return (await this.getPrefix<T & { at: number; seq?: number }>(prefix)).sort((a, b) => a.at - b.at || (a.seq ?? 0) - (b.seq ?? 0)).slice(-n);
+  },
   async delPrefix(prefix: string) {
     await (await open()).runAsync('DELETE FROM kv WHERE k >= ? AND k < ?', prefix, upper(prefix));
   },

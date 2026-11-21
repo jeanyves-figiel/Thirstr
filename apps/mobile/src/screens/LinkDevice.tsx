@@ -1,8 +1,10 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { api, ApiError, Me, platform, saveSession, Session } from '../api/client';
+import * as X from '../chat/transfer';
 import { tx } from '../i18n/app';
+import { xx } from '../i18n/transfer';
 import { color, space } from '../theme/tokens';
 import { Body, Button, ErrorText, Field, H1, Screen } from '../ui';
 
@@ -12,6 +14,7 @@ export function LinkDeviceScreen({ onDone, onBack }: { onDone: (me: Me) => void;
   const [scan, setScan] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [match, setMatch] = useState<string | null>(null);
   const [perm, askPerm] = useCameraPermissions();
   const alive = useRef(true);
   useEffect(
@@ -28,15 +31,22 @@ export function LinkDeviceScreen({ onDone, onBack }: { onDone: (me: Me) => void;
     setScan(false);
     setWaiting(true);
     try {
-      const r = await api<{ claim: string }>('POST', '/auth/device-link', { code: c, platform });
+      // R-01.14: one-time key for the chat transfer; both phones show the same 6-digit code.
+      const keys = X.newKeys();
+      const r = await api<{ claim: string; xfer_pub?: string | null }>('POST', '/auth/device-link', { code: c, platform, xfer_pub: keys.pub });
+      if (r.xfer_pub) setMatch(X.matchCode(r.xfer_pub, keys.pub));
       for (let i = 0; i < 60 && alive.current; i++) {
         await new Promise((res) => setTimeout(res, 2000));
         const s = await api<Session | { state: string }>('POST', '/auth/device-link', { code: c, claim: r.claim });
-        if ('access_token' in s) return onDone(await saveSession(s));
+        if ('access_token' in s) {
+          if (r.xfer_pub) X.expect(keys, r.xfer_pub);
+          return onDone(await saveSession(s));
+        }
       }
       throw new Error('timeout');
     } catch (e) {
       setWaiting(false);
+      setMatch(null);
       setErr(e instanceof ApiError && e.status !== 404 ? e.message : tx.devices.badCode);
     }
   };
@@ -55,6 +65,14 @@ export function LinkDeviceScreen({ onDone, onBack }: { onDone: (me: Me) => void;
     <Screen>
       <H1>{tx.devices.haveApp}</H1>
       <Body muted>{waiting ? tx.devices.waiting : tx.devices.enterHint}</Body>
+      {waiting && match ? (
+        <View style={{ gap: 2 }}>
+          <Body muted>{xx.showsCode}</Body>
+          <Text testID="link-match" style={{ fontSize: 28, fontWeight: '800', letterSpacing: 3, color: color.trust, fontVariant: ['tabular-nums'] }}>
+            {match}
+          </Text>
+        </View>
+      ) : null}
       {!waiting ? (
         <>
           {Platform.OS !== 'web' ? (

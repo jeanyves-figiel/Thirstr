@@ -1,0 +1,130 @@
+{
+  "_doc": "On-call alert rules (EN-06, #165). Evaluated every 5 min by .github/workflows/oncall.yml via scripts/ops/oncall.py. Each rule's runbook section is docs/runbooks/alerts.md#<id> (CI checks it exists). sev 1 = page any hour (Pushover emergency, repeats until acknowledged); sev 2 = normal push (respects Pushover quiet hours); sev 3 = job summary only, no push. PromQL rules fire when the query returns at least one sample.",
+  "prometheus": "https://api.fly.io/prometheus/personal",
+  "rules": [
+    {
+      "id": "api-down",
+      "title": "API down",
+      "sev": 1,
+      "type": "http",
+      "url": "https://api.thirstr.fun/v1/health",
+      "expect_status": 200,
+      "for_min": 4
+    },
+    {
+      "id": "api-errors",
+      "title": "API 5xx above 2 %",
+      "sev": 1,
+      "type": "promql",
+      "query": "(sum(rate(phoenix_router_dispatch_stop_duration_count{app=\"thirstr-api-prod\",status=~\"5..\"}[5m])) / sum(rate(phoenix_router_dispatch_stop_duration_count{app=\"thirstr-api-prod\"}[5m])) > 0.02) and on() sum(rate(phoenix_router_dispatch_stop_duration_count{app=\"thirstr-api-prod\"}[5m])) > 0.05",
+      "unit": "ratio",
+      "for_min": 5
+    },
+    {
+      "id": "push-queue-stuck",
+      "title": "Push jobs stuck (SOS / check-in alerts late)",
+      "sev": 1,
+      "type": "promql",
+      "query": "max(thirstr_oban_jobs_oldest_available_s{app=\"thirstr-api-prod\",queue=\"push\"}) > 120",
+      "unit": "s",
+      "for_min": 5
+    },
+    {
+      "id": "api-slow",
+      "title": "API p95 above 500 ms",
+      "sev": 2,
+      "type": "promql",
+      "query": "histogram_quantile(0.95, sum by (le) (rate(phoenix_router_dispatch_stop_duration_bucket{app=\"thirstr-api-prod\"}[5m]))) > 500 and on() sum(rate(phoenix_router_dispatch_stop_duration_count{app=\"thirstr-api-prod\"}[5m])) > 0.05",
+      "unit": "ms",
+      "for_min": 10
+    },
+    {
+      "id": "push-failing",
+      "title": "Push sends retrying above 5 %",
+      "sev": 2,
+      "type": "promql",
+      "query": "sum(rate(thirstr_push_send_count{app=\"thirstr-api-prod\",outcome=\"retry\"}[10m])) / sum(rate(thirstr_push_send_count{app=\"thirstr-api-prod\"}[10m])) > 0.05",
+      "unit": "ratio",
+      "for_min": 10
+    },
+    {
+      "id": "jobs-stuck",
+      "title": "Background jobs waiting over 10 min",
+      "sev": 2,
+      "type": "promql",
+      "query": "max(thirstr_oban_jobs_oldest_available_s{app=\"thirstr-api-prod\",queue!=\"push\"}) > 600",
+      "unit": "s",
+      "for_min": 5
+    },
+    {
+      "id": "valkey-down",
+      "title": "Valkey unreachable (rate limits on fallback)",
+      "sev": 2,
+      "type": "promql",
+      "query": "sum(increase(thirstr_valkey_fallback_count{app=\"thirstr-api-prod\"}[5m])) > 0",
+      "unit": "count",
+      "for_min": 5
+    },
+    {
+      "id": "db-filling",
+      "title": "Database above 2.2 GB (volume 3 GB)",
+      "sev": 2,
+      "type": "promql",
+      "query": "max(thirstr_db_size_bytes{app=\"thirstr-api-prod\"}) > 2.2e9",
+      "unit": "bytes",
+      "for_min": 30
+    },
+    {
+      "id": "machine-memory",
+      "title": "API machine memory above 400 MB",
+      "sev": 2,
+      "type": "promql",
+      "query": "max(vm_memory_total{app=\"thirstr-api-prod\"}) > 400e6",
+      "unit": "bytes",
+      "for_min": 10
+    },
+    {
+      "id": "retention-overdue",
+      "title": "Data kept past its retention deadline",
+      "sev": 2,
+      "type": "promql",
+      "query": "max(thirstr_retention_overdue{app=\"thirstr-api-prod\"}) > 0",
+      "unit": "rows",
+      "for_min": 60
+    },
+    {
+      "id": "app-crash-rate",
+      "title": "App crash-free sessions below 99.5 %",
+      "sev": 2,
+      "type": "promql",
+      "query": "(sum(increase(thirstr_client_error_count{app=\"thirstr-api-prod\",fatal=\"true\"}[1h])) / sum(increase(thirstr_client_session_count{app=\"thirstr-api-prod\"}[1h])) > 0.005) and on() sum(increase(thirstr_client_session_count{app=\"thirstr-api-prod\"}[1h])) >= 50",
+      "unit": "ratio",
+      "for_min": 30
+    },
+    {
+      "id": "tls-expiring",
+      "title": "TLS certificate expires in under 14 days",
+      "sev": 2,
+      "type": "cert",
+      "hosts": ["api.thirstr.fun", "thirstr.fun"],
+      "min_days": 14,
+      "for_min": 30
+    },
+    {
+      "id": "metrics-unreachable",
+      "title": "Metrics unreachable (alerts blind)",
+      "sev": 2,
+      "type": "meta",
+      "for_min": 15
+    },
+    {
+      "id": "chat-backlog-old",
+      "title": "Undelivered chat ciphertext near the 30-day sweep",
+      "sev": 3,
+      "type": "promql",
+      "query": "max(thirstr_chat_backlog_oldest_s{app=\"thirstr-api-prod\"}) > 86400 * 25",
+      "unit": "s",
+      "for_min": 60
+    }
+  ]
+}

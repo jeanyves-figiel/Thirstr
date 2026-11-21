@@ -50,12 +50,25 @@ Never restore over the running prod volume. Restore into a new machine + volume,
 6. Destroy the drill machine and volume (Machines API `DELETE …/machines/<id>?force=true`, then the volume).
 7. Real incident: stop `thirstr-api-<env>`, point `DATABASE_URL` at the new machine (`<id>.vm.thirstr-db-<env>.internal`), start the API, then make the new machine the only DB machine.
 
+## Automated drill (EN-17, #176)
+`scripts/ops/restore-drill.sh <env> <region> [--migrate-image <api image>]` does steps 1–6 with the Machines API and prints a JSON result:
+- temporary volume (live size **+ 2 GB**: WAL replay needs room) + machine on `thirstr-db-<env>` in another EU region, `BACKUPS=off`, init `sleep`, metadata `purpose=dr-drill`;
+- `pgbackrest restore` (latest), then Postgres on **port 5499** with `archive_mode=off` and the pgBackRest env (the `restore_command` needs it), until recovery has promoted;
+- RTO = start → usable DB; RPO = how old the last archived WAL was on the live DB at drill time (worst-case loss); `accounts` count and newest message age as sanity checks;
+- `--migrate-image`: a second temporary machine runs `/app/bin/migrate` of that image against the copy (one-time superuser `drill_migrator`, random password, only `fdaa::/16`);
+- always destroys machines (all with this run id) and the volume, even on failure.
+
+Workflow **DR drill** (`dr-drill.yml`): quarterly (1 Jan/Apr/Jul/Oct, 04:17 UTC) on prod into `ams`, or by hand (env, region). It dry-runs the image live on staging, writes the run summary and comments on the issue labelled `dr-drill` ("DR drill log"). Cost: two shared-cpu machines + a small volume for ~5–10 min.
+
 ## Gotchas
 - A target time needs a commit **after** it in archived WAL, else recovery stops with "recovery ended before configured recovery target was reached". Force it with `SELECT pg_switch_wal()` (its own statement: `psql -c "a; b"` runs as one transaction) or wait ≤ `archive_timeout`.
-- `pgbackrest` options come from env vars on the DB machine; an exec shell must export them (see step 3).
+- `pgbackrest` options come from env vars on the DB machine; an exec shell must export them (see step 3), **also for the shell that starts Postgres** (recovery calls `pgbackrest archive-get`; without them: "archive-get command requires option: stanza").
+- A restore volume the same size as the live one can fill up during WAL replay (pg_wal grows to `max_wal_size`): use live size + 2 GB and `-c max_wal_size=256MB`.
+- Machines API: create with `skip_launch: true`, then `start` (create+launch with a fresh volume answered 400); `wait` timeout max 60 s.
 
 ## Drill log
 | Date | Env | Target | Result | Time to usable DB |
 |---|---|---|---|---|
 | 2026-11-21 | prod | — (rollout) | ✔ backups on at 09:30 UTC (`pg16-h3-8994cda`), first full 09:31 (40 MB → 6.7 MB), API health checks passing; DB restart ~10 s | — |
 | 2026-11-21 | staging | 09:07:47 UTC (between two marker rows) | ✔ row before target present, row after absent, `venues` count matches (28 686); full backup 40 MB → 6.8 MB in repo | ~1 min per restore (2.6 min incl. one retry, see Gotchas) |
+| 2026-11-21 | staging → `ams` | latest (automated `restore-drill.sh`, #176) | ✔ second region from backups only; 8 accounts; migration dry run of the staging image ok (11 s); everything destroyed after | RTO 177 s (restore 21 s + WAL replay); RPO at drill time 161 s |

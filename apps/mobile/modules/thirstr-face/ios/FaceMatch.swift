@@ -66,12 +66,7 @@ enum FaceMatch {
   /// cosine similarity against those faces (−1 = no face in that frame).
   static func matchClip(clip: URL, photos: [URL], frameCount: Int) throws -> [String: Any] {
     let net = try model()
-    var refs: [[Float]] = []
-    for url in photos.prefix(6) {
-      // One bad photo never stops the match.
-      guard let img = try? loadPhoto(url), let v = (try? embed(img, net)) ?? nil else { continue }
-      refs.append(v)
-    }
+    let refs = references(photos, net).faces
     var frames: [Double] = []
     if !refs.isEmpty {
       for img in try clipFrames(clip, count: frameCount) {
@@ -83,6 +78,62 @@ enum FaceMatch {
       }
     }
     return ["photoFaces": refs.count, "frames": frames]
+  }
+
+  /// F-03 R-03.2 (#232): own selfie stills (local files, from the liveness check) vs own public photos.
+  /// Returns `{ photoFaces, photoErrors, frames }`: `photoErrors` = photos that could not be loaded
+  /// (network), so the caller can tell "no face in your photos" from "photos didn't load".
+  static func matchStills(stills: [URL], photos: [URL]) throws -> [String: Any] {
+    let net = try model()
+    let (refs, errors) = references(photos, net)
+    var frames: [Double] = []
+    if !refs.isEmpty {
+      for url in stills {
+        guard let img = try? loadPhoto(url), let v = embedAnyOrientation(img, net) else {
+          frames.append(-1)
+          continue
+        }
+        frames.append(Double(refs.map { dot($0, v) }.max() ?? -1))
+      }
+    }
+    return ["photoFaces": refs.count, "photoErrors": errors, "frames": frames]
+  }
+
+  /// Largest face of each photo (main first, at most 6). One bad photo never stops the match.
+  static func references(_ photos: [URL], _ net: MLModel) -> (faces: [[Float]], errors: Int) {
+    var refs: [[Float]] = []
+    var errors = 0
+    for url in photos.prefix(6) {
+      guard let img = ((try? loadPhoto(url)) ?? nil) else {
+        errors += 1
+        continue
+      }
+      if let v = (try? embed(img, net)) ?? nil { refs.append(v) }
+    }
+    return (refs, errors)
+  }
+
+  /// #131: raw front-camera stills can carry no or a wrong EXIF orientation; Vision finds no face
+  /// sideways. Try upright first, then the other quarter turns.
+  static func embedAnyOrientation(_ img: CGImage, _ net: MLModel) -> [Float]? {
+    for turns in [0, 1, 3, 2] {
+      guard let r = turns == 0 ? img : rotate(img, quarterTurns: turns) else { continue }
+      if let v = (try? embed(r, net)) ?? nil { return v }
+    }
+    return nil
+  }
+
+  /// Rotates by 90° steps clockwise (pixels only, no metadata).
+  static func rotate(_ img: CGImage, quarterTurns: Int) -> CGImage? {
+    let q = ((quarterTurns % 4) + 4) % 4
+    let w = img.width, h = img.height
+    let (ow, oh) = q % 2 == 1 ? (h, w) : (w, h)
+    guard let ctx = CGContext(data: nil, width: ow, height: oh, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    ctx.translateBy(x: CGFloat(ow) / 2, y: CGFloat(oh) / 2)
+    ctx.rotate(by: -CGFloat(q) * .pi / 2)
+    ctx.draw(img, in: CGRect(x: -CGFloat(w) / 2, y: -CGFloat(h) / 2, width: CGFloat(w), height: CGFloat(h)))
+    return ctx.makeImage()
   }
 
   // MARK: inputs

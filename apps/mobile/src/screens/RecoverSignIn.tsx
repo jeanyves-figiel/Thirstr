@@ -1,10 +1,12 @@
 // F-01 R-01.7 (#25, option B): sign in with the 12 words (S-65), then "You're back" (S-66).
 // The words live only in this screen's state; nothing is stored until the server accepts them.
 import * as Clipboard from 'expo-clipboard';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ApiError, Me } from '../api/client';
 import * as R from '../auth/recovery';
+import * as B from '../chat/backup';
+import { bx, mb } from '../i18n/backup';
 import { rx } from '../i18n/recovery';
 import { Enter, StepShell } from '../onboarding/kit';
 import { color, font, radius, space } from '../theme/tokens';
@@ -15,34 +17,9 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { da
 
 export function RecoverSignInScreen({ onBack, onDone }: { onBack: () => void; onDone: (me: Me, restored: R.Restored | null) => void }) {
   const [words, setWords] = useState<string[]>(Array(12).fill(''));
-  const [at, setAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const refs = useRef<(React.ComponentRef<typeof TextInput> | null)[]>([]);
-
-  const full = words.every((w) => w.trim());
-  const p = R.wordsProblem(words);
-  const problem = p === 'checksum' ? rx.checksum : p ? rx.notWord(p.notWord) : null;
-  const sugg = R.suggest(words[at] ?? '').filter((w) => w !== words[at]?.trim().toLowerCase());
-
-  const put = (i: number, v: string) => {
-    // a pasted phrase in any field fills all 12
-    const parts = v.trim().split(/\s+/);
-    if (parts.length >= 12) return fill(parts);
-    setErr(null);
-    setWords((ws) => ws.map((w, j) => (j === i ? v.replace(/\s/g, '').toLowerCase() : w)));
-    if (/\s$/.test(v) && i < 11) refs.current[i + 1]?.focus();
-  };
-  const fill = (parts: string[]) => {
-    setErr(null);
-    setWords(R.normalize(parts).slice(0, 12).concat(Array(12).fill('')).slice(0, 12));
-    refs.current[11]?.blur();
-  };
-  const pick = (w: string) => {
-    setWords((ws) => ws.map((x, j) => (j === at ? w : x)));
-    if (at < 11) refs.current[at + 1]?.focus();
-  };
-  const paste = async () => fill((await Clipboard.getStringAsync()).split(/\s+/));
+  const problem = wordsProblemText(words);
 
   const go = async () => {
     setBusy(true);
@@ -63,8 +40,44 @@ export function RecoverSignInScreen({ onBack, onDone }: { onBack: () => void; on
       sub={rx.enterSub}
       onBack={onBack}
       scroll
-      cta={{ title: rx.signIn, onPress: go, busy, disabled: !full || !!problem, fill: color.trust, testID: 'recover-signin' }}
+      cta={{ title: rx.signIn, onPress: go, busy, disabled: !words.every((w) => w.trim()) || !!problem, fill: color.trust, testID: 'recover-signin' }}
     >
+      <WordGrid words={words} onChange={(w) => (setErr(null), setWords(w))} />
+      <ErrorText text={err ?? problem} />
+    </StepShell>
+  );
+}
+
+export const wordsProblemText = (words: string[]) => {
+  const p = R.wordsProblem(words);
+  return p === 'checksum' ? rx.checksum : p ? rx.notWord(p.notWord) : null;
+};
+
+/** S-65 word grid: 2 × 6 numbered fields, suggestion bar, Paste fills all 12. Also used by #261. */
+export function WordGrid({ words, onChange }: { words: string[]; onChange: (w: string[]) => void }) {
+  const [at, setAt] = useState(0);
+  const refs = useRef<(React.ComponentRef<typeof TextInput> | null)[]>([]);
+  const sugg = R.suggest(words[at] ?? '').filter((w) => w !== words[at]?.trim().toLowerCase());
+
+  const fill = (parts: string[]) => {
+    onChange(R.normalize(parts).slice(0, 12).concat(Array(12).fill('')).slice(0, 12));
+    refs.current[11]?.blur();
+  };
+  const put = (i: number, v: string) => {
+    // a pasted phrase in any field fills all 12
+    const parts = v.trim().split(/\s+/);
+    if (parts.length >= 12) return fill(parts);
+    onChange(words.map((w, j) => (j === i ? v.replace(/\s/g, '').toLowerCase() : w)));
+    if (/\s$/.test(v) && i < 11) refs.current[i + 1]?.focus();
+  };
+  const pick = (w: string) => {
+    onChange(words.map((x, j) => (j === at ? w : x)));
+    if (at < 11) refs.current[at + 1]?.focus();
+  };
+  const paste = async () => fill((await Clipboard.getStringAsync()).split(/\s+/));
+
+  return (
+    <>
       <View style={s.grid}>
         {[0, 1, 2, 3, 4, 5].map((r) => (
           <View key={r} style={s.row}>
@@ -114,19 +127,36 @@ export function RecoverSignInScreen({ onBack, onDone }: { onBack: () => void; on
           </Pressable>
         )}
       </View>
-      <ErrorText text={err ?? problem} />
-    </StepShell>
+    </>
   );
 }
 
 export function RecoveredScreen({ me, restored, onDone }: { me: Me; restored: R.Restored | null; onDone: () => void }) {
   const name = me.profile?.display_name;
+  // R-01.15: an opt-in chat backup can bring the chats back; Chats runs it once the app is open.
+  const [chats, setChats] = useState<B.Info>(null);
+  useEffect(() => {
+    B.info().then(setChats);
+  }, []);
+  const cta = chats
+    ? { title: bx.restore, onPress: () => B.requestRestore().then(onDone), fill: color.trust, testID: 'recover-restore' }
+    : { title: rx.go, onPress: onDone, fill: color.bgInverse, testID: 'recover-go' };
   return (
-    <StepShell title={name ? rx.backTitleName(name) : rx.backTitle} cta={{ title: rx.go, onPress: onDone, fill: color.bgInverse, testID: 'recover-go' }}>
+    <StepShell
+      title={name ? rx.backTitleName(name) : rx.backTitle}
+      cta={cta}
+      below={
+        chats ? (
+          <Pressable testID="recover-go" accessibilityRole="button" onPress={onDone} style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={s.ls}>{rx.go}</Text>
+          </Pressable>
+        ) : undefined
+      }
+    >
       <Enter delay={40} style={s.list}>
         <Line ok t={rx.r1} />
         <Line ok={!!restored} t={rx.r2} sub={restored ? rx.r2s(day(restored.backupAt)) : rx.r2none} />
-        <Line ok={false} t={rx.r3} sub={rx.r3s} />
+        {chats ? <Line ok t={bx.restoreTitle} sub={`${bx.restoreMeta(day(chats.updated_at), mb(chats.bytes))}. ${bx.restoreLater}`} /> : <Line ok={false} t={rx.r3} sub={rx.r3s} />}
         <Line ok t={rx.r4} />
       </Enter>
     </StepShell>

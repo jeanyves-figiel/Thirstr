@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Smoke checks after deploy (ops.md). Usage: smoke.sh <base-url> [expected-release-sha]
+# FORCE_INSTANCE=<machine id> pins every request to one machine (canary, EN-12) via Fly's fly-force-instance-id.
 set -euo pipefail
 base="$1"; sha="${2:-}"
+pin=(); [[ -n "${FORCE_INSTANCE:-}" ]] && pin=(-H "fly-force-instance-id: ${FORCE_INSTANCE}")
+curl() { command curl "${pin[@]}" "$@"; }
 for i in $(seq 1 30); do
   body=$(curl -fsS "$base/v1/health" || true)
   if [[ -n "$body" && ( -z "$sha" || "$body" == *"$sha"* ) ]]; then break; fi

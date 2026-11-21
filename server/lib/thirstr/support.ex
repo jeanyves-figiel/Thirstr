@@ -53,7 +53,7 @@ defmodule Thirstr.Support do
             account_id: a && Nearby.dump(a.id),
             topic: topic,
             lang: lang,
-            reply_email: email,
+            reply_to_sealed: email && seal(email),
             app_details: details(params["app_details"])
           }
         ])
@@ -166,7 +166,7 @@ defmodule Thirstr.Support do
     with {:ok, _} <- Ecto.UUID.cast(id),
          [row] <-
            Repo.query!(
-             "SELECT id::text, ref, account_id::text, topic, lang, status, reply_email, app_details, created_at, updated_at, solved_at FROM support_requests WHERE id = $1",
+             "SELECT id::text, ref, account_id::text, topic, lang, status, reply_to_sealed, app_details, created_at, updated_at, solved_at FROM support_requests WHERE id = $1",
              [Nearby.dump(id)]
            ).rows
            |> Nearby.utc() do
@@ -180,7 +180,7 @@ defmodule Thirstr.Support do
          topic: topic,
          lang: lang,
          status: status,
-         reply_email: email,
+         reply_email: email && unseal(email),
          app_details: details,
          created_at: c,
          updated_at: u,
@@ -444,6 +444,29 @@ defmodule Thirstr.Support do
   rescue
     _ -> :ok
   end
+
+  defp seal_key do
+    base = Application.get_env(:thirstr, ThirstrWeb.Endpoint)[:secret_key_base] || ""
+    :crypto.hash(:sha256, base <> "|support-reply-v1")
+  end
+
+  defp seal(plain) do
+    iv = :crypto.strong_rand_bytes(12)
+
+    {ct, tag} =
+      :crypto.crypto_one_time_aead(:aes_256_gcm, seal_key(), iv, plain, "support", true)
+
+    iv <> tag <> ct
+  end
+
+  defp unseal(<<iv::binary-12, tag::binary-16, ct::binary>>) do
+    case :crypto.crypto_one_time_aead(:aes_256_gcm, seal_key(), iv, ct, "support", tag, false) do
+      p when is_binary(p) -> p
+      _ -> nil
+    end
+  end
+
+  defp unseal(_), do: nil
 
   # The SES identity may send only as MAIL_FROM (hello@, runbooks/email.md); ImprovMX forwards both.
   defp sender, do: Application.get_env(:thirstr, :mail_from, "hello@thirstr.fun")

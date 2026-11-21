@@ -229,10 +229,8 @@ defmodule Thirstr.RecoveryClaims do
             )
           )
 
-    {n_pk, _} =
-      Repo.delete_all(
-        from(p in Passkey, where: p.account_id == ^aid and (is_nil(^keep) or p.id != ^keep))
-      )
+    pk = from(p in Passkey, where: p.account_id == ^aid)
+    {n_pk, _} = Repo.delete_all(if(keep, do: from(p in pk, where: p.id != ^keep), else: pk))
 
     Recovery.delete(a)
 

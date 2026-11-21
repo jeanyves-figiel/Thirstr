@@ -90,7 +90,7 @@ defmodule Thirstr.Feedback do
            [Nearby.dump(id)]
          ).rows do
       [[kind, part, text, app, date, at]] when is_binary(text) ->
-        if DateTime.diff(DateTime.utc_now(), at, :hour) >= 24 do
+        if DateTime.diff(DateTime.utc_now(), to_dt(at), :hour) >= 24 do
           drop(id)
         else
           post(id, issue(%{kind: kind, part: part, text: text, app: app, id: id, date: date}))

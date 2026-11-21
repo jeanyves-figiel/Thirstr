@@ -11,7 +11,9 @@ defmodule Thirstr.Repo.Migrations.Support do
       add :topic, :text, null: false
       add :lang, :text, null: false, default: "en"
       add :status, :text, null: false, default: "open"
-      add :reply_email, :text
+
+      # Optional reply address, sealed (AES-GCM, key from SECRET_KEY_BASE); never plaintext (AC-01.2)
+      add :reply_to_sealed, :binary
       add :app_details, :map
       add :unread_member, :boolean, null: false, default: false
       add :created_at, :utc_datetime_usec, null: false, default: fragment("now()")

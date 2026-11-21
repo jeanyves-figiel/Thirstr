@@ -95,6 +95,9 @@ export async function backupNow(opts: { full?: boolean } = {}): Promise<{ rows: 
   const vault = await vaultKey();
   if (!vault) return null;
   const key = chatKey(vault);
+  // Main's start-up effect runs before the engine has loaded the chat list; an empty list here
+  // would tombstone every chat in the backup.
+  await E.loadedConvs();
   const st = (await kv.get<State>(STATE)) ?? empty();
   const convs = E.getConvs().filter((c) => !c.gone);
   const full = opts.full || !st.segs.length || st.segs.length >= 200 || (st.rows > 0 && st.tomb / st.rows > 0.3);

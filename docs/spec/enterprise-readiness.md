@@ -29,7 +29,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 - Metrics + alerts (SR-07).
 - **EN-04** (#163) SLOs with error budgets for the targets above; burn-rate alerts; public status page (`status.thirstr.fun`); weekly SLO review. ✔ Spec `slos.md`, status page on GitHub Pages (`status.yml`), weekly report (`slo-report.yml`), alert rules in `monitoring.md`.
 - **EN-05** (#164) Error + crash reporting with PII scrubbing, EU-hosted (Sentry EU or self-hosted GlitchTip): server, iOS, Android; release health gates (crash-free %). ✔ Built in-house instead (no vendor, no cost): anonymous app reports + session pings, server grouping and scrubbing, crash-free alert (`docs/runbooks/monitoring.md` › App crashes); server errors via existing metrics + Fly logs.
-- **EN-06** (#165) On-call: rotation (owner + ≥ 1 engineer once hired), paging (phone push + SMS), runbook per alert, escalation path.
+- **EN-06** (#165) On-call: rotation (owner + ≥ 1 engineer once hired), paging (phone push + SMS), runbook per alert, escalation path. ✔ Solo on-call for beta: GitHub Actions every 5 min → Pushover (SEV1 emergency until acknowledged, escalation key ready), runbook link per alert (`docs/runbooks/on-call.md`, `alerts.md`); no SMS (Pushover covers it, €0/month).
 
 ### C. Incident response
 - **EN-07** (#166) Incident process: severity levels, incident commander, comms templates (in-app banner, status page, email), GDPR 72 h breach notification flow (Art. 33/34), blameless post-mortems with tracked actions, yearly tabletop exercise. ✔ `docs/runbooks/incident-response.md`, register `docs/incidents/` (legal wording to confirm with counsel, #9).
@@ -38,7 +38,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 - **EN-08** (#167) Security program: annual external pen test (API + iOS + Android + MLS implementation review), bug bounty (private → public), SAST/DAST in CI (sobelow, semgrep, ZAP on staging), dependency patch SLAs (critical 48 h), SBOM already signed (cosign).
   - Done (#244): every GitHub Action pinned to a full commit SHA with a version comment (Dependabot proposes bumps monthly), workflow inputs and step outputs reach `run:` only through quoted `env:` variables, `FLY_TOKEN` scoped to the jobs that use it, and the `semgrep` CI job is blocking (`--error`); a justified false positive gets `# nosemgrep: <rule-id> <reason>`.
   - Done (#167, free tooling only until public launch, owner 2026-11-21): ZAP baseline on staging (`.github/workflows/zap-staging.yml`, `.zap/rules.tsv`), patch SLAs (`docs/runbooks/security-patching.md`). Next: AI pen test on staging; external pen test + bounty revisited before launch.
-- **EN-09** (#168) Secrets & keys: EU KMS for pepper (#27) and backup key, rotation schedule, short-lived deploy tokens, Fly org `thirstr` with SSO + 2FA, least-privilege tokens, break-glass account, quarterly access review.
+- **EN-09** (#168) Secrets & keys: EU KMS for pepper (#27) and backup key, rotation schedule, short-lived deploy tokens, Fly org `thirstr` with SSO + 2FA, least-privilege tokens, break-glass account, quarterly access review. 2026-11-21: KMS deferred to before open beta (€0 budget). Access runbook ✔ (`docs/runbooks/access.md`: rotation schedule, break-glass, quarterly review), per-environment 90-day deploy tokens ✔ (`scripts/ops/fly-ci-tokens.sh`, nightly expiry check), org move planned (`docs/runbooks/fly-org-move.md`).
 - Certificate pinning + app attestation (App Attest / Play Integrity) against bots and API scraping (spec security.md).
 
 ### E. Compliance
@@ -76,7 +76,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 - **EN-21** (#180) Monthly cost dashboard (Fly, Tigris, egress, vendors), cost per MAU, budget alerts, capacity forecast from SR-12 numbers.
 
 ### L. Team & process
-- **EN-22** (#181) Bus factor: second engineer with prod access, code owners, two-person review for infra/security changes, documented on-boarding/off-boarding, change log for prod (already: promote-prod workflow).
+- **EN-22** (#181) Bus factor: second engineer with prod access, code owners, two-person review for infra/security changes, documented on-boarding/off-boarding, change log for prod (already: promote-prod workflow). ✔ Ready now (€0): `.github/CODEOWNERS`, `docs/team/two-person-rule.md`, `onboarding.md`, `offboarding.md`, `docs/runbooks/break-glass.md`. Second engineer + enforced two-person review at open beta.
 
 ## 3. Phased roadmap
 | Phase | When | Must have |

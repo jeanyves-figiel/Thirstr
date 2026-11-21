@@ -124,25 +124,27 @@ defmodule Thirstr.ChatBackup do
 
   @doc "Manifest + 1 h download URLs for each segment (restore)."
   def get(%Account{id: id}) do
-    with %{rows: [[m, at]]} <-
-           Repo.query!(
-             "SELECT manifest, updated_at FROM chat_backups WHERE account_id = $1",
-             [dump(id)]
-           ) do
-      segs =
-        from(s in "chat_backup_segments",
-          where: s.account_id == ^dump(id) and s.committed,
-          select: {s.id, s.size, s.storage_key}
-        )
-        |> Repo.all()
-        |> Enum.map(fn {sid, size, key} ->
-          %{id: load(sid), size: size, url: Storage.presigned_get(key, @url_ttl)}
-        end)
+    case Repo.query!(
+           "SELECT manifest, updated_at FROM chat_backups WHERE account_id = $1",
+           [dump(id)]
+         ) do
+      %{rows: [[m, at]]} ->
+        {:ok, %{manifest: Base.encode64(m), updated_at: at, segments: segments(id)}}
 
-      {:ok, %{manifest: Base.encode64(m), updated_at: at, segments: segs}}
-    else
-      _ -> {:error, :not_found}
+      _ ->
+        {:error, :not_found}
     end
+  end
+
+  defp segments(id) do
+    from(s in "chat_backup_segments",
+      where: s.account_id == ^dump(id) and s.committed,
+      select: {s.id, s.size, s.storage_key}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {sid, size, key} ->
+      %{id: load(sid), size: size, url: Storage.presigned_get(key, @url_ttl)}
+    end)
   end
 
   @doc "Turn off, recovery off, new words: backup and every segment go at once."

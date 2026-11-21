@@ -13,4 +13,6 @@ for e in api-kill valkey-down db-restart disk-fill api-stop; do
   curl -fs http://127.0.0.1:18081/v1/apps/x/state | grep -q '"stopped"' && { echo "FAIL $e left a machine stopped"; exit 1; }
   echo "ok $e"
 done
-FLY_TOKEN=x "$HERE/chaos.sh" prod 2>&1 | grep -q refusing && echo "ok prod refused"
+out=$(FLY_TOKEN=x "$HERE/chaos.sh" prod 2>&1 || true)
+grep -q refusing <<<"$out" || { echo "FAIL prod not refused: $out"; exit 1; }
+echo "ok prod refused"

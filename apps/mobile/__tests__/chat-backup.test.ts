@@ -8,6 +8,7 @@ const mockServer: { manifest: string | null; segs: string[]; pending: Map<string
 const mockPhone: { convs: Record<string, unknown>[]; msgs: Record<string, Record<string, unknown>[]>; imported: unknown[] } = { convs: [], msgs: {}, imported: [] };
 let mockVaultKey: Uint8Array | null = new Uint8Array(32).fill(7);
 let mockN = 0;
+let mockLoaded: Promise<void> = Promise.resolve();
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('../src/app/dataSaver', () => ({ unmetered: () => true }));
@@ -24,6 +25,7 @@ jest.mock('../src/chat/kv', () => ({
 jest.mock('../src/chat/engine', () => ({
   TTL_S: { '24h': 86400, '7d': 604800, never: null },
   getConvs: () => mockPhone.convs,
+  loadedConvs: () => mockLoaded,
   messages: async (cid: string) => mockPhone.msgs[cid] ?? [],
   importHistory: async (cs: unknown[], rows: Record<string, unknown[]>, tomb: Record<string, string[]>) => {
     mockPhone.imported.push({ cs, rows, tomb });
@@ -144,6 +146,21 @@ describe('#146 chat backup (R-01.15)', () => {
     await B.unlock(right);
     expect(mockVaultKey).toEqual(right);
     expect((await B.restore()).messages).toBe(3);
+  });
+
+  it('waits for the chat list before a run, so an early start-up run tombstones nothing', async () => {
+    await B.turnOn();
+    let release = () => {};
+    mockLoaded = new Promise<void>((r) => (release = r));
+    const real = mockPhone.convs;
+    mockPhone.convs = []; // engine not started yet
+    const run = B.backupNow();
+    await new Promise((r) => setTimeout(r, 10));
+    mockPhone.convs = real; // start() loaded the list
+    release();
+    expect((await run)?.rows).toBe(0);
+    expect(mockServer.segs).toHaveLength(1);
+    mockLoaded = Promise.resolve();
   });
 
   it('daily on Wi-Fi only when on', async () => {

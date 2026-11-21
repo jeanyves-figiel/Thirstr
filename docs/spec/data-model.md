@@ -123,6 +123,13 @@ Address/door code: E2EE message to accepted guests, never in DB.
 ### server_keys (name pk, der, created_at) — `verify_rsa`: F-03 blind-signature issuer key (RSA 3072), generated on first use
 ### spent_tokens (hash pk = sha256(token), created_at) — redeemed verification tokens, no link to the account (R-03.4)
 ### admin_audit (id bigserial, actor, action, object_hash (sha256 prefix of the object id), reason, at) — append-only (DB rules drop UPDATE/DELETE), R-AD.4
+### support_requests (F-22, #178) (id uuid, ref (8) unique, account_id null (signed out), topic enum(account, safety, broken, privacy, other), lang, status enum(open, waiting, solved), reply_email null (only if asked, deleted with the request), app_details jsonb, created_at, solved_at)
+### support_messages (id bigserial, request_id, from enum(member, support), body (4 000), attachments [storage_key] (≤ 2, Tigris private), macro_id null, created_at)
+### support_macros (id, title, lang, body, updated_at)
+### recovery_claims (F-22 R-22.22) (id uuid, account_id, install_hash, method, state enum(started, selfie_passed, holding, ready, completed, cancelled, expired, conflict), attempts, hold_ends_at, created_at, ended_at) — one active per account; audit events in `security_events`
+### help_votes (article, lang, day, up, down, reasons jsonb; PK article + lang + day) — no account id
+### security_events (id bigserial, account_id, kind (claim_started, selfie_passed, selfie_failed, claim_cancelled, claim_completed, claim_conflict), install_hash, at) — R-22.26, 1 y, append-only
+### feedback (id uuid, created_on date, text_scrubbed null, issue_number null) — text deleted once the issue exists; row deleted after 30 d
 ### linked_accounts (id uuid, profile_id, platform enum(x, bluesky, onlyfans, jff, instagram), handle (64), code, verified_at, checked_at, visibility enum(everyone, verified, chats), created_at)
 ### profile_shares (slug pk (10), profile_id unique, created_at) — I-02 share link; rotate = new row
 ### mls_key_packages (id bigserial, profile_id, device_id, key_package bytea, last_resort bool, created_at) — single-use; ≤ 200 per (profile, device); one last-resort per (profile, device)
@@ -178,5 +185,9 @@ Beta store: one encrypted key-value table (`expo-sqlite` + SQLCipher, key in Key
 | Deleted account | hard delete ≤ 24 h; backups roll off ≤ 30 d |
 | History transfer chunks | ack, cancel or 2 h idle |
 | Chat backup | while on; 210 d without upload → deleted |
+| Support requests + messages + screenshots | 90 d after solved, or with the account |
+| Recovery claims / security events | 1 y |
+| Feedback | text until the GitHub issue exists (≤ 24 h), row 30 d |
+| Help notes (👎 reason) | 90 d |
 
 Enforcement is measured (EN-17): `Thirstr.Retention` counts rows past each deadline + grace and exports `thirstr_retention_overdue{rule}`; alert when > 0 for 1 h (`docs/runbooks/monitoring.md`). A new retention rule adds a probe there.

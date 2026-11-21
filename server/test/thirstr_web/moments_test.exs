@@ -73,6 +73,15 @@ defmodule ThirstrWeb.MomentsTest do
     assert moments_of(other.c, other.pid) |> json_response(404)
   end
 
+  # #247 R-07.44: friends are resolved on the phone like favorites; only ids reach the server.
+  test "friends audience: only listed people", %{poster: p, viewer: v, conn: conn} do
+    other = onboarded(conn, cell: zurich_ring(2))
+    share!(p.c, %{audience: "friends", audience_ids: [v.pid]})
+
+    assert moments_of(v.c, p.pid) |> json_response(200) |> Map.get("moments") |> length() == 1
+    assert moments_of(other.c, p.pid) |> json_response(404)
+  end
+
   @tag ac: "AC-21.3"
   test "blocking removes access at once", %{poster: p, viewer: v} do
     share!(p.c)

@@ -3,7 +3,9 @@ import { Dimensions, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, V
 import { tx } from '../i18n/app';
 import { v2 } from '../i18n/v2';
 import { color, radius, space, tileFor, type } from '../theme/tokens';
-import { Banner, Button, EmptyState, Field, Icon, ListRow, Loading, Scrim, Section, SectionLabel, Sheet } from '../ui';
+import { Banner, Button, EmptyState, Field, Icon, ListRow, Loading, Scrim, Section, SectionLabel, Sheet, Toggle } from '../ui';
+import { ppl } from '../i18n/people';
+import { friendList } from './people';
 import * as A from './albums';
 import type * as E from './engine';
 import { getConv } from './engine';
@@ -191,6 +193,17 @@ export function AlbumEditScreen({ navigation, route }: { navigation: Nav; route:
         </Pressable>
       </View>
       {err ? <Banner tone="danger" text={err} /> : null}
+      {/* #247 R-07.45: one switch for every friend, new ones too. */}
+      <Section>
+        <Toggle
+          label={ppl.albumFriends}
+          sub={a.friends ? ppl.albumFriendsOn(friendList('yes').length) : ppl.albumFriendsSub}
+          value={!!a.friends}
+          disabled={busy === 'friends'}
+          onChange={(v) => run('friends', () => A.setFriendsOpen(a.id, v))}
+          tone={color.friends}
+        />
+      </Section>
       <SectionLabel>{tx.albums.sharedWith}</SectionLabel>
       {a.shares.length === 0 ? <Banner tone="trust" text={tx.albums.notShared} /> : null}
       {a.shares.length ? (
@@ -201,7 +214,7 @@ export function AlbumEditScreen({ navigation, route }: { navigation: Nav; route:
           <ListRow
             key={s.cid}
             title={c?.name ?? '…'}
-            sub={s.until ? tx.albums.until(new Date(s.until).toLocaleString()) : undefined}
+            sub={s.via === 'friends' ? ppl.viaFriends : s.until ? tx.albums.until(new Date(s.until).toLocaleString()) : undefined}
             right={busy === s.cid ? '…' : tx.albums.revoke}
             danger
             onPress={() => run(s.cid, () => A.revoke(a.id, s.cid))}

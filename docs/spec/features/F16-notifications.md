@@ -11,6 +11,7 @@
 - R-16.8 Badge count = unread chats.
 - R-16.9 No marketing pushes. Product announcements only in-app.
 - R-16.10 Delivery (SR-02, #142): APNs (iOS) and FCM HTTP v1 (Android, `FCM_SERVICE_ACCOUNT_JSON`), same content-free wording. 429 / 5xx / network errors retry after 5 s, 15 s, 45 s, 2 min; 400/410 (APNs) and UNREGISTERED (FCM) forget the token; revoked devices get none. If Valkey is down the 20 s throttle falls back to job uniqueness (SR-11).
+- R-16.11 Friend-online alert (#247, F-07 R-07.48): a local notification from the phone, foreground checks only; no server push.
 
 ## Acceptance criteria
 - AC-16.1 APNs/FCM payload inspection shows no names, text or image URLs.

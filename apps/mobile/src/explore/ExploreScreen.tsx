@@ -39,6 +39,7 @@ import { MomentsRow } from '../moments/MomentsRow';
 import * as Moments from '../moments/api';
 import * as People from '../chat/people';
 import { convWith } from '../chat/engine';
+import { useFriendLocs } from '../chat/friendLoc';
 import { ppl } from '../i18n/people';
 import { away, filterMap, keep, restoreShow, Show, SHOW_KEY, showIds, wantMore } from './show';
 import { readSnapshot, saveSnapshot, snapshotSig } from './snapshot';
@@ -261,7 +262,7 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
     const b = bbox.current;
     if (!b) return;
     loadPlaces(kinds, b)
-      .then((r) => setPlaces(r.places))
+      .then((r) => setPlaces(r.places ?? []))
       .catch(() => {});
   }, [kinds]);
   useEffect(() => {
@@ -446,10 +447,23 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   const friendIds = useMemo(() => People.friendList('yes'), [peopleTick]); // eslint-disable-line react-hooks/exhaustive-deps
   const ids = useMemo(() => showIds(show, favIds, friendIds), [show, favIds, friendIds]);
   const shown = useMemo(() => (items ? keep(items, ids) : items), [items, ids]);
-  const shownMap = useMemo(() => filterMap(mapData, ids), [mapData, ids]);
+  // #247 R-07.47: friends who share their spot with me (E2EE), drawn like Area people.
+  const friendLocs = useFriendLocs();
+  const shownMap = useMemo(() => {
+    const m = filterMap(mapData, ids);
+    if (!friendLocs.length || look) return m;
+    const have = new Set([...(m?.avatars ?? []), ...(m?.pins ?? [])].map((c) => c.id));
+    const extra: Card[] = friendLocs
+      .filter((f) => !have.has(f.peer) && (!ids || ids.has(f.peer)))
+      .map((f) => {
+        const c = convWith(f.peer);
+        return { id: f.peer, display_name: c?.name ?? '…', age: c?.age ?? 0, verified: !!c?.verified, photo: c?.photo ?? null, online: true, distance: null, now: null, exact: false, pin_expires_at: null, further: false, creator: false, intent: null, position: null, new: false, lat: f.lat, lng: f.lng, intents: ['friends'] };
+      });
+    return { cells: m?.cells ?? [], pins: m?.pins ?? [], avatars: [...(m?.avatars ?? []), ...extra] };
+  }, [mapData, ids, friendLocs, look]);
   const awayIds = useMemo(
-    () => away(ids, show === 'fav' ? favIds : friendIds, [...(items ?? []).map((c) => c.id), ...(mapData?.avatars ?? []).map((c) => c.id), ...(mapData?.pins ?? []).map((c) => c.id)]),
-    [ids, show, favIds, friendIds, items, mapData],
+    () => away(ids, show === 'fav' ? favIds : friendIds, [...(items ?? []).map((c) => c.id), ...(mapData?.avatars ?? []).map((c) => c.id), ...(mapData?.pins ?? []).map((c) => c.id), ...friendLocs.map((f) => f.peer)]),
+    [ids, show, favIds, friendIds, items, mapData, friendLocs],
   );
   const paging = useRef(false);
   useEffect(() => {

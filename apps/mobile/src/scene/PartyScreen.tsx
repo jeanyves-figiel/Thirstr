@@ -13,6 +13,8 @@ import { Who } from './TonightScreen';
 import type { Party } from './types';
 import { usePull } from '../ui/pull';
 import { day, time } from './types';
+import { InviteFriendsSheet, invitable } from './InviteFriendsSheet';
+import { ppl } from '../i18n/people';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void };
 
@@ -35,6 +37,7 @@ export function PartyScreen({ navigation, route }: { navigation: Nav; route: { p
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [addrOpen, setAddrOpen] = useState(false);
+  const [invOpen, setInvOpen] = useState(false);
   const [addr, setAddr] = useState('');
   const [note, setNote] = useState<string | null>(null);
   const mine = me.profile;
@@ -129,6 +132,8 @@ export function PartyScreen({ navigation, route }: { navigation: Nav; route: { p
         <>
           {p.invite_code ? <Banner tone="trust" text={`${tx.party.inviteLink}: ${p.invite_code}`} /> : null}
           <Button testID="party-chat" title={tx.party.guestChat} onPress={chat} disabled={!accepted.length} />
+          {invitable().length ? <Button testID="party-invite-friends" kind="secondary" title={ppl.inviteFriends} onPress={() => setInvOpen(true)} /> : null}
+          <InviteFriendsSheet party={p} visible={invOpen} onClose={() => setInvOpen(false)} />
           <Button
             testID="party-address"
             kind="secondary"

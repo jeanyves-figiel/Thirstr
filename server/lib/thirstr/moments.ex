@@ -10,7 +10,7 @@ defmodule Thirstr.Moments do
   - "everyone" = the Explore audience: blocks both ways, active accounts, `hide_from_unverified`,
     the viewer's lens ∩ the Moment's intents, `main_ok` outside Hookup (R-21.6, R-21.8);
     Safe Mode viewers see only Moments they are listed in (R-21.21);
-  - chats / favorites are resolved on the phone; the server only stores the profile ids;
+  - chats / favorites / friends (#247) are resolved on the phone; the server only stores the profile ids;
   - not allowed and "no Moment" both answer 404 (AC-21.2);
   - everything is hard-deleted at expiry, storage objects included (R-21.22).
   """
@@ -20,7 +20,7 @@ defmodule Thirstr.Moments do
 
   @types ~w(image/jpeg image/png image/heic image/webp image/avif)
   @ttls [3600, 21_600, 86_400]
-  @audiences ~w(everyone chats favorites)
+  @audiences ~w(everyone chats favorites friends)
   @styles ~w(clean pill pop)
   @intents ~w(hookup friends sport)
   @max_live 10
@@ -129,7 +129,7 @@ defmodule Thirstr.Moments do
 
   # R-21.3 / R-21.6 option checks, first failure wins.
   @checks [
-    {:audience, &__MODULE__.bad_audience?/1, "everyone, chats or favorites"},
+    {:audience, &__MODULE__.bad_audience?/1, "everyone, chats, favorites or friends"},
     {:audience, &__MODULE__.closed_everyone?/1,
      "You're hidden: only people you chat with or Favorites"},
     {:ttl_s, &__MODULE__.bad_ttl?/1, "1, 6 or 24 hours"},

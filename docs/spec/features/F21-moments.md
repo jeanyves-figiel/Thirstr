@@ -58,6 +58,7 @@ Show what you look like **right now**, tonight, at the gym, getting ready, witho
 ## Performance & data saving
 - R-21.27 Rings come with existing payloads: Explore cards and profiles gain `moments: {live: n, unseen: bool}` (2 fields, no extra call). The viewer fetches `GET /moments/:account_id` only when opened; the next person's first Moment is prefetched (480 px copy first, full image when the viewer opens it). On cellular with Low Data Mode, only 480 px copies load until tapped "Full quality".
 - R-21.28 Seen state is kept on the device (SQLCipher `moments.seen`, ids expire with the Moment) and posted in batches (`POST /moments/views`, max every 10 s) for the viewer counts.
+- R-21.29 Audience **Friends** (#247, F-07 R-07.44): accepted friends, resolved on the phone into `moment_audience` like Chats and Favorites; the server stores ids only, never the word friend.
 
 ## API (api.md › Moments)
 - `POST /moments/uploads` → presigned PUTs for the photo and its 480 px copy; then `POST /moments/:id/publish` (caption, audience `everyone|chats|favorites` + `audience_ids` for lists, intents[], ttl `3600|21600|86400`) → `{id, status: "live"|"review"|"rejected", expires_at}`.

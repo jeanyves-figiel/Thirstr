@@ -16,6 +16,32 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 4,
+    date: '2026-11-21',
+    lines: [
+      {
+        tone: 'personal',
+        glyph: 'pin',
+        to: tab('Explore'),
+        text: {
+          en: ['Favorites on the map', 'Star chip: only favorites or friends.'],
+          fr: ['Favoris sur la carte', 'Étoile : seulement favoris ou amis.'],
+          de: ['Favoriten auf der Karte', 'Stern: nur Favoriten oder Freunde.'],
+        },
+      },
+      {
+        tone: 'friends',
+        glyph: 'hand',
+        to: tab('Chats'),
+        text: {
+          en: ['Friends get more', 'Albums, Moments, parties, safety, map.'],
+          fr: ['Plus pour les amis', 'Albums, Moments, soirées, sécurité, carte.'],
+          de: ['Mehr für Freunde', 'Alben, Moments, Partys, Sicherheit, Karte.'],
+        },
+      },
+    ],
+  },
+  {
     id: 3,
     date: '2026-11-21',
     lines: [

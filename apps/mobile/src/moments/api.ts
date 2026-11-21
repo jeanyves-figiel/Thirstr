@@ -4,7 +4,7 @@ import { api, putBlob } from '../api/client';
 import type { Mode } from '../api/types';
 import { makeThumb } from '../api/photoUpload';
 
-export type Audience = 'everyone' | 'chats' | 'favorites';
+export type Audience = 'everyone' | 'chats' | 'favorites' | 'friends';
 export type CaptionStyle = 'clean' | 'pill' | 'pop';
 export type Ttl = 3600 | 21600 | 86400;
 export const TTLS: Ttl[] = [3600, 21600, 86400];

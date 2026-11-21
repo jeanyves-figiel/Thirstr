@@ -7,11 +7,13 @@ import { api } from '../api/client';
 import { fromB64, hex, rand } from './bytes';
 import * as E from './engine';
 import { kv } from './kv';
+import * as People from './people';
 import { readBytes, uploadEncrypted } from './media';
 import * as Video from './video';
 
-export type Share = { cid: string; until?: number };
-export type Album = { id: string; name: string; items: E.AlbumItem[]; shares: Share[] };
+/** `via: 'friends'` = added by "Open to all friends" (#247 R-07.45), removed with the friendship. */
+export type Share = { cid: string; until?: number; via?: 'friends' };
+export type Album = { id: string; name: string; items: E.AlbumItem[]; shares: Share[]; friends?: boolean };
 
 const emit = new Set<() => void>();
 export const onAlbums = (fn: () => void) => {
@@ -130,3 +132,41 @@ export async function receivedGrant(cid: string, album: string) {
   if (!g || (g.until && g.until < Date.now())) return null;
   return g;
 }
+
+// ------------------------------------------------------------------ open to all friends (#247 R-07.45)
+
+const friendCids = () =>
+  People.friendList('yes')
+    .map((p) => E.convWith(p)?.id)
+    .filter((c): c is string => !!c);
+
+async function grantFriend(id: string, cid: string) {
+  const a = await update(id, (x) => (x.shares.some((s) => s.cid === cid) ? x : { ...x, shares: [...x.shares, { cid, via: 'friends' }] }));
+  const s = a?.shares.find((x) => x.cid === cid);
+  if (a && s?.via === 'friends') await E.send(cid, { t: 'album.grant', album: a.id, name: a.name, items: a.items }, { silent: true }).catch(() => {});
+}
+
+/** On: every accepted friend gets the album (and each new friend on accept). Off: friend shares are revoked; hand shares stay. */
+export async function setFriendsOpen(id: string, on: boolean) {
+  const a = await update(id, (x) => ({ ...x, friends: on }));
+  if (!a) return;
+  if (on) {
+    for (const cid of friendCids()) await grantFriend(id, cid);
+    return;
+  }
+  const mine = a.shares.filter((s) => s.via === 'friends');
+  if (!mine.length) return;
+  for (const s of mine) await E.send(s.cid, { t: 'album.revoke', album: id }, { silent: true }).catch(() => {});
+  const rotated = await rotate({ ...a, shares: a.shares.filter((s) => s.via !== 'friends') });
+  await update(id, () => rotated);
+  await regrant(rotated);
+}
+
+E.onFriendChange((cid, _peer, now, was) => {
+  void (async () => {
+    for (const a of await listAlbums()) {
+      if (now === 'yes' && a.friends && cid) await grantFriend(a.id, cid);
+      else if (was === 'yes' && now !== 'yes' && a.shares.some((s) => s.cid === cid && s.via === 'friends')) await revoke(a.id, cid);
+    }
+  })().catch(() => {});
+});

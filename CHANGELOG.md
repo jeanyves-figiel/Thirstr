@@ -12,6 +12,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.
 
 ### Changed
+- **`support@thirstr.fun` mailbox** (ops, #178): ImprovMX alias forwards to the owner, like `hello@`, `contact@`, `bug@` and `dpo@`.
 - **Active now sheet: two stops, same content** (app, #250, F-04 R-04.14, [mockup option B](https://claude.ai/artifact/4otVv3QabTP8n5jcsFcVwH)): the sheet over the Explore map now has only a low **strip** (title, then the Moments row with You first; most of the screen stays map) and **full**. Both show the same list (Moments row, hold hint, grid), so the You row no longer appears only at a middle stop. Tapping the handle toggles; a phone that had the old middle stop saved opens on the strip.
 
 ### Fixed

@@ -1,5 +1,7 @@
 # F-22 Help & support (EN-19, #178)
 
+[Mockup, approved 2026-11-21](https://claude.ai/artifact/8dj76bVvENgDfkLUHxGW83).
+
 ## Purpose
 Members find answers in the app, reach a human when they need one, get a locked or stolen account back without anyone at Thirstr being able to hand it to the wrong person, and tell us what to build next. Budget €0 (decided 2026-11-21, #178): no helpdesk vendor in beta; a Zammad / EU helpdesk is revisited at open beta.
 

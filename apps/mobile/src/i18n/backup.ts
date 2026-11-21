@@ -27,6 +27,8 @@ const en = {
   restoring: (done: number, total: number) => `Restoring chats · ${done} of ${total}`,
   restored: (n: number) => `${n} messages are back`,
   restoreFailed: "Restore didn't finish. Try again.",
+  wordsSub: 'They unlock your chat backup. They never leave this phone.',
+  wrongWords: "These words don't open this backup.",
 };
 type S = typeof en;
 const fr: S = {
@@ -54,6 +56,8 @@ const fr: S = {
   restoring: (done, total) => `Restauration des chats · ${done} sur ${total}`,
   restored: (n) => `${n} messages sont de retour`,
   restoreFailed: 'La restauration n’a pas abouti. Réessaie.',
+  wordsSub: 'Ils déverrouillent ta sauvegarde des chats. Ils ne quittent jamais ce téléphone.',
+  wrongWords: 'Ces mots n’ouvrent pas cette sauvegarde.',
 };
 const de: S = {
   title: 'Chat-Backup',
@@ -80,6 +84,8 @@ const de: S = {
   restoring: (done, total) => `Chats werden wiederhergestellt · ${done} von ${total}`,
   restored: (n) => `${n} Nachrichten sind zurück`,
   restoreFailed: 'Die Wiederherstellung wurde nicht fertig. Versuch es nochmal.',
+  wordsSub: 'Sie entsperren dein Chat-Backup. Sie verlassen dieses Handy nie.',
+  wrongWords: 'Diese Wörter öffnen dieses Backup nicht.',
 };
 const lang = getLocales()[0]?.languageCode ?? 'en';
 export const bx: S = lang === 'fr' ? fr : lang === 'de' ? de : en;

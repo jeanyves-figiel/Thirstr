@@ -1,14 +1,19 @@
 // Settings › Chats & media › Chat backup (F-01 R-01.15, #146, mockup board 4) and the restore card
 // in Chats (board 5: started from "You're back" or shown when this phone has no chats yet).
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { api } from '../../api/client';
-import { vaultKey } from '../../auth/recovery';
+import { deriveKeys, vaultKey } from '../../auth/recovery';
 import * as B from '../../chat/backup';
 import * as E from '../../chat/engine';
 import { tx } from '../../i18n/app';
+import { rx } from '../../i18n/recovery';
+import { StepShell } from '../../onboarding/kit';
+import { WordGrid, wordsProblemText } from '../../screens/RecoverSignIn';
 import { bx, mb } from '../../i18n/backup';
 import { color, radius, space, type } from '../../theme/tokens';
+import { ErrorText } from '../../ui';
 import { Group, Page, Row, SwitchRow } from './parts';
 
 type Nav = { navigate: (s: string, p?: object) => void };
@@ -109,6 +114,8 @@ export function RestoreCard() {
   const [prog, setProg] = useState<[number, number]>([0, 0]);
   const [n, setN] = useState(0);
   const [hidden, setHidden] = useState(true);
+  const [needWords, setNeedWords] = useState(false);
+  const nav = useNavigation<Nav>();
 
   const start = useCallback(async () => {
     setState('running');
@@ -122,20 +129,25 @@ export function RestoreCard() {
     }
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      const i = await B.info();
-      if (!i) return;
-      setInfo(i);
-      const pending = await B.restorePending();
-      if (pending) {
-        setHidden(false);
-        start();
-      } else if (!E.getConvs().length && (await vaultKey())) {
-        setHidden(false);
-      }
-    })().catch(() => {});
-  }, [start]);
+  // Re-checked on focus: the words screen (#261) asks for a restore and comes back here.
+  useFocusEffect(
+    useCallback(() => {
+      if (state !== 'idle') return;
+      (async () => {
+        const i = await B.info();
+        if (!i) return;
+        setInfo(i);
+        const key = await vaultKey();
+        setNeedWords(!key);
+        if (key && (await B.restorePending())) {
+          setHidden(false);
+          start();
+        } else if (!E.getConvs().length) {
+          setHidden(false);
+        }
+      })().catch(() => {});
+    }, [start, state]),
+  );
 
   if (hidden || !info) return null;
   return (
@@ -155,11 +167,46 @@ export function RestoreCard() {
       ) : (
         <>
           <Text style={{ ...type.meta, color: color.fgSecondary }}>{state === 'failed' ? bx.restoreFailed : `${bx.restoreMeta(when(info.updated_at), mb(info.bytes))}. ${bx.restoreLater}`}</Text>
-          <Pressable testID="restore-start" accessibilityRole="button" onPress={start} style={({ pressed }) => ({ height: 48, borderRadius: radius.pill, backgroundColor: color.trust, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
+          <Pressable testID="restore-start" accessibilityRole="button" onPress={needWords ? () => nav.navigate('RestoreWords') : start} style={({ pressed }) => ({ height: 48, borderRadius: radius.pill, backgroundColor: color.trust, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
             <Text style={{ ...type.headline, color: color.onAccent }}>{bx.restore}</Text>
           </Pressable>
         </>
       )}
     </View>
+  );
+}
+
+/** #261: restore on a phone signed in without the words (passkey, email). The key stays only if it opens the backup. */
+export function RestoreWordsScreen({ navigation }: { navigation: { goBack: () => void } }) {
+  const [words, setWords] = useState<string[]>(Array(12).fill(''));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const problem = wordsProblemText(words);
+
+  const go = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await B.unlock(deriveKeys(words).vaultKey);
+      await B.requestRestore();
+      navigation.goBack();
+    } catch (e) {
+      setErr(e instanceof B.WrongWords ? bx.wrongWords : tx.common.error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <StepShell
+      title={rx.enterTitle}
+      sub={bx.wordsSub}
+      onBack={navigation.goBack}
+      scroll
+      cta={{ title: bx.restore, onPress: go, busy, disabled: !words.every((w) => w.trim()) || !!problem, fill: color.trust, testID: 'restore-words-go' }}
+    >
+      <WordGrid words={words} onChange={(w) => (setErr(null), setWords(w))} />
+      <ErrorText text={err ?? problem} />
+    </StepShell>
   );
 }

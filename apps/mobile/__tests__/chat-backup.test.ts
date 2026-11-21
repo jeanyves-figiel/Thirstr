@@ -135,6 +135,17 @@ describe('#146 chat backup (R-01.15)', () => {
     await expect(B.restore()).rejects.toBeInstanceOf(B.WrongWords);
   });
 
+  it('#261: typed words are kept only when they open the backup', async () => {
+    await B.turnOn();
+    const right = mockVaultKey!;
+    mockVaultKey = null;
+    await expect(B.unlock(new Uint8Array(32).fill(9))).rejects.toBeInstanceOf(B.WrongWords);
+    expect(mockVaultKey).toBeNull();
+    await B.unlock(right);
+    expect(mockVaultKey).toEqual(right);
+    expect((await B.restore()).messages).toBe(3);
+  });
+
   it('daily on Wi-Fi only when on', async () => {
     await B.backupIfDue();
     expect(mockServer.segs).toHaveLength(0);

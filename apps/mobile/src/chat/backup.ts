@@ -184,6 +184,17 @@ export const clearRestorePending = () => AsyncStorage.removeItem(PENDING).catch(
  * Restore (R-01.15): newest segments land last, so a later row wins; tombstones apply in order.
  * `vault` = key from the words when this phone has none yet (kept only if it opens the backup).
  */
+/** #261: checks typed words open this account's backup, then keeps the vault key on this phone. */
+export async function unlock(vault: Uint8Array) {
+  const r = await api<{ manifest: string }>('GET', '/me/backup/manifest');
+  try {
+    openBox<Manifest>(chatKey(vault), fromB64(r.manifest));
+  } catch {
+    throw new WrongWords();
+  }
+  await keepVaultKey(vault);
+}
+
 export async function restore(opts: { vault?: Uint8Array; onProgress?: (done: number, total: number) => void } = {}) {
   const vault = opts.vault ?? (await vaultKey());
   if (!vault) throw new WrongWords();

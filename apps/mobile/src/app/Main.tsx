@@ -29,7 +29,7 @@ import { quickLevel } from '../explore/level';
 import { LensPreviewScreen } from '../me/LensPreviewScreen';
 import { SettingsScreen } from '../me/SettingsScreen';
 import { DataSaverSettings } from '../me/settings/DataSaverScreen';
-import { ChatBackupSettings } from '../me/settings/ChatBackupScreen';
+import { ChatBackupSettings, RestoreWordsScreen } from '../me/settings/ChatBackupScreen';
 import { backupIfDue as chatBackupIfDue } from '../chat/backup';
 import { AccountSettings, ChatSettings, DeleteAccount, NotificationSettings, PrivacySettings, SafetySettings } from '../me/settings/screens';
 import { TapsScreen } from '../me/TapsScreen';
@@ -406,6 +406,7 @@ export function Main() {
           <Stack.Screen name="ChatSettings" component={ChatSettings} options={sub} />
           <Stack.Screen name="DataSaverSettings" component={DataSaverSettings} options={sub} />
           <Stack.Screen name="ChatBackupSettings" component={ChatBackupSettings as React.ComponentType} options={sub} />
+          <Stack.Screen name="RestoreWords" component={RestoreWordsScreen as React.ComponentType} options={{ headerShown: false }} />
           <Stack.Screen name="NotificationSettings" component={NotificationSettings} options={sub} />
           <Stack.Screen name="SafetySettings" component={SafetySettings as React.ComponentType} options={sub} />
           <Stack.Screen name="AccountSettings" component={AccountSettings as React.ComponentType} options={sub} />

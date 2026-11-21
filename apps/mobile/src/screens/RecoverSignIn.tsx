@@ -17,34 +17,9 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { da
 
 export function RecoverSignInScreen({ onBack, onDone }: { onBack: () => void; onDone: (me: Me, restored: R.Restored | null) => void }) {
   const [words, setWords] = useState<string[]>(Array(12).fill(''));
-  const [at, setAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const refs = useRef<(React.ComponentRef<typeof TextInput> | null)[]>([]);
-
-  const full = words.every((w) => w.trim());
-  const p = R.wordsProblem(words);
-  const problem = p === 'checksum' ? rx.checksum : p ? rx.notWord(p.notWord) : null;
-  const sugg = R.suggest(words[at] ?? '').filter((w) => w !== words[at]?.trim().toLowerCase());
-
-  const put = (i: number, v: string) => {
-    // a pasted phrase in any field fills all 12
-    const parts = v.trim().split(/\s+/);
-    if (parts.length >= 12) return fill(parts);
-    setErr(null);
-    setWords((ws) => ws.map((w, j) => (j === i ? v.replace(/\s/g, '').toLowerCase() : w)));
-    if (/\s$/.test(v) && i < 11) refs.current[i + 1]?.focus();
-  };
-  const fill = (parts: string[]) => {
-    setErr(null);
-    setWords(R.normalize(parts).slice(0, 12).concat(Array(12).fill('')).slice(0, 12));
-    refs.current[11]?.blur();
-  };
-  const pick = (w: string) => {
-    setWords((ws) => ws.map((x, j) => (j === at ? w : x)));
-    if (at < 11) refs.current[at + 1]?.focus();
-  };
-  const paste = async () => fill((await Clipboard.getStringAsync()).split(/\s+/));
+  const problem = wordsProblemText(words);
 
   const go = async () => {
     setBusy(true);
@@ -65,8 +40,44 @@ export function RecoverSignInScreen({ onBack, onDone }: { onBack: () => void; on
       sub={rx.enterSub}
       onBack={onBack}
       scroll
-      cta={{ title: rx.signIn, onPress: go, busy, disabled: !full || !!problem, fill: color.trust, testID: 'recover-signin' }}
+      cta={{ title: rx.signIn, onPress: go, busy, disabled: !words.every((w) => w.trim()) || !!problem, fill: color.trust, testID: 'recover-signin' }}
     >
+      <WordGrid words={words} onChange={(w) => (setErr(null), setWords(w))} />
+      <ErrorText text={err ?? problem} />
+    </StepShell>
+  );
+}
+
+export const wordsProblemText = (words: string[]) => {
+  const p = R.wordsProblem(words);
+  return p === 'checksum' ? rx.checksum : p ? rx.notWord(p.notWord) : null;
+};
+
+/** S-65 word grid: 2 × 6 numbered fields, suggestion bar, Paste fills all 12. Also used by #261. */
+export function WordGrid({ words, onChange }: { words: string[]; onChange: (w: string[]) => void }) {
+  const [at, setAt] = useState(0);
+  const refs = useRef<(React.ComponentRef<typeof TextInput> | null)[]>([]);
+  const sugg = R.suggest(words[at] ?? '').filter((w) => w !== words[at]?.trim().toLowerCase());
+
+  const fill = (parts: string[]) => {
+    onChange(R.normalize(parts).slice(0, 12).concat(Array(12).fill('')).slice(0, 12));
+    refs.current[11]?.blur();
+  };
+  const put = (i: number, v: string) => {
+    // a pasted phrase in any field fills all 12
+    const parts = v.trim().split(/\s+/);
+    if (parts.length >= 12) return fill(parts);
+    onChange(words.map((w, j) => (j === i ? v.replace(/\s/g, '').toLowerCase() : w)));
+    if (/\s$/.test(v) && i < 11) refs.current[i + 1]?.focus();
+  };
+  const pick = (w: string) => {
+    onChange(words.map((x, j) => (j === at ? w : x)));
+    if (at < 11) refs.current[at + 1]?.focus();
+  };
+  const paste = async () => fill((await Clipboard.getStringAsync()).split(/\s+/));
+
+  return (
+    <>
       <View style={s.grid}>
         {[0, 1, 2, 3, 4, 5].map((r) => (
           <View key={r} style={s.row}>
@@ -116,8 +127,7 @@ export function RecoverSignInScreen({ onBack, onDone }: { onBack: () => void; on
           </Pressable>
         )}
       </View>
-      <ErrorText text={err ?? problem} />
-    </StepShell>
+    </>
   );
 }
 

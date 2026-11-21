@@ -162,6 +162,17 @@ defmodule ThirstrWeb.IntegrityTest do
                |> json_response(200)
     end
 
+    test "#270: flag verification_attest off = kill switch, no proof needed", %{u: u} do
+      Thirstr.Flags.set("verification_attest", false, %{}, "test")
+      on_exit(fn -> Thirstr.Flags.delete("verification_attest") end)
+      n = vchallenge(u)
+
+      assert %{"signature" => _} =
+               authed(u)
+               |> post("/v1/verification/attest", %{nonce: n, passed: true, blinded: blinded()})
+               |> json_response(200)
+    end
+
     test "#270: App Attest assertion over nonce.blinded is accepted once; wrong data refused", %{
       u: u
     } do

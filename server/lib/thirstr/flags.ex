@@ -19,7 +19,10 @@ defmodule Thirstr.Flags do
     "travel" => true,
     "parties" => true,
     "translate" => true,
-    "web_push" => true
+    "web_push" => true,
+    # #270 server-side switch: off = verification issues without device proof (kill switch if
+    # attestation breaks for real users). Only matters where VERIFICATION_REQUIRE_ATTEST is on.
+    "verification_attest" => true
   }
   @table :thirstr_flags
   @ttl_ms 30_000

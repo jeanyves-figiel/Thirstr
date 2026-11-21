@@ -11,7 +11,8 @@ defmodule Thirstr.Verification do
 
   Failures: 3 in 24 h → 24 h cooldown (R-03.10). Credentials expire after 12 months (R-03.7).
 
-  #270: a passed result is only a hint. With `:verification_requires_attest` (staging + prod), it
+  #270: a passed result is only a hint. With `:verification_requires_attest` (staging + prod) and
+  the EN-13 flag `verification_attest` (default on; set it off to switch without a deploy), it
   must come with device proof over `"<nonce>.<blinded>"` from this session's device: an App Attest
   assertion (iOS) or a Play Integrity token (Android), `Thirstr.DeviceAttest.prove/3`. A scripted
   client without a genuine app on a genuine device gets no signature. Issuance is also capped per
@@ -75,7 +76,8 @@ defmodule Thirstr.Verification do
   end
 
   defp device_proof(device_id, nonce, p) do
-    if Application.get_env(:thirstr, :verification_requires_attest, false) do
+    if Application.get_env(:thirstr, :verification_requires_attest, false) and
+         Thirstr.Flags.enabled?("verification_attest") do
       case DeviceAttest.prove(device_id, nonce <> "." <> to_string(p["blinded"]), p) do
         :ok ->
           :ok

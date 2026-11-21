@@ -11,6 +11,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.
 
 ### Changed
+- **Selfie verification checks your photos** (app, #232, F-03 R-03.2, [mockup](https://claude.ai/artifact/NMwBrnBPp5Kwgy4p6k5M5E)): after the liveness moves, the phone compares two frontal selfie stills with the face in your own public photos (same on-device SFace model as the video check). Both must match; otherwise it counts as a failed try with "Your face doesn't match your photos". No face in any of your photos still verifies (no photo claim). Photos that don't load, or a still without a face, ask again without spending a try. Stills are deleted right after; nothing new is sent to the server. New native call `matchStills` in `modules/thirstr-face`.
 - **Active now sheet: two stops, same content** (app, #250, F-04 R-04.14, [mockup option B](https://claude.ai/artifact/4otVv3QabTP8n5jcsFcVwH)): the sheet over the Explore map now has only a low **strip** (title, then the Moments row with You first; most of the screen stays map) and **full**. Both show the same list (Moments row, hold hint, grid), so the You row no longer appears only at a middle stop. Tapping the handle toggles; a phone that had the old middle stop saved opens on the strip.
 
 ### Fixed

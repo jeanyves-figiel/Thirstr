@@ -29,6 +29,8 @@ defmodule Thirstr.Jobs.ExpirySweep do
     Thirstr.ClientErrors.sweep()
     # F-01 R-01.15: unfinished chat-backup uploads, idle backups
     Thirstr.ChatBackup.sweep()
+    # F-01 R-01.14: history transfers idle 2 h or finished
+    Thirstr.Transfer.sweep()
     :ok
   end
 end

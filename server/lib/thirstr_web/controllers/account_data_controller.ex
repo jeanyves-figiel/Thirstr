@@ -1,7 +1,7 @@
 defmodule ThirstrWeb.AccountDataController do
   @moduledoc "B4d: data export (R-01.11), linked devices (R-01.6), linked accounts (I-01), share links (I-02)."
   use ThirstrWeb, :controller
-  alias Thirstr.{ChatBackup, DeviceAttest, DeviceLink, Export, Linked, Recovery, Social}
+  alias Thirstr.{ChatBackup, DeviceAttest, Transfer, DeviceLink, Export, Linked, Recovery, Social}
 
   action_fallback ThirstrWeb.FallbackController
 
@@ -22,7 +22,7 @@ defmodule ThirstrWeb.AccountDataController do
   # devices
   def devices(conn, _), do: json(conn, DeviceLink.devices(me(conn), conn.assigns.device_id))
   def remove_device(conn, %{"id" => id}), do: DeviceLink.remove(me(conn), id) |> done(conn)
-  def link_start(conn, _), do: DeviceLink.start(me(conn)) |> done(conn)
+  def link_start(conn, p), do: DeviceLink.start(me(conn), p) |> done(conn)
   def link_status(conn, %{"code" => c}), do: DeviceLink.status(me(conn), c) |> done(conn)
   def link_confirm(conn, %{"code" => c}), do: DeviceLink.confirm(me(conn), c) |> done(conn)
 
@@ -55,6 +55,25 @@ defmodule ThirstrWeb.AccountDataController do
   def backup_commit(conn, p), do: ChatBackup.commit(me(conn), p) |> done(conn)
   def backup_get(conn, _), do: ChatBackup.get(me(conn)) |> done(conn)
   def backup_delete(conn, _), do: ChatBackup.delete(me(conn)) |> done(conn)
+
+  # R-01.14 history transfer to a new phone (#146)
+  def xfer_create(conn, p), do: Transfer.create(me(conn), dev(conn), p) |> done(conn)
+  def xfer_incoming(conn, _), do: Transfer.incoming(me(conn), dev(conn)) |> done(conn)
+  def xfer_get(conn, %{"id" => id}), do: Transfer.get(me(conn), dev(conn), id) |> done(conn)
+
+  def xfer_chunk(conn, %{"id" => id} = p),
+    do: Transfer.chunk(me(conn), dev(conn), id, p) |> done(conn)
+
+  def xfer_ready(conn, %{"id" => id, "n" => n}),
+    do: Transfer.ready(me(conn), dev(conn), id, n) |> done(conn)
+
+  def xfer_ack(conn, %{"id" => id} = p),
+    do: Transfer.ack(me(conn), dev(conn), id, p) |> done(conn)
+
+  def xfer_finish(conn, %{"id" => id} = p),
+    do: Transfer.finish(me(conn), dev(conn), id, p) |> done(conn)
+
+  def xfer_cancel(conn, %{"id" => id}), do: Transfer.cancel(me(conn), dev(conn), id) |> done(conn)
 
   def link_claim(conn, p) do
     case DeviceLink.claim(p) do

@@ -55,6 +55,12 @@ export async function put(blob: string, ct: Uint8Array, opts: { once?: boolean; 
   await save();
 }
 
+/** Size of a cached file (0 when not here). R-01.14 estimates the transfer with it. */
+export async function sizeOf(blob: string): Promise<number> {
+  if (WEB) return 0;
+  return (await load())[blob]?.size ?? 0;
+}
+
 export async function drop(blob: string) {
   if (WEB) return;
   const idx = await load();

@@ -1,6 +1,6 @@
 # I-01 Shared posts & linked accounts
 
-Issue #17. Owner decision 2026-11-21: **build all now, in closed beta** (D-23). [Mockup](https://claude.ai/artifact/LHYfbUwpEpAQviEa98VhPr) (6 boards), waiting for the owner's OK. Concept §5.
+Issue #17. Owner decision 2026-11-21: **build all now, in closed beta** (D-23). [Mockup](https://claude.ai/artifact/LHYfbUwpEpAQviEa98VhPr) (6 boards), OK'd by the owner 2026-11-21 ("Build as shown"). Concept §5.
 
 ## Purpose
 Guys already live on X, Bluesky, OnlyFans and JustFor.Fans. Two things should feel native in Thirstr:
@@ -18,7 +18,7 @@ Privacy first: Thirstr's server never sees which posts are shared, never fetches
 ## Rules
 
 ### A. Share into Thirstr (S-44)
-- R-I01.1 **Share target.** iOS Share Extension and Android `ACTION_SEND` intent filter accept a URL, or text containing one URL (first `https://` URL wins; `http://` upgraded; other schemes refused). Implementation: `expo-share-intent` config plugin. The extension shows no UI of its own beyond a 300 ms "Opening Thirstr…" and hands the URL to the app through the App Group (iOS) / intent (Android); nothing is stored in the extension after hand-off. Opening the app first keeps App lock and the duress PIN in force (F-13 R-13.11, same reason as the Live Activity, R-13.20).
+- R-I01.1 **Share target.** iOS Share Extension (`targets/share`, bundle `app.thirstr.share`, built by `@bacons/apple-targets`) accepts one web URL, or text containing one (first `https://` URL wins; `http://` upgraded; other schemes refused). It shows only the ink background, hands the text to the app as `thirstr://share?url=<percent-encoded>` and closes; **no App Group, nothing stored**. Android `ACTION_SEND` follows with the Android build (#107). Opening the app first keeps App lock and the duress PIN in force (F-13 R-13.11, same reason as the Live Activity, R-13.20).
 - R-I01.2 **Share sheet (S-44)**, full-height sheet over whatever screen was open:
   - top: the link card as the receiver will see it (R-I01.8), building state = skeleton with platform glyph and host, ready in ≤ 2 s on 4G (R-I01.5);
   - "Add a message" field (≤ 500 chars, optional, sent in the same message);
@@ -38,7 +38,7 @@ Privacy first: Thirstr's server never sees which posts are shared, never fetches
   - final URL = `og:url` if same registrable domain, else the last redirect target (so a shortener shows the real host);
   - thumbnail: first image, downloaded (≤ 5 MB), decoded and **re-encoded** to JPEG q 0.8, long side ≤ 480 px, EXIF stripped, target ≤ 40 KB; encrypted and uploaded as F-08 media (same key handling, same 30 d server TTL);
   - failure (timeout, blocked, no metadata) → card with host + URL only, never a blocking error.
-- R-I01.6 Preview cache on the sender's phone: by normalised URL (lower-case host, no `utm_*`/`fbclid`/`si`/`s`/`t` params), 24 h, max 200 entries, LRU; re-sharing the same post to more chats re-uses the encrypted thumbnail upload (new key per message, R-08.14).
+- R-I01.6 Preview cache on the sender's phone: by normalised URL (lower-case host, no `utm_*`/`fbclid`/`si`/`s`/`t` params), 24 h, max 200 entries, LRU; one share uploads the encrypted thumbnail once and sends the same reference to every chat of that share (the key travels only inside each E2EE message).
 - R-I01.7 Tracking parameters listed in R-I01.6 are **removed** from the URL that is sent.
 
 ### B. Link card in chat
@@ -70,8 +70,8 @@ Privacy first: Thirstr's server never sees which posts are shared, never fetches
 - R-I01.23 **Rate and duplicate signals without seeing links**:
   - phone limits: ≤ 5 chats per share, ≤ **40 link cards / 24 h** per account (counter on the phone; over the limit → "You've shared a lot today. Try again tomorrow.");
   - with each `link.preview` send the client adds `lh` = first 8 bytes of HMAC-SHA256(**device-only key**, normalised URL) to the send request (not to the ciphertext). The server can count "same link to many people **from this sender**" but cannot learn the link, compare senders or test guesses (it never has the key);
-  - server signal (R-15.5): one `lh` to ≥ 15 distinct recipients in 24 h, or ≥ 25 link sends to contacts with no reply in 7 d → score points; adult-platform host + ≥ 15 recipients/24 h → the phone shows the R-I01.21 note again (the phone knows the host; the server learns nothing about it).
-- R-I01.24 **Reports**: link card ⋯ → Report → **Shared without consent** (`non_consensual`, severe), **Spam / promotion** (`spam_bot`), **Something else**. The franked message (R-07.11) carries `url`, `title`, `text` only (no thumbnail). The card is hidden for the reporter at once. Profile view linked chip ⋯ → Report → **Not his account** (`impersonation`): ≥ 2 independent reports → ✓ removed and chip hidden pending review.
+  - server signal (R-15.5): one `lh` reaching 15 distinct recipients in 24 h records `link_fanout` (Valkey, 24 h window, never stored in the DB or logged); 3 of those in 24 h → shadow quarantine review (R-15.6). Adult-platform host + ≥ 15 recipients/24 h → the phone shows the R-I01.21 note again (the phone knows the host; the server learns nothing about it).
+- R-I01.24 **Reports**: link card ⋯ → Report → **Shared without consent** (`non_consensual`, severe), **Spam / promotion** (`spam_bot`), **Something else**. The franked message (R-07.11) carries `url`, `title`, `text` only (no thumbnail). The card is hidden for the reporter at once. Profile view: long-press a linked chip → **Not his account** = `POST /reports` with `reason: impersonation`, `note: linked:<platform>`; ≥ 2 independent reports → ✓ removed and chip hidden pending review.
 - R-I01.25 No link cards inside Moments, Tonight plans, party descriptions or bios (text fields keep their existing link rules).
 
 ### E. Store review & Safe Mode

@@ -24,3 +24,4 @@ Builds below get HTTP 426 on every call (except `/v1/config`, `/v1/health`) and 
 ## Rules
 - Every change: one line in the CHANGELOG or the incident log (who, why).
 - Never use a flag to hide personal data handling from users; flags switch features, not consent.
+- Store review builds: see `store-review.md` (`adult_links` `off_builds`).

@@ -10,7 +10,7 @@ import { decryptToUri } from '../chat/media';
 import { kv } from '../chat/kv';
 import { lx } from '../i18n/links';
 import { prefs } from '../me/prefs';
-import { color, radius, space, type } from '../theme/tokens';
+import { color, font, radius, space, type } from '../theme/tokens';
 import { toast } from '../ui/Toast';
 import { adultAllowed, displayHost, GLYPH, isAdult, PLATFORM_NAME, trust, trusted, type Platform } from './links';
 
@@ -207,5 +207,61 @@ export function OpenSheet({ url, platform, onClose, onReport }: { url: string | 
         ) : null}
       </View>
     </Modal>
+  );
+}
+
+/** S-20 "Elsewhere" (R-I01.14): platform chips with ✓, tap → R-I01.10 sheet, long-press → "Not his account". */
+export function Elsewhere({ profileId, links, self }: { profileId: string; links: { platform: string; handle: string; verified?: boolean; url?: string }[]; self: boolean }) {
+  const [open, setOpen] = useState<{ url: string; p: Platform } | null>(null);
+  const [ask, setAsk] = useState<string | null>(null);
+  if (!links.length) return null;
+  const report = async (platform: string) => {
+    setAsk(null);
+    await api('POST', '/reports', { profile_id: profileId, reason: 'impersonation', context: 'profile', note: `linked:${platform}` }).catch(() => {});
+    toast(lx.reportThanks);
+  };
+  return (
+    <View testID="profile-linked" style={{ gap: space.s }}>
+      <Text style={{ ...type.caption, color: color.fgSecondary, letterSpacing: 0.6 }}>{lx.elsewhere.toUpperCase()}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+        {links.map((l) => {
+          const p = (l.platform as Platform) ?? 'web';
+          return (
+            <Pressable
+              key={l.platform + l.handle}
+              accessibilityRole="link"
+              accessibilityLabel={`${PLATFORM_NAME[p] || l.platform} @${l.handle}${l.verified ? ', ✓' : ''}`}
+              onPress={() => l.url && setOpen({ url: l.url, p })}
+              onLongPress={self ? undefined : () => setAsk(l.platform)}
+              style={{ height: 40, paddingLeft: 6, paddingRight: 12, borderRadius: 20, borderWidth: 1, borderColor: color.line, backgroundColor: color.bgRaised, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+            >
+              <Glyph p={p} size={28} />
+              <Text style={{ ...type.meta, fontFamily: font.bold, color: color.fgPrimary }}>@{l.handle}</Text>
+              {l.verified ? (
+                <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: color.trust, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: color.onAccent }}>✓</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+      {links.some((l) => l.verified) ? <Text style={{ ...type.meta, color: color.fgSecondary }}>{lx.provenHint}</Text> : null}
+      <OpenSheet url={open?.url ?? null} platform={open?.p ?? 'web'} onClose={() => setOpen(null)} />
+      {ask ? (
+        <Modal transparent animationType="fade" visible onRequestClose={() => setAsk(null)}>
+          <Pressable accessibilityLabel={lx.cancel} onPress={() => setAsk(null)} style={{ flex: 1, backgroundColor: 'rgba(10,8,22,0.6)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: color.bgRaised, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: space.l, paddingBottom: 34, gap: space.s }}>
+              <Pressable accessibilityRole="button" onPress={() => report(ask)} style={{ minHeight: 48, justifyContent: 'center' }}>
+                <Text style={{ ...type.body, color: color.danger }}>⚑ {lx.notHis}</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => setAsk(null)} style={{ minHeight: 48, justifyContent: 'center' }}>
+                <Text style={{ ...type.body, color: color.fgPrimary }}>{lx.cancel}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+      ) : null}
+    </View>
   );
 }

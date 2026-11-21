@@ -102,7 +102,7 @@ jobs:
         if: steps.gate.outputs.ok == 'true'
         working-directory: .
         run: |
-          if [ -f .github/scripts/asc-ensure-bundle-ids.mjs ]; then node .github/scripts/asc-ensure-bundle-ids.mjs "app.thirstr.safetylive=Thirstr Safety Live"; else echo "Older commit, no extensions"; fi
+          if [ -f .github/scripts/asc-ensure-bundle-ids.mjs ]; then node .github/scripts/asc-ensure-bundle-ids.mjs "app.thirstr.safetylive=Thirstr Safety Live" "app.thirstr.share=Thirstr Share"; else echo "Older commit, no extensions"; fi
 
       - name: Native project (expo prebuild)
         if: steps.gate.outputs.ok == 'true'

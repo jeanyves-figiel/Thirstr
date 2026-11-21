@@ -33,6 +33,7 @@ Internal web app (`/server/apps/admin`, Phoenix LiveView). Implements back offic
 | A-08 | Legal register | requests, jurisdiction, response, hold | log; respond with templated "data held" summary |
 | A-09 | Config | rate limits, k-anon k, view caps, flags | change with 2-person approval |
 | A-10 | Audit log | filter by actor, action, time | read-only |
+| A-12 | Support inbox (F-22, #178) | requests sorted by target time left (R-22.13), topic, ref, language, app details, message + screenshots, thread; Recovery conflicts tab (claim events only, no images); feedback held by the scrubber/classifier | reply (free text or saved reply with placeholders, R-22.14), mark waiting / solved, edit saved replies; recovery conflict: keep paused / release freeze after a side withdrew. **No** action changes sign-in methods, devices, recovery phrase or ownership (R-22.20). Every view and reply audited |
 
 ## Rules
 - R-AD.6 Moderators never see: location, chats not attached by a reporter, private albums not attached, email, device ids, IPs.

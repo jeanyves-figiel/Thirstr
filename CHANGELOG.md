@@ -7,6 +7,7 @@ When a build brings something people can see or use, also add a 2–4 line note 
 ## [Unreleased]
 
 ### Specified
+- **Help & support** (spec, #178, F-22, S-80–S-85, A-12): in-app help center with bundled, offline articles in en/fr/de and on-device search; contact form whose replies come back inside the app (owner alert via `support@thirstr.fun`, message stays in the admin inbox, saved replies); **Get my account back**: a recovery ladder, then an identity check (one sign-in method + fresh on-device selfie match + 1 h / 24 h hold that other phones can cancel only with a passing selfie), with no human override; feedback sent anonymously and scrubbed of personal data into GitHub issues. €0, no vendor.
 - **Chat history on a new phone** (spec, #146, F-01 R-01.14–R-01.15, F-07 R-07.13): after linking a new phone, the old phone can move all chats (or the last 12 months), with photos and videos, end-to-end encrypted, checked by a 6-digit code on both screens. Optional **Chat backup** (off by default), sealed with a key only the recovery phrase unlocks, daily on Wi-Fi and power. API and data model added; build follows the mockup pick.
 - **Data saver** (spec, #177, F-17 R-17.16): Auto on mobile data (default) / Always / Off. Thumbnails only, no prefetch, large chat media tap-to-load, 720p video sends on mobile data; messages, safety and location never affected.
 

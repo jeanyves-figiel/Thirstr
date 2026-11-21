@@ -12,6 +12,9 @@ defmodule Thirstr.Moderation do
   alias Thirstr.Profiles.Photo
   alias Thirstr.Repo
 
+  # DSA Art. 20: reviews open for at least 6 months after a decision.
+  @appeal_window_s 183 * 86_400
+
   def auto_quarantine(%Account{status: "active"} = a, reason) do
     a |> Ecto.Changeset.change(status: "quarantined") |> Repo.update!()
     log_action(a.id, "quarantine", reason, "system")
@@ -20,25 +23,40 @@ defmodule Thirstr.Moderation do
 
   def auto_quarantine(_, _), do: :ok
 
+  @doc """
+  Logs one action. Statement-of-reasons fields (F-15 R-15.28, R-15.36): `detected_by`
+  (auto | report | staff) and `decided_by` (person | auto) follow from the actor and the
+  report; `appeal_until` = now + 6 months (DSA Art. 20). `extra` may set `facts`, `ground`
+  (tos | law) and `law_ref`.
+  """
   def log_action(account_id, action, reason, actor, extra \\ %{}) do
     id = Ecto.UUID.generate()
+    now = DateTime.utc_now()
+    auto = actor == "system"
 
-    Repo.insert_all("moderation_actions", [
-      Map.merge(
-        %{
-          id: Ecto.UUID.dump!(id),
-          target_account: Ecto.UUID.dump!(account_id),
-          action: action,
-          reason: reason,
-          actor: actor,
-          created_at: DateTime.utc_now()
-        },
-        extra
-      )
-    ])
+    base = %{
+      id: Ecto.UUID.dump!(id),
+      target_account: Ecto.UUID.dump!(account_id),
+      action: action,
+      reason: reason,
+      actor: actor,
+      created_at: now,
+      decided_by: if(auto, do: "auto", else: "person"),
+      detected_by:
+        cond do
+          Map.has_key?(extra, :report_id) -> "report"
+          auto -> "auto"
+          true -> "staff"
+        end,
+      appeal_until: DateTime.add(now, @appeal_window_s, :second)
+    }
+
+    Repo.insert_all("moderation_actions", [Map.merge(base, extra)])
 
     {:ok, id}
   end
+
+  def appeal_window_s, do: @appeal_window_s
 
   @doc "Moderator action on an account (admin console A-02/A-04). Returns {:ok, action_id}."
   def enforce(account_id, action, reason, actor, opts \\ [])
@@ -79,16 +97,30 @@ defmodule Thirstr.Moderation do
 
   def enforce(_, _, _, _, _), do: {:error, {:validation, %{action: ["unknown action"]}}}
 
-  @doc "Appeal decision (A-05): overturn restores the account (suspend/ban) and closes the appeal."
-  def decide_appeal(action_id, decision, actor) when decision in ~w(upheld overturned) do
+  @doc """
+  Appeal decision (A-05, R-15.31/R-15.33): records the reviewer's reason and whether the
+  reviewer differs from the original decider; overturn restores the account (suspend/ban)
+  (a removed photo stays removed; the user re-uploads it).
+  """
+  def decide_appeal(action_id, decision, actor, reason \\ nil)
+
+  def decide_appeal(action_id, decision, actor, reason) when decision in ~w(upheld overturned) do
+    reason = reason && String.slice(String.trim(to_string(reason)), 0, 300)
+
     case Repo.query!(
-           "UPDATE moderation_actions SET appeal_state = $2 WHERE id = $1 AND appeal_state = 'open' RETURNING target_account::text, action",
-           [Ecto.UUID.dump!(action_id), decision]
+           """
+           UPDATE moderation_actions
+           SET appeal_state = $2, appeal_reason = $4, appeal_decided_at = now(), appeal_actor = $3,
+               reviewed_by_other = (actor IS DISTINCT FROM $3), seen = false
+           WHERE id = $1 AND appeal_state = 'open' RETURNING target_account::text, action
+           """,
+           [Ecto.UUID.dump!(action_id), decision, actor, reason]
          ).rows do
       [[aid, act]] ->
         if decision == "overturned" and act in ~w(suspend ban),
           do: enforce(aid, "release", "appeal_overturned", actor)
 
+        Thirstr.Notify.event(aid, "moderation.notice", %{})
         :ok
 
       _ ->
@@ -113,12 +145,22 @@ defmodule Thirstr.Moderation do
     Repo.update_all(q, set: [status: status, updated_at: DateTime.utc_now()])
   end
 
+  # Report link + statement-of-reasons fields given by the moderator (R-15.28).
   defp report(opts) do
-    case opts[:report_id] do
-      nil -> %{}
-      id -> %{report_id: Ecto.UUID.dump!(id)}
-    end
+    base =
+      case opts[:report_id] do
+        nil -> %{}
+        id -> %{report_id: Ecto.UUID.dump!(id)}
+      end
+
+    base
+    |> put_opt(:facts, opts[:facts] && String.slice(String.trim(to_string(opts[:facts])), 0, 300))
+    |> put_opt(:ground, if(opts[:ground] in ["tos", "law"], do: opts[:ground]))
+    |> put_opt(:law_ref, opts[:law_ref] && String.slice(to_string(opts[:law_ref]), 0, 200))
   end
+
+  defp put_opt(m, _k, v) when v in [nil, ""], do: m
+  defp put_opt(m, k, v), do: Map.put(m, k, v)
 
   defp to_int(n) when is_integer(n), do: n
   defp to_int(n) when is_binary(n), do: String.to_integer(n)

@@ -22,7 +22,7 @@ type Picked = { uri: string; w: number; h: number };
 const CROPS: M.Crop[] = ['9:16', '4:5', '1:1'];
 const STYLES: M.CaptionStyle[] = ['clean', 'pill', 'pop'];
 const LENSES: Mode[] = ['hookup', 'friends', 'sport'];
-const AUDS: M.Audience[] = ['everyone', 'chats', 'favorites'];
+const AUDS: M.Audience[] = ['everyone', 'chats', 'favorites', 'friends'];
 
 // Remembered on the device for the session (R-21.3: last used).
 let last: { audience: M.Audience; ttl: M.Ttl } = { audience: 'everyone', ttl: 86400 };
@@ -30,6 +30,8 @@ let last: { audience: M.Audience; ttl: M.Ttl } = { audience: 'everyone', ttl: 86
 /** People I chat with = 1:1 chats where both wrote (resolved on the phone, R-21.6). */
 const chatPeers = () => E.getConvs().filter((c) => !c.ctx && !c.gone && c.iWrote && c.theyWrote).map((c) => c.peer);
 const favPeers = () => People.favList().map((f) => f.peer);
+/** #247 R-07.44: accepted friends (resolved on the phone; the server only gets ids). */
+const friendPeers = () => People.friendList('yes');
 
 // S-76 Moment composer (F-21 R-21.1–R-21.5).
 export function MomentNewScreen({ navigation }: { navigation: Nav }) {
@@ -49,7 +51,7 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
   const [busy, setBusy] = useState(false);
   const [rejected, setRejected] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const counts = useMemo(() => ({ chats: chatPeers().length, favorites: favPeers().length }), []);
+  const counts = useMemo(() => ({ chats: chatPeers().length, favorites: favPeers().length, friends: friendPeers().length }), []);
 
   async function pick(camera: boolean) {
     setErr(null);
@@ -67,7 +69,7 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
 
   async function shareNow() {
     if (!src || busy) return;
-    const ids = audience === 'chats' ? chatPeers() : audience === 'favorites' ? favPeers() : [];
+    const ids = audience === 'chats' ? chatPeers() : audience === 'favorites' ? favPeers() : audience === 'friends' ? friendPeers() : [];
     if (audience !== 'everyone' && !ids.length) return setErr(mx.nobody);
     setBusy(true);
     setErr(null);

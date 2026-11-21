@@ -27,6 +27,7 @@
 - R-05.14 (#197) Precise display: shown at r10 only while the owner's r9 cell has ≥ 3 visible profiles (crowd floor, evaluated with R-05.2), else at the Area resolution R-05.2 gives. Map avatar = deterministic random point inside the displayed r10 cell (seed as R-05.3).
 - R-05.15 (#197) Distances are computed server-side **cell centre to cell centre**: the viewer is snapped to the centre of his own query cell (r10 if he is Precise, else r9), never his GPS. Exact pins use the jittered pin (R-05.4). Distances are then rounded **down** to the step of the shown person's precision (F-04 R-04.6) so the number never says more than the cell.
 - R-05.16 (#197) Viewer spoof brake: besides R-05.8's 1 update / 30 s, a viewer whose query cell changes to more than 20 distinct r9 cells within 1 h gets range buckets only (R-04.6 legacy buckets) for the rest of that hour; logged as `location.spoof_brake`. R-05.9 velocity flags unchanged.
+- R-05.17 **Show me to friends** (#247, F-07 R-07.47): an E2EE, time-boxed (1–24 h), ≈ 100 m spot sent only to friends, at any level including Hidden; the server relays ciphertext only.
 
 ## Interactions (S-30 Location sheet)
 Radio list 4 levels (Hidden disabled "After you verify" for unverified) · under Area: "Show closer distance" switch (R-05.13) · Exact settings (TTL chips, audience chips) · "Others see" live preview · toggle "Hide me from hidden users" · Safe Mode note.

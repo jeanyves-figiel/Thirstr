@@ -62,6 +62,8 @@ export async function contacts(): Promise<Contact[]> {
 }
 
 export const link = (c: Contact) => `${SITE}/c/#${c.rid}.${c.key}`;
+/** #247 R-07.46: only our own trusted-contact page opens from a chat card. */
+export const isInviteLink = (u: string) => typeof u === 'string' && u.startsWith(`${SITE}/c/#`) && u.length < 300;
 
 export async function invite(label: string, from: string): Promise<Contact> {
   const key = toB64url(rand(32));

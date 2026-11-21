@@ -1,4 +1,5 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useFriendPerks } from '../chat/friendPerks';
 import { createNavigationContainerRef, DarkTheme, NavigationContainer, StackActions, type NavigationState } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
@@ -364,6 +365,8 @@ export function Main() {
   useAttestation();
   useHiddenReturn();
   useShareLinks();
+  // #247: Show me to friends + friend-online alerts (foreground only).
+  useFriendPerks();
   // #119 R-13.20: Live Activity + app-icon quick actions + thirstr://safety/* links.
   useSafetyNative(nav);
   const kb = useKeyboardShown();

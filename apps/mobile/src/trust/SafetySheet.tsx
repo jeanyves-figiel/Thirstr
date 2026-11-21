@@ -7,7 +7,7 @@ import { feel } from '../ui/haptics';
 import { color, radius, space, type } from '../theme/tokens';
 import { Banner, Button, Icon, Sheet } from '../ui';
 import { toast } from '../ui/Toast';
-import { forgetFriend } from '../chat/people';
+import { forgetFriend } from '../chat/engine';
 import { forgetVc } from '../chat/vcheck';
 
 // S-51 shared safety sheet (#111, F-15 R-15.17–R-15.20): same Hide / Block / Report tiles on the

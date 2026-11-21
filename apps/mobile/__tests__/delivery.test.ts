@@ -142,6 +142,7 @@ type Engine = typeof import('../src/chat/engine');
 type Mls = typeof import('../src/chat/mls');
 type Bytes = typeof import('../src/chat/bytes');
 type People = typeof import('../src/chat/people');
+type FLoc = typeof import('../src/chat/friendLoc');
 
 let run = 0;
 const me = (receipts = true) => ({ id: 'acc-a', status: 'active', verified: true, profiles: [{ id: 'pa', kind: 'hookup', display_name: 'Alice' }], settings: { read_receipts: receipts } }) as never;
@@ -151,16 +152,18 @@ const alice = () => `alice${run}`;
 const settle = () => new Promise((r) => setTimeout(r, 30));
 
 /** Loads a fresh engine for Alice (a relaunch keeps her store). */
-async function launch(receipts = true): Promise<{ E: Engine; P: People }> {
+async function launch(receipts = true): Promise<{ E: Engine; P: People; F: FLoc }> {
   g.__dev = alice();
   let E!: Engine;
   let P!: People;
+  let F!: FLoc;
   jest.isolateModules(() => {
     E = require('../src/chat/engine');
     P = require('../src/chat/people');
+    F = require('../src/chat/friendLoc');
   });
   await E.start(me(receipts));
-  return { E, P };
+  return { E, P, F };
 }
 
 /** Bob is a raw MLS client on his own store; each call runs as Bob, then hands back to Alice. */
@@ -496,6 +499,30 @@ describe('#115 friends travel only inside the E2EE chat (R-07.36)', () => {
     expect(got.filter((x) => x.t === 'friend').map((x) => x.op)).toEqual(['decline']);
     // The decline is not a visible row for Alice.
     expect((await E.messages(cid)).filter((m) => m.p.t === 'friend').map((m) => (m.p as { op: string }).op)).toEqual(['request']);
+  }, 60000);
+
+  it('#247 friend location is silent, kept only for friends, and stop forgets it', async () => {
+    const { E, P, F, cid, bob } = await open1to1();
+    await E.send(cid, { t: 'text', text: 'hey' });
+    await bob.pull();
+    const gid = E.getConv(cid)!.groups[0];
+    const until = Date.now() + 3600_000;
+    // Not a friend yet: ignored.
+    await bob.say(gid, { t: 'friend.loc', lat: 47.37694, lng: 8.54172, until });
+    await E.pull();
+    expect(F.shown()).toHaveLength(0);
+    await bob.say(gid, { t: 'friend', op: 'request' });
+    await E.pull();
+    await E.answerFriend(cid, true);
+    expect(P.friendOf('pb')).toBe('yes');
+    await bob.say(gid, { t: 'friend.loc', lat: 47.37694, lng: 8.54172, until });
+    await E.pull();
+    expect(F.shown()).toEqual([{ peer: 'pb', lat: 47.377, lng: 8.542, until, at: expect.any(Number) }]);
+    expect((await E.messages(cid)).some((m) => m.p.t === 'friend.loc')).toBe(false);
+    for (const q of srv.queue) expect(JSON.stringify(q)).not.toMatch(/47\.37|friend/);
+    await bob.say(gid, { t: 'friend.loc', stop: true });
+    await E.pull();
+    expect(F.shown()).toHaveLength(0);
   }, 60000);
 
   it('a starred 1:1 chat migrates to a favorite of its peer', async () => {

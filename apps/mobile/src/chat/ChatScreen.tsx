@@ -2,7 +2,7 @@ import { a11yLabel, daysUntil, rangeLabel, shortLabel, TravelLabel } from '../tr
 import { usePeerTrip } from '../travel/peerTrips';
 import { tr } from '../i18n/travel';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Dimensions, FlatList, Keyboard, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
 import { useSession } from '../app/session';
@@ -34,6 +34,8 @@ import * as Clipboard from 'expo-clipboard';
 import { gx } from '../i18n/gestures';
 import { feel } from '../ui/haptics';
 import { toast } from '../ui/Toast';
+import * as Safety from '../safety/safety';
+import * as Online from './friendOnline';
 import { hitSlot, MsgRow, ReactionBar, useChatGestures, type Hold } from './MsgGestures';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void; setOptions: (o: object) => void };
@@ -445,6 +447,42 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
               </View>
             );
           }
+          if (m.p.t === 'safety.invite') {
+            // #247 R-07.46: a friend asks me to be his trusted contact.
+            if (m.from === 'me') return <Text style={{ ...type.meta, color: color.fgMuted, textAlign: 'center', marginVertical: space.s }}>{ppl.safetySent(conv.name)}</Text>;
+            const url = m.p.url;
+            const ok = Safety.isInviteLink(url);
+            return (
+              <View testID="safety-invite" style={{ alignSelf: 'stretch', marginVertical: space.s, padding: space.l, borderRadius: radius.md, backgroundColor: `${color.trust}1F`, alignItems: 'center', gap: space.s }}>
+                <Icon.Shield size={26} c={color.trust} />
+                <Text style={{ ...type.headline, fontSize: 15, color: color.trust, textAlign: 'center' }}>{ppl.safetyAsk(conv.name)}</Text>
+                <Text style={{ ...type.meta, color: color.fgSecondary, textAlign: 'center' }}>{ppl.safetyBody}</Text>
+                {ok ? (
+                  <Pressable testID="safety-open" accessibilityRole="link" onPress={() => Linking.openURL(url).catch(() => {})} style={{ height: 40, paddingHorizontal: 18, borderRadius: radius.pill, backgroundColor: color.trust, justifyContent: 'center', marginTop: space.xs }}>
+                    <Text style={{ ...type.meta, fontFamily: font.heavy, color: color.onAccent }}>{ppl.open}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            );
+          }
+          if (m.p.t === 'party.invite') {
+            // #247 R-07.49: the host invited me to his party.
+            const pi = m.p;
+            const when = new Date(pi.starts_at);
+            return (
+              <View testID="party-invite" style={{ alignSelf: m.from === 'me' ? 'flex-end' : 'flex-start', width: '78%', marginVertical: space.s, padding: space.l, borderRadius: radius.md, backgroundColor: `${color.personal}1F`, gap: space.s }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                  <Icon.Party size={22} c={color.personal} />
+                  <Text style={{ ...type.meta, fontFamily: font.heavy, color: color.personal }}>{m.from === 'me' ? ppl.partySent : ppl.partyAsk(conv.name)}</Text>
+                </View>
+                <Text numberOfLines={2} style={{ ...type.headline, color: color.fgPrimary }}>{pi.title}</Text>
+                {isNaN(when.getTime()) ? null : <Text style={{ ...type.meta, color: color.fgSecondary }}>{when.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</Text>}
+                <Pressable testID="party-open" accessibilityRole="button" onPress={() => navigation.navigate('Party', { id: pi.party, code: pi.code })} style={{ height: 40, borderRadius: radius.pill, backgroundColor: color.personal, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ ...type.meta, fontFamily: font.heavy, color: color.onAccent }}>{ppl.seeParty}</Text>
+                </Pressable>
+              </View>
+            );
+          }
           if (m.p.t === 'disappearing') {
             return (
               <Text style={{ ...type.meta, color: color.fgMuted, textAlign: 'center', marginVertical: space.s }}>
@@ -833,6 +871,29 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
                 <SheetRow testID="menu-friend" title={friend === 'out' ? ppl.cancelRequest : ppl.removeFriend} onPress={() => E.dropFriend(conv.id).then(() => setMenu(false))} />
               ) : P.canAsk(conv.peer) && (conv.iWrote || conv.theyWrote) ? (
                 <SheetRow testID="menu-friend" title={ppl.addFriend} onPress={() => { setMenu(false); askFriend(); }} />
+              ) : null}
+              {friend === 'yes' ? (
+                <>
+                  <SheetRow
+                    testID="menu-safety"
+                    title={ppl.makeSafety}
+                    onPress={() => {
+                      setMenu(false);
+                      Safety.myName(me.profile?.display_name ?? '')
+                        .then((n) => Safety.invite(conv.name, n))
+                        .then((c) => E.sendSafetyInvite(conv.id, Safety.link(c)))
+                        .then(() => toast(ppl.safetyDone(conv.name)), () => toast(tx.common.error));
+                    }}
+                  />
+                  <SheetRow
+                    testID="menu-online"
+                    title={Online.isWatched(conv.peer) ? ppl.onlineOff : ppl.onlineOn}
+                    onPress={() => {
+                      setMenu(false);
+                      Online.setWatched(conv.peer, !Online.isWatched(conv.peer)).then((ok) => toast(ok ? (Online.isWatched(conv.peer) ? ppl.onlineSet(conv.name) : ppl.onlineUnset) : ppl.onlineMax));
+                    }}
+                  />
+                </>
               ) : null}
               <SheetRow testID="menu-note" title={P.noteFor(conv.peer) ? ppl.editNote : ppl.addNote} onPress={() => { setMenu(false); setNoteOpen(true); }} />
               {vcAvailable && (conv.iWrote || conv.theyWrote) && V.canAsk(conv.peer) ? (

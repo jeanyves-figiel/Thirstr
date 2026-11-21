@@ -14,6 +14,7 @@ import * as MediaCache from './mediaCache';
 import * as mls from './mls';
 import * as store from './store';
 import * as people from './people';
+import * as floc from './friendLoc';
 import * as vc from './vcheck';
 import { vcx } from '../i18n/vcheck';
 import { ppl } from '../i18n/people';
@@ -72,6 +73,12 @@ export type Payload =
   | { t: 'screenshot' }
   /** F-07 R-07.36 (#115): mutual friends, only inside the 1:1 E2EE chat. */
   | { t: 'friend'; op: people.FriendOp }
+  /** #247 R-07.46: trusted-contact invite link (F-13 R-13.2) sent inside the chat. */
+  | { t: 'safety.invite'; url: string }
+  /** #247 R-07.49: party invite from its host (F-10). */
+  | { t: 'party.invite'; party: string; code?: string; title: string; starts_at: string }
+  /** #247 R-07.47: friend location for the map, silent, never stored as a message. */
+  | floc.FriendLoc
   /** F-18 R-18.8–R-18.16 (#159): video check, only inside the 1:1 E2EE chat. */
   | vc.VcPayload;
 
@@ -625,8 +632,12 @@ async function receive(cid: string, w: Wire, serverAt: number, from?: string, ra
   if (p.t === 'friend') {
     // R-07.36: request/accept show as a row; decline, cancel and remove are quiet.
     if (c.ctx || !c.peer) return false;
-    const show = await people.applyFriend(c.peer, p.op, mine);
+    const show = await friendOp(c, p.op, mine);
     if (!show) return false;
+  }
+  if (p.t === 'friend.loc') {
+    if (!c.ctx && c.peer && !mine) await floc.receive(c.peer, p);
+    return false;
   }
   if (p.t === 'vcheck') {
     // R-18.8–R-18.16: request, clip, confirm and screenshot show as rows; the rest is quiet.
@@ -705,6 +716,10 @@ export function preview(p: Payload): string {
       return '⏱';
     case 'friend':
       return p.op === 'accept' ? ppl.previewAccept : ppl.previewRequest;
+    case 'safety.invite':
+      return '🛡 ' + ppl.previewSafety;
+    case 'party.invite':
+      return '🎉 ' + p.title;
     case 'vcheck':
       return '◉ ' + vcx.preview;
     default:
@@ -926,13 +941,95 @@ export async function setConv(id: string, patch: Partial<Pick<Conv, 'starred' | 
 // ------------------------------------------------------------------ friends (R-07.36, #115)
 
 /** Ask the peer of a 1:1 chat to be friends. Visible row in the chat ("Pending" card). */
+// #247 R-07.45–R-07.47: friend perks (albums, location) follow the friend state on this phone.
+export type FriendChange = (cid: string, peer: string, now: people.FriendState | null, was: people.FriendState | null) => void;
+const friendSubs = new Set<FriendChange>();
+export function onFriendChange(fn: FriendChange) {
+  friendSubs.add(fn);
+  return () => {
+    friendSubs.delete(fn);
+  };
+}
+async function friendChanged(cid: string, peer: string, was: people.FriendState | null) {
+  const now = people.friendOf(peer);
+  if (now === was) return;
+  if (now === 'yes') await floc.resend().catch(() => {});
+  if (was === 'yes') {
+    await floc.forget(peer).catch(() => {});
+    if (cid && convs[cid] && (await floc.mine())) await send(cid, { t: 'friend.loc', stop: true }, { silent: true }).catch(() => {});
+  }
+  friendSubs.forEach((f) => {
+    try {
+      f(cid, peer, now, was);
+    } catch {
+      /* a perk failing never blocks the chat */
+    }
+  });
+}
+async function friendOp(c: Conv, op: people.FriendOp, mine: boolean) {
+  const was = people.friendOf(c.peer);
+  const show = await people.applyFriend(c.peer, op, mine);
+  await friendChanged(c.id, c.peer, was);
+  return show;
+}
+/** #247 R-07.46: make a friend a trusted contact; the invite link travels E2EE in this chat. */
+export async function sendSafetyInvite(cid: string, url: string) {
+  const c = convs[cid];
+  if (!c || c.ctx || people.friendOf(c.peer) !== 'yes') return;
+  await send(cid, { t: 'safety.invite', url });
+}
+
+/** #247 R-07.49: invite friends (1:1 chats) to my party. Returns how many were sent. */
+export async function sendPartyInvites(peers: string[], party: { id: string; code?: string | null; title: string; starts_at: string }) {
+  let n = 0;
+  for (const peer of peers) {
+    const c = convWith(peer);
+    if (!c || people.friendOf(peer) !== 'yes') continue;
+    await send(c.id, { t: 'party.invite', party: party.id, ...(party.code ? { code: party.code } : {}), title: party.title.slice(0, 80), starts_at: party.starts_at })
+      .then(() => n++)
+      .catch(() => {});
+  }
+  return n;
+}
+
+/** #247 R-07.47: send my spot to every friend if due (start, every 10 min, or after 200 m). */
+export async function shareLocTick(here: { lat: number; lng: number } | null, force = false) {
+  const m = await floc.mine();
+  if (!here || !m || m.until <= Date.now()) return;
+  if (!force && !floc.due(m, here)) return;
+  const spot = { lat: floc.round(here.lat), lng: floc.round(here.lng) };
+  for (const peer of people.friendList('yes')) {
+    const c = convWith(peer);
+    if (c) await send(c.id, { t: 'friend.loc', ...spot, until: m.until }, { silent: true }).catch(() => {});
+  }
+  await floc.markSent(spot);
+}
+
+/** Stop sharing: friends forget my spot at once. */
+export async function stopLocShare() {
+  const m = await floc.mine();
+  await floc.stop();
+  if (!m) return;
+  for (const peer of people.friendList('yes')) {
+    const c = convWith(peer);
+    if (c) await send(c.id, { t: 'friend.loc', stop: true }, { silent: true }).catch(() => {});
+  }
+}
+
+/** Block / report (R-07.38): forget the friendship and let perks revoke what they gave. */
+export async function forgetFriend(peer: string) {
+  const was = people.friendOf(peer);
+  await people.forgetFriend(peer);
+  await friendChanged(convWith(peer)?.id ?? '', peer, was);
+}
+
 export async function requestFriend(cid: string) {
   const c = convs[cid];
   if (!c || c.ctx || !c.peer) return;
   const cur = people.friendOf(c.peer);
   if (cur === 'in') return answerFriend(cid, true);
   if (!people.canAsk(c.peer)) return;
-  await people.applyFriend(c.peer, 'request', true);
+  await friendOp(c, 'request', true);
   await send(cid, { t: 'friend', op: 'request' });
 }
 
@@ -940,7 +1037,7 @@ export async function requestFriend(cid: string) {
 export async function answerFriend(cid: string, accept: boolean) {
   const c = convs[cid];
   if (!c || c.ctx || !c.peer || people.friendOf(c.peer) !== 'in') return;
-  await people.applyFriend(c.peer, accept ? 'accept' : 'decline', true);
+  await friendOp(c, accept ? 'accept' : 'decline', true);
   await send(cid, { t: 'friend', op: accept ? 'accept' : 'decline' }, { silent: !accept });
 }
 
@@ -951,7 +1048,7 @@ export async function dropFriend(cid: string) {
   const cur = people.friendOf(c.peer);
   if (!cur) return;
   const op = cur === 'out' ? 'cancel' : cur === 'in' ? 'decline' : 'remove';
-  await people.applyFriend(c.peer, op, true);
+  await friendOp(c, op, true);
   await send(cid, { t: 'friend', op }, { silent: true });
 }
 

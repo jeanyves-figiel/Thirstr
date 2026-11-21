@@ -4,6 +4,7 @@ import { useSession } from '../app/session';
 import { tx } from '../i18n/app';
 import { Sheet, Toggle } from '../ui';
 import { LocationControl } from './LocationControl';
+import { FriendShare } from './FriendShare';
 
 export { type Level, position, quickLevel } from './level';
 
@@ -21,6 +22,7 @@ export function LocationSheet({ visible, onClose, onLocked }: { visible: boolean
         value={!!me.location?.hide_from_hidden}
         onChange={(v) => api<Me>('PATCH', '/me/visibility', { hide_from_hidden: v }).then(setMe, () => {})}
       />
+      <FriendShare />
     </Sheet>
   );
 }

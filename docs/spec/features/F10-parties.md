@@ -17,6 +17,7 @@ Host or join group hookups/parties safely.
 - R-10.9 Safe Mode: party creation disabled; viewing only invite-only parties.
 - R-10.10 Official parties (#113): events listed by the team (beta) or a partner venue, at a catalogue venue: title (60), venue, start/end (max 24 h), optional https link. Table `events`; admin console › Places adds and removes them. Public: shown on the Explore map at the venue's coordinates (yellow marker, F-04 R-04.20) from 12 h before start until the end, to everyone not in Safe Mode. No guest list, no requests: they're nightlife listings.
 - R-10.11 Hosted parties on the Explore map (#113): same visibility as `GET /parties` (R-10.2: verified audience to verified viewers, chats audience to chat partners, never invite-only), marker at the r8 cell centroid, never the address (AC-10.1).
+- R-10.12 The host can invite friends from the party screen; each invite is a card in the 1:1 E2EE chat (#247, F-07 R-07.49).
 
 ## Screens
 S-14 Party detail (host view: requests list; guest view: status, rules, chat), S-15 Create party sheet.

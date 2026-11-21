@@ -27,6 +27,13 @@ type Auth = { access: string; refresh: string; profile: string };
 type Conv = { gids: string[]; s: ChatState };
 type Incoming = { id: number; to_profile_id: string; from_profile_id: string; group_id: string; kind: string; ciphertext: string; at: string };
 type Payload = Record<string, unknown> & { t: string };
+
+/** #271: blob ids a payload hands to its recipients (same as the app's engine.blobsOf). */
+export function blobsOf(p: Payload): string[] | undefined {
+  if (p.t === 'media') return [(p.media as { blob: string }).blob];
+  if (p.t === 'album.grant') return (p.items as { blob: string }[]).map((i) => i.blob);
+  return undefined;
+}
 type Claimed = { id: number; device_id: string; key_package: string; profile: string };
 type AlbumItem = { blob: string; key: string; iv: string; mime: string };
 
@@ -424,6 +431,8 @@ export class Bot {
       franking_tag: toB64(tag),
       context: ctx,
       envelopes: to.map((m) => ({ to_profile_id: m.p, to_device_id: m.d, kind: 'app', ciphertext: toB64(sealed.wire) })),
+      // #271: recipients of this message may fetch these blobs.
+      blobs: blobsOf(p),
     };
     for (let i = 0; ; i++) {
       try {
@@ -606,7 +615,7 @@ export class Bot {
     const key = rand(32);
     const iv = rand(12);
     const ct = gcm(key, iv).encrypt(bytes);
-    const r = await this.api<{ blob_id: string; put_url: string }>('POST', '/media/upload', { size: ct.length, ...opts });
+    const r = await this.api<{ blob_id: string; put_url: string }>('POST', '/media/upload', { size: ct.length, scoped: !opts.once, ...opts });
     const put = await fetch(r.put_url, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: Buffer.from(ct) });
     if (!put.ok) throw new Error('upload failed ' + put.status);
     return { blob: r.blob_id, key: toB64(key), iv: toB64(iv) };

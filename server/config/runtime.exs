@@ -100,6 +100,20 @@ if System.get_env("CLASSIFIER_URL") not in [nil, ""] do
   config :thirstr, :classifier_token, System.get_env("CLASSIFIER_TOKEN")
 end
 
+# F-15 R-15.42 (#179): pre-publish hash match. Staging/prod: noop until the PhotoDNA keys arrive.
+if config_env() == :prod or System.get_env("HASH_MATCH_PROVIDER") do
+  provider =
+    case System.get_env("HASH_MATCH_PROVIDER", "noop") do
+      "photodna" -> Thirstr.Moderation.HashMatch.PhotoDNA
+      "dev" -> Thirstr.Moderation.HashMatch.Dev
+      _ -> Thirstr.Moderation.HashMatch.Noop
+    end
+
+  config :thirstr, :hash_match, provider
+  config :thirstr, :photodna_key, System.get_env("PHOTODNA_KEY")
+  config :thirstr, :photodna_url, System.get_env("PHOTODNA_URL")
+end
+
 s3 = URI.parse(env.("S3_ENDPOINT", "http://localhost:9000"))
 
 config :ex_aws,

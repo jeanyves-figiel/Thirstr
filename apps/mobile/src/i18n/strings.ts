@@ -65,6 +65,7 @@ const en = {
     ok: 'Looks good',
     too_explicit: 'Needs to be less explicit for your main photo',
     no_person: 'We need to see a person',
+    unusable: "This photo can't be used",
     extra: 'Extra photos (optional)',
     continue: 'Continue',
   },
@@ -118,7 +119,7 @@ const fr: Strings = {
     denied: 'Pas de souci. Choisis plutôt ta ville.',
     cityPh: 'Rechercher une ville',
   },
-  photo: { ...en.photo, title: 'Ta photo principale', rule: 'Visage ou corps, reste soft. Les plus hot vont dans les 4 emplacements en plus.', pick: 'Choisir une photo', checking: 'Vérification…', ok: 'C’est bon', too_explicit: 'Doit être moins explicite pour ta photo principale', no_person: 'On doit voir une personne', extra: 'Photos en plus (facultatif)', continue: 'Continuer' },
+  photo: { ...en.photo, title: 'Ta photo principale', rule: 'Visage ou corps, reste soft. Les plus hot vont dans les 4 emplacements en plus.', pick: 'Choisir une photo', checking: 'Vérification…', ok: 'C’est bon', too_explicit: 'Doit être moins explicite pour ta photo principale', no_person: 'On doit voir une personne', unusable: 'Cette photo ne peut pas être utilisée', extra: 'Photos en plus (facultatif)', continue: 'Continuer' },
   verify: {
     ...en.verify,
     title: 'Fais-toi vérifier',
@@ -159,7 +160,7 @@ const de: Strings = {
     denied: 'Kein Problem. Wähl stattdessen deine Stadt.',
     cityPh: 'Stadt suchen',
   },
-  photo: { ...en.photo, title: 'Dein Hauptfoto', rule: 'Gesicht oder Körper, jugendfrei. Heißere kommen in die 4 Extraplätze.', pick: 'Foto wählen', checking: 'Wird geprüft…', ok: 'Sieht gut aus', too_explicit: 'Für dein Hauptfoto zu explizit', no_person: 'Wir müssen eine Person sehen', extra: 'Weitere Fotos (optional)', continue: 'Weiter' },
+  photo: { ...en.photo, title: 'Dein Hauptfoto', rule: 'Gesicht oder Körper, jugendfrei. Heißere kommen in die 4 Extraplätze.', pick: 'Foto wählen', checking: 'Wird geprüft…', ok: 'Sieht gut aus', too_explicit: 'Für dein Hauptfoto zu explizit', no_person: 'Wir müssen eine Person sehen', unusable: 'Dieses Foto kann nicht verwendet werden', extra: 'Weitere Fotos (optional)', continue: 'Weiter' },
   verify: {
     ...en.verify,
     title: 'Lass dich verifizieren',

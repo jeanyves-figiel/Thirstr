@@ -183,12 +183,12 @@ One MLS identity per (own profile, device): credential identity = `{"p": profile
 | GET | /mls/keypackages | → {counts: {profile_id: {count, last_resort}}, device_id} for this device |
 | POST | /mls/keypackages | {profile_id, key_packages: [b64] (≤ 200 stored per device), last_resort?: b64 (replaces previous)} → {counts, device_id} |
 | POST | /mls/keypackages/claim | {from_profile_id, to_profile_id, context?} → {key_packages: [{id, device_id, key_package}]}, one per recipient device, single-use (last-resort reused). First contact needs caller verified unless replying (R-07.2); recipient without packages → 409 `unavailable` |
-| POST | /mls/messages | {client_id: hex ≤ 32 (R-07.18, idempotency: a repeat from the same device within 7 d returns the first result and stores nothing), from_profile_id, group_id: b64, franking_tag?: b64, context?, envelopes: [{to_profile_id, to_device_id, kind: welcome\|commit\|app, key_package_id?, ciphertext: b64 ≤ 256 KB}] ≤ 200} → {delivered: [profile_id], undelivered: [profile_id]}. Blocked recipients land in `undelivered` (generic "Not delivered", no block reveal). New-contact limit 30/h. Emits `message.new` (no content) + push. All-or-nothing (R-07.22) |
+| POST | /mls/messages | {client_id: hex ≤ 32 (R-07.18, idempotency: a repeat from the same device within 7 d returns the first result and stores nothing), from_profile_id, group_id: b64, franking_tag?: b64, context?, envelopes: [{to_profile_id, to_device_id, kind: welcome\|commit\|app, key_package_id?, ciphertext: b64 ≤ 256 KB}] ≤ 200, blobs?: [blob_id] ≤ 200 (#271: the accounts this message is delivered to may fetch these blobs; only the sender's own blobs count, others ignored)} → {delivered: [profile_id], undelivered: [profile_id]}. Blocked recipients land in `undelivered` (generic "Not delivered", no block reveal). New-contact limit 30/h. Emits `message.new` (no content) + push. All-or-nothing (R-07.22) |
 | GET | /mls/messages?after= | → {messages: [{id, to_profile_id, from_profile_id, group_id, kind, key_package_id, ciphertext, at}], expired: [{group_id, count}]} for this device, ≤ 200, ordered by id. `expired` = messages swept unread for this device since last pull (R-07.22) |
 | POST | /mls/messages/ack | {ids} → deletes them (R-07.12); unacked swept after 30 d |
-| POST | /media/upload | {size ≤ 210 MB, ttl_s?, album?: bool} → 201 {blob_id, put_url}; ciphertext only (AES-256-GCM on device). Chat media ≤ 30 d; album items until deleted |
+| POST | /media/upload | {size ≤ 210 MB, ttl_s?, album?: bool, scoped?: bool (#271: fetchable only by the uploader and accounts a message carrying it was delivered to; the app always sets it)} → 201 {blob_id, put_url}; ciphertext only (AES-256-GCM on device). Chat media ≤ 30 d; album items until deleted |
 | POST | /media/upload (once) | `once: true` (video check, R-18.12): size ≤ 3 MB, TTL 24 h fixed, 20 per account per day |
-| GET | /media/{blob_id} | → {url} signed GET (1 h). Once blob (R-18.12): first call binds to the caller (`fetched_by`), URL valid 2 min; repeat only by that account ≤ 10 min after first fetch, else 404 |
+| GET | /media/{blob_id} | → {url} signed GET (1 h). Scoped blob (#271): only the uploader's account or an account it was sent to (`blobs` on `/mls/messages`), else 404; URL valid 15 min. Unscoped (app builds before #271): any signed-in account, until the blob expires. Once blob (R-18.12): first call binds to the caller (`fetched_by`), URL valid 2 min; repeat only by that account ≤ 10 min after first fetch, else 404 |
 | DELETE | /media/{blob_id} | owner only; album revoke and item delete. Once blob: owner or `fetched_by` |
 | PUT | /me/push | {token, platform: ios\|android} → 204 (device push token) |
 
@@ -229,10 +229,12 @@ Contact side (no account; `rid` from the link fragment; 60 req/min per IP):
 | PATCH | /me/linked-accounts/{id} | {visibility} → 204 |
 | POST | /me/linked-accounts/{id}/verify | → {verified} (Bluesky: code in public bio) |
 | DELETE | /me/linked-accounts/{id} | → 204 |
-| GET | /me/profiles/{id}/share | → {share: {slug, url} \| null} |
-| POST | /me/profiles/{id}/share | → {slug, url} (creates or rotates) |
+| GET | /me/profiles/{id}/share | → {share: {slug, url, short, show_photo, has_preview} \| null} |
+| POST | /me/profiles/{id}/share | → {slug, url, short, show_photo, has_preview} (creates or renews; renew keeps show_photo, clears preview) |
+| PATCH | /me/profiles/{id}/share | {show_photo} → share |
+| PUT | /me/profiles/{id}/share/preview | {photo_id, jpeg_b64} (≤ 2 KB, JPEG, ≤ 32 px each side; photo_id must be the ok_main photo) → 204 |
 | DELETE | /me/profiles/{id}/share | → 204 (link dead) |
-| GET | /share/{slug} | → {profile_id} (signed in; then GET /profiles/{id}) |
+| GET | /share/{slug} | → {profile_id} or 404 (signed in; blocked either way = 404; rate limit 30/min; then GET /profiles/{id}) |
 Public page `GET /p/{slug}` (HTML, no scripts) — I-02.
 | POST · DELETE | /profiles/{id}/vouch | vouch / withdraw. Verified, account ≥ 30 d (403, AC-18.1), ≥ 10 messages each way with that profile, ≤ 5 per 30 d. Profile view adds `vouches` (weighted, anonymous), `vouched`, `can_vouch` |
 
@@ -261,6 +263,23 @@ Connect: `wss://<api host>/socket/websocket?token=<access token>&vsn=2.0.0`, the
 **Envelopes over the socket (SR-13, #153).** Join `user:me` with `{env: true}`: this device's new envelopes come as `message.env {messages: [...]}` (same objects as `GET /mls/messages`) when one send's envelopes for the device total ≤ 48 KB, else `message.pull` (content-free); the account-wide `message.new` is not sent to that socket. The client stores each message (or its pending copy) before acking with `ack {ids}` (≤ 500) → reply `{acked: n}`; same rule and deletion as `POST /mls/messages/ack`. Nothing changes for durability: envelopes stay on the server until acked, and the app still pulls over REST at start, on foreground, on reconnect and when a socket step fails. Saves the GET (and the REST ack) per message while the app is open.
 
 Rate limits (beta defaults, per account): messages to new contacts 30/h (unverified: 0), taps 100/day, location updates 1/30 s, pin set 6/h, party create 3/day, report 20/day.
+
+
+### Help & support (F-22, #178)
+| Method | Path | Body → Response |
+|---|---|---|
+| POST | /help/votes | {article, lang, helpful, reason?, note? ≤ 200} → 204; no auth needed, no account stored; 30 / day per install |
+| POST | /support/requests | {topic, message (20–4 000), attachments?: [upload_id] ≤ 2, app_details?, reply_email?} → 201 {id, ref}; signed out: reply_email required; 3 open / 5 per 24 h; 429 `support_limit` |
+| POST | /support/uploads | {size ≤ 2 MB, sha256} → {id, upload_url} (presigned PUT, 15 min, JPEG only) |
+| GET | /support/requests · /support/requests/{id} | → list `[{id, ref, topic, status, last, updated_at, unread}]` · thread `{…, messages: [{from, body, attachments, at}]}` |
+| POST | /support/requests/{id}/messages · /solve | {body} → 201 · → 204 (reopen by message within 14 d) |
+| POST | /feedback | {type: idea\|off\|love, part?, text (10–1 000), app} → 202; scrubbed + queued (R-22.31–34); 5 / 24 h |
+| POST | /auth/recovery/claim | (signed in with any method) → {claim_id, challenge}; 409 `claim_active`; 429 |
+| POST | /auth/recovery/claim/{id}/selfie | {liveness_result (signed), match: {passed, model, threshold}, attestation} → {state, hold_ends_at}; 401 `recovery_check_failed` (attempts left) |
+| GET · DELETE | /auth/recovery/claim/{id} | → {state, hold_ends_at} · cancel own claim |
+| POST | /me/recovery/claims/{id}/cancel | from another device: {device_auth, liveness_result, match} → 204; refused without a passing selfie |
+| POST | /auth/recovery/claim/{id}/complete | → tokens + {signed_out, removed_methods}; only when state `ready` |
+Push types `support_reply`, `recovery_claim` use the generic payload (§ Push payloads).
 
 ## Push payloads
 Beta (no notification service extension yet): a **visible, generic** alert, identical for every event type:

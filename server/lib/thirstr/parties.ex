@@ -50,7 +50,8 @@ defmodule Thirstr.Parties do
              :starts_at,
              "within the next 7 days"
            ),
-         :ok <- check(is_integer(cap) and cap in 2..50, :capacity, "2–50"),
+         :ok <- check(is_integer(cap) and cap >= 2, :capacity, "at least 2"),
+         :ok <- capacity_ok(ctx.account, cap),
          :ok <- check(audience in @audiences, :audience, "invalid"),
          :ok <-
            check(
@@ -60,6 +61,7 @@ defmodule Thirstr.Parties do
              "max 3 custom rules, 30 characters"
            ),
          :ok <- check(live_count(ctx.profile_id) == 0, :party, "you already have a live party"),
+         :ok <- weekly_ok(ctx),
          {:ok, _} <- Social.limit(ctx.account, "party", @per_day, 86_400) do
       id = Ecto.UUID.generate()
 
@@ -513,12 +515,14 @@ defmodule Thirstr.Parties do
       if Map.has_key?(params, "cohost_profile_id") do
         co = params["cohost_profile_id"]
 
+        # F-23 R-23.5: co-hosts are Plus (removing one is always allowed).
         ok? =
           is_nil(co) or
-            Repo.query!(
-              "SELECT 1 FROM party_requests WHERE party_id = $1 AND profile_id = $2 AND state = 'accepted'",
-              [Nearby.dump(r.id), Nearby.dump(co)]
-            ).num_rows == 1
+            (Thirstr.Plus.limit(ctx.account, :party_cohosts) > 0 and
+               Repo.query!(
+                 "SELECT 1 FROM party_requests WHERE party_id = $1 AND profile_id = $2 AND state = 'accepted'",
+                 [Nearby.dump(r.id), Nearby.dump(co)]
+               ).num_rows == 1)
 
         if ok?,
           do:
@@ -588,4 +592,47 @@ defmodule Thirstr.Parties do
   def can_watch?(%Account{} = a, id) do
     match?({:ok, _}, get(Nearby.ctx(a, "hookup"), id))
   end
+
+  # F-23 R-23.5: Free hosts up to 10 guests, Plus 40.
+  defp capacity_ok(account, cap) do
+    max = Thirstr.Plus.limit(account, :party_capacity)
+
+    if cap <= max,
+      do: :ok,
+      else: Thirstr.Plus.limit_error(:party_capacity, "up to #{max} guests")
+  end
+
+  # F-23 R-23.5: Free hosts 1 party per rolling 7 days (Plus: only the shared 3-a-day cap).
+  defp weekly_ok(ctx) do
+    case Thirstr.Plus.limit(ctx.account, :party_per_week) do
+      nil ->
+        :ok
+
+      max ->
+        rows =
+          Repo.query!(
+            """
+            SELECT created_at FROM parties
+            WHERE host_profile_id = ANY($1) AND created_at > now() - interval '7 days'
+            ORDER BY created_at
+            """,
+            [Enum.map(ctx.own_ids, &Nearby.dump/1)]
+          ).rows
+
+        if length(rows) < max do
+          :ok
+        else
+          [[first] | _] = rows
+
+          Thirstr.Plus.limit_error(
+            :party_per_week,
+            "#{max} party a week on Free",
+            first |> utc() |> DateTime.add(7 * 86_400, :second)
+          )
+        end
+    end
+  end
+
+  defp utc(%NaiveDateTime{} = n), do: DateTime.from_naive!(n, "Etc/UTC")
+  defp utc(%DateTime{} = d), do: d
 end

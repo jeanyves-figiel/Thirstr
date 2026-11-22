@@ -69,7 +69,8 @@ defmodule ThirstrWeb.TravelTest do
     assert post_trip(t.c, Map.put(base, :show_days, 21)) |> json_response(422)
     assert post_trip(t.c, %{base | first_day: day(-1)}) |> json_response(422)
 
-    for k <- 0..2, do: trip!(t.c, %{first_day: day(20 + k * 40), last_day: day(22 + k * 40)})
+    # F-23: Plus (everyone in the beta) plans up to 5 trips; Free 1 (plus_test.exs).
+    for k <- 0..4, do: trip!(t.c, %{first_day: day(20 + k * 30), last_day: day(22 + k * 30)})
     assert post_trip(t.c, Map.put(base, :show_days, nil)) |> json_response(422)
 
     # shown windows can't overlap
@@ -78,7 +79,7 @@ defmodule ThirstrWeb.TravelTest do
 
     t.c
     |> recycle_authed()
-    |> patch("/v1/trips/#{first["id"]}", %{first_day: day(61), last_day: day(62)})
+    |> patch("/v1/trips/#{first["id"]}", %{first_day: day(51), last_day: day(52)})
     |> json_response(409)
 
     # unverified: browse only

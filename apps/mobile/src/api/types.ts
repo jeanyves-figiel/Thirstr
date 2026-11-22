@@ -98,7 +98,7 @@ export type Place = {
 
 /** GET /explore/summary (R-04.17, #104). */
 export type ExploreSummary = { place: string | null; counts: Record<Mode, number>; now: number; total?: number; visitors?: number };
-export type Grid = { items: Card[]; next: string | null; further_from: number | null; reason: string | null; fit_m?: number | null };
+export type Grid = { items: Card[]; next: string | null; further_from: number | null; reason: string | null; fit_m?: number | null; /** F-23: the Free limit (200) ended the list. */ capped?: boolean };
 export type MapData = { cells: { cell: string; res: number; count: number }[]; pins: Card[]; avatars: Card[] };
 
 export type ProfileView = {

@@ -12,7 +12,7 @@ defmodule Thirstr.Flags do
   """
   alias Thirstr.Repo
 
-  # Known flags the app reads (all on by default). Add a name here before shipping code that reads it.
+  # Known flags the app reads (on by default unless set false here). Add a name here before shipping code that reads it.
   @defaults %{
     "video_check" => true,
     "chat_media" => true,
@@ -27,7 +27,9 @@ defmodule Thirstr.Flags do
     "hash_match" => true,
     # I-01 R-I01.30 (#17): OnlyFans / JustFor.Fans surfaces. Before a store submission ops lists the
     # build under review in `off_builds` (%{"ios" => [512]}) so only that build hides them.
-    "adult_links" => true
+    "adult_links" => true,
+    # F-23 R-23.1 (#7): off = closed beta, everyone has Plus; on = billing (open beta).
+    "plus_billing" => false
   }
   @table :thirstr_flags
   @ttl_ms 30_000

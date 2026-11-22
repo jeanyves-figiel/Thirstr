@@ -61,7 +61,7 @@ defmodule Thirstr.Moments do
 
   @doc """
   POST /moments/:id/publish: validates options, classifies (permissive public rules, R-21.24),
-  and goes live with `expires_at = now + ttl`. Limits: 10 live, 20 per 24 h, 3 per 24 h for
+  and goes live with `expires_at = now + ttl`. Limits (Plus; Free 3 live, 3 a day, F-23): 10 live, 20 per 24 h, 3 per 24 h for
   accounts younger than a day (R-21.5, R-21.26).
   """
   def publish(%Account{} = a, id, params) do
@@ -72,14 +72,16 @@ defmodule Thirstr.Moments do
          {:ok, _} <- day_limit(a),
          {:ok, %{size: size}} when size > 0 and size <= @max_bytes <- Storage.head(m.key),
          {:ok, hash_cols, thumb_ok} <- hash_gate(a, m, id) do
-      {status, reason, score} =
+      # F-15 R-15.56 (#325): borderline goes live and is reviewed after; no verdict stays hidden.
+      {status, reason, score, flagged} =
         case Classifier.impl().classify(m.key, 1, "now") do
-          {:review, s} -> {"review", nil, s}
-          {ok, s} when ok in [:ok_main, :ok_public] -> {"live", nil, s}
-          {:rejected, why, s} -> {"rejected", Atom.to_string(why), s}
+          {:review, %{"error" => true} = s} -> {"review", nil, s, false}
+          {:review, s} -> {"live", nil, s, true}
+          {ok, s} when ok in [:ok_main, :ok_public] -> {"live", nil, s, false}
+          {:rejected, why, s} -> {"rejected", Atom.to_string(why), s, false}
         end
 
-      main_ok = Map.get(score || %{}, "main_ok", false) == true
+      main_ok = not flagged and Map.get(score || %{}, "main_ok", false) == true
       thumb = if status == "live" and thumb_ok, do: checked_thumb(m.key)
 
       Repo.transaction(fn ->
@@ -87,7 +89,7 @@ defmodule Thirstr.Moments do
           """
           UPDATE moments SET status = $2, reject_reason = $3, main_ok = $4, thumb_key = $5,
             caption = $6, caption_style = $7, audience = $8, intents = $9, ttl_s = $10::int,
-            expires_at = now() + make_interval(secs => $10::int)
+            expires_at = now() + make_interval(secs => $10::int), after_review = $11
           WHERE id = $1
           """,
           [
@@ -100,7 +102,8 @@ defmodule Thirstr.Moments do
             opts.style,
             opts.audience,
             opts.intents,
-            opts.ttl
+            opts.ttl,
+            flagged
           ]
         )
 
@@ -239,18 +242,40 @@ defmodule Thirstr.Moments do
       |> hd()
       |> hd()
 
-    if n >= @max_live,
-      do: {:error, {:conflict, "You have 10 live Moments. Delete one to share another."}},
-      else: :ok
+    max = min(@max_live, Thirstr.Plus.limit(a, :moments_live))
+
+    cond do
+      n < max ->
+        :ok
+
+      max < @max_live ->
+        Thirstr.Plus.limit_error(:moments_live, "You have #{max} live Moments on Free.")
+
+      true ->
+        {:error, {:conflict, "You have #{max} live Moments. Delete one to share another."}}
+    end
   end
 
   defp day_limit(a) do
+    plus_n = Thirstr.Plus.limit(a, :moments_per_day)
+
     n =
       if DateTime.diff(DateTime.utc_now(), a.inserted_at, :hour) < 24,
-        do: @new_per_day,
-        else: @per_day
+        do: min(@new_per_day, plus_n),
+        else: min(@per_day, plus_n)
 
-    Social.limit(a, "moments", n, 86_400)
+    # F-23 R-23.5: Free 3 a day; Plus fair use 20 (same counter, so a plan change applies at once).
+    case Social.limit(a, "moments", n, 86_400) do
+      {:error, {:rate_limited, retry}} when plus_n < @per_day ->
+        Thirstr.Plus.limit_error(
+          :moments_per_day,
+          "#{n} Moments a day on Free",
+          DateTime.add(DateTime.utc_now(), retry, :second)
+        )
+
+      other ->
+        other
+    end
   end
 
   defp checked_thumb(key) do
@@ -370,45 +395,59 @@ defmodule Thirstr.Moments do
     |> hd()
   end
 
-  @doc "Admin A-03 (#221, R-21.24): borderline Moments still live in time, oldest first."
+  @doc """
+  Admin A-03 (#221, R-21.24, R-15.56): Moments still in time that need a look, oldest first.
+  `live: false` = hidden (classifier gave no verdict), `live: true` = borderline, already live.
+  """
   def review_queue do
     Repo.query!(
       """
-      SELECT id::text, storage_key, caption, main_ok, expires_at FROM moments
-      WHERE status = 'review' AND expires_at > now() ORDER BY created_at LIMIT 100
+      SELECT id::text, storage_key, caption, main_ok, expires_at, status = 'live' FROM moments
+      WHERE (status = 'review' OR (status = 'live' AND after_review)) AND expires_at > now()
+      ORDER BY created_at LIMIT 100
       """,
       []
     ).rows
-    |> Enum.map(fn [id, key, caption, main_ok, exp] ->
+    |> Enum.map(fn [id, key, caption, main_ok, exp, live] ->
       %{
         id: id,
         url: Storage.presigned_get(key, @signed_ttl),
         caption: caption,
         main_ok: main_ok,
-        expires_at: exp
+        expires_at: exp,
+        live: live
       }
     end)
   end
 
   @doc """
-  Admin decision on a `review` Moment. Approve → live for the time it has left (thumb made now);
-  reject → files and row deleted, same as a classifier reject.
+  Admin decision. Hidden `review` Moment: approve → live for the time it has left (thumb made
+  now). Live borderline Moment: keep → stays live, off the list. Reject (either) → files and row
+  deleted, same as a classifier reject.
   """
-  def review(id, decision) when decision in ~w(approve reject) do
+  def review(id, decision) when decision in ~w(approve keep reject) do
     with {:ok, _} <- Ecto.UUID.cast(id),
-         %{rows: [[pid, key]]} <-
+         %{rows: [[pid, key, status]]} <-
            Repo.query!(
-             "SELECT profile_id::text, storage_key FROM moments WHERE id = $1 AND status = 'review'",
+             "SELECT profile_id::text, storage_key, status FROM moments WHERE id = $1 AND (status = 'review' OR (status = 'live' AND after_review))",
              [dump(id)]
            ) do
-      if decision == "approve" do
-        Repo.query!("UPDATE moments SET status = 'live', thumb_key = $2 WHERE id = $1", [
-          dump(id),
-          checked_thumb(key)
-        ])
-      else
-        Storage.delete_many([key, thumb_of(key)])
-        Repo.query!("DELETE FROM moments WHERE id = $1", [dump(id)])
+      case {decision, status} do
+        {"approve", "review"} ->
+          Repo.query!("UPDATE moments SET status = 'live', thumb_key = $2 WHERE id = $1", [
+            dump(id),
+            checked_thumb(key)
+          ])
+
+        {"keep", "live"} ->
+          Repo.query!("UPDATE moments SET after_review = false WHERE id = $1", [dump(id)])
+
+        {"reject", _} ->
+          Storage.delete_many([key, thumb_of(key)])
+          Repo.query!("DELETE FROM moments WHERE id = $1", [dump(id)])
+
+        _ ->
+          :noop
       end
 
       broadcast(pid)

@@ -9,7 +9,10 @@ env="${1:-}"; hours="${2:-2160}"
 repo="${THIRSTR_REPO:-jeanyves-figiel/Thirstr}"
 case "$env" in
   staging)    apps="thirstr-api-staging thirstr-db-staging thirstr-valkey-staging thirstr-bot-staging thirstr-classifier-staging" ;;
-  production) apps="thirstr-api-prod thirstr-db-prod thirstr-valkey-prod thirstr-classifier-prod" ;;
+  # production also needs thirstr-api-staging: promote deploys the staging image
+  # (registry.fly.io/thirstr-api-staging@sha256:…) and the registry is per app, so without that app's
+  # token prod machines can't resolve it ("Not authorized to access this imageref", promote run 24).
+  production) apps="thirstr-api-prod thirstr-db-prod thirstr-valkey-prod thirstr-classifier-prod thirstr-api-staging" ;;
   *) echo "usage: $0 <staging|production> [expiry-hours]" >&2; exit 2 ;;
 esac
 command -v flyctl >/dev/null || { echo "flyctl missing (brew install flyctl)" >&2; exit 1; }

@@ -1,3 +1,5 @@
+import { PlusLimit } from '../plus/PlusLimit';
+import { plusLimitOf, type PlusLimitHit } from '../plus/plus';
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { api, ApiError } from '../api/client';
@@ -48,6 +50,8 @@ function PlanForm({ onDone, mode }: { onDone: () => void; mode: Mode }) {
   const [win, setWin] = useState<Win>(() => planDefault(Date.now()));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // F-23 R-23.16: a Free limit shows the limit card instead of a red error.
+  const [hit, setHit] = useState<PlusLimitHit | null>(null);
 
   const limits = planLimits(now);
   const startLabel = win.s === limits.min ? tx.now.now : hhmm(win.s);
@@ -76,7 +80,9 @@ function PlanForm({ onDone, mode }: { onDone: () => void; mode: Mode }) {
       setText('');
       onDone();
     } catch (e) {
-      setErr(e instanceof ApiError ? (Object.values(e.fields ?? {})[0]?.[0] ?? e.message) : tx.common.error);
+      const h = plusLimitOf(e);
+      setHit(h);
+      if (!h) setErr(e instanceof ApiError ? (Object.values(e.fields ?? {})[0]?.[0] ?? e.message) : tx.common.error);
     } finally {
       setBusy(false);
     }
@@ -137,6 +143,7 @@ function PlanForm({ onDone, mode }: { onDone: () => void; mode: Mode }) {
         <IconChoice testID="plan-aud" row label={tx.tonight.audience} options={AUDS} value={aud} onChange={setAud} fill={color.trust} />
       </View>
 
+      {hit ? <PlusLimit hit={hit} /> : null}
       <ErrorText text={err} />
       <Button testID="plan-post" title={`${tx.tonight.publish} · ${winLabel}`} busy={busy} onPress={post} />
     </>

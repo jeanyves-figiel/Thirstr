@@ -18,6 +18,7 @@ import { tx } from '../i18n/app';
 import { DevicesScreen } from '../me/DevicesScreen';
 import { RecoveryScreen } from '../me/RecoveryScreen';
 import { PasskeysScreen } from '../me/PasskeysScreen';
+import { PlusScreen, PlusSettingsScreen } from '../plus/PlusScreen';
 import { HelpArticleScreen, HelpCategoryScreen, HelpHomeScreen } from '../help/HelpScreens';
 import { HelpContactScreen, HelpFeedbackScreen, HelpRequestsScreen, HelpThreadScreen } from '../help/SupportScreens';
 import { ClaimBanner, RecoveryClaimScreen, RecoveryStopScreen, useClaim } from '../help/RecoveryClaim';
@@ -90,7 +91,7 @@ const TAB_ICON: Record<string, (c: string) => React.ReactNode> = {
 const TABS = ['Explore', 'Tonight', 'Chats', 'Me'] as const;
 // #137: screens where the nav bar stays hidden (full-screen camera).
 // F-21 (#212): Moments viewer and composer are full screen too.
-const NO_BAR = new Set(['Verify', 'Moments', 'MomentNew']);
+const NO_BAR = new Set(['Verify', 'Moments', 'MomentNew', 'Plus']);
 
 // Pop bottom nav (App v2): white floating pill, icons; active tab grows, shows its label and fills with the mode colour.
 // #137: one bar for the whole app, drawn over every screen (pushed screens too); hidden while the keyboard is up.
@@ -488,6 +489,8 @@ export function Main() {
           <Stack.Screen name="AppLock" component={AppLockScreen} options={sub} />
           <Stack.Screen name="Devices" component={DevicesScreen} options={sub} />
           <Stack.Screen name="Passkeys" component={PasskeysScreen} options={sub} />
+          <Stack.Screen name="Plus" component={PlusScreen as React.ComponentType} options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="PlusSettings" component={PlusSettingsScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="Recovery" component={RecoveryScreen as React.ComponentType} options={{ headerShown: false }} />
           <Stack.Screen name="Help" component={HelpHomeScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="HelpCategory" component={HelpCategoryScreen as React.ComponentType} options={sub} />

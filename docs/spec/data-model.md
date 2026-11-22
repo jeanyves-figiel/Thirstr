@@ -153,6 +153,8 @@ Address/door code: E2EE message to accepted guests, never in DB.
 ### safety_msgs (id bigserial, relay_id, checkin_id null, kind notice|alert|panic|ok|loc, ciphertext bytea, release_at null (held) \| time, created_at) — deleted on contact ack or 24 h after release (R-13.10)
 ### checkins (id uuid, account_id unique, token_hash, due_at, extensions, due_pushed bool, created_at) — deleted on OK/panic; alerts released at due + 15 min
 
+### plus_entitlements (id uuid, account_id, store ios|android|grant, product plus.monthly|plus.yearly|plus.lifetime|plus.grant, original_id_hash bytea, state active|grace|expired|refunded|revoked, period_end null (lifetime), storefront, granted_by, reason, inserted_at, updated_at) — F-23; unique (store, original_id_hash). `accounts.plus_token uuid` = StoreKit appAccountToken / Play obfuscatedAccountId (never the account id)
+
 ## Valkey (RAM-only, no persistence)
 | Key | Value | TTL |
 |---|---|---|

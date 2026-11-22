@@ -33,7 +33,7 @@ test('flags default on, kill switch turns one off', async () => {
 });
 
 test('build below the minimum forces the update screen; header carries the build', async () => {
-  expect(C.clientHeaders()).toEqual({ 'x-thirstr-build': '120' });
+  expect(C.clientHeaders()).toEqual({ 'x-thirstr-build': '120', 'x-thirstr-plus': '1' });
   await C.refreshConfig(fakeFetch(cfg({ min_build: { ios: 121, android: 121 } })));
   expect(C.upgradeRequired()).toBe(true);
   expect(C.storeUrl()).toMatch(/^https:\/\//);
@@ -51,7 +51,7 @@ test('a 426 from any call forces the update screen; offline keeps the last confi
 
 test('no native build (web/dev): no header, never forced by min build', async () => {
   mockBuild = null;
-  expect(C.clientHeaders()).toEqual({});
+  expect(C.clientHeaders()).toEqual({ 'x-thirstr-plus': '1' });
   await C.refreshConfig(fakeFetch(cfg({ min_build: { ios: 999, android: 999 } })));
   expect(C.upgradeRequired()).toBe(false);
 });

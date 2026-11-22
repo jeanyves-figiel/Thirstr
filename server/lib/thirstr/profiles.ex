@@ -148,19 +148,24 @@ defmodule Thirstr.Profiles do
 
   # SR-10 (#150): the phone uploads a ~480 px JPEG next to the photo. It is classified on its own
   # and used only when it passes the same bar as the photo; otherwise cards fall back to the full one.
-  defp checked_thumb(ph, status) do
+  defp checked_thumb(ph, status, borderline_ok) do
     key = thumb_of(ph.storage_key)
 
     with {:ok, %{size: size}} when size > 0 and size <= @thumb_max <- Storage.head(key),
-         {^status, _} <- thumb_verdict(Classifier.impl().classify(key, ph.slot, "now")) do
+         {^status, _} <-
+           thumb_verdict(Classifier.impl().classify(key, ph.slot, "now"), status, borderline_ok) do
       key
     else
       _ -> nil
     end
   end
 
-  defp thumb_verdict({ok, s}) when ok in [:ok_main, :ok_public], do: {Atom.to_string(ok), s}
-  defp thumb_verdict(other), do: other
+  defp thumb_verdict({ok, s}, _, _) when ok in [:ok_main, :ok_public],
+    do: {Atom.to_string(ok), s}
+
+  # A borderline photo is live; its card copy may be borderline too, never worse.
+  defp thumb_verdict({:review, s}, status, true) when not is_map_key(s, "error"), do: {status, s}
+  defp thumb_verdict(other, _, _), do: other
 
   @doc """
   R-02.7 / R-15.10: classify after upload. Slot 0 must be `ok_main`. Every photo carries
@@ -185,12 +190,23 @@ defmodule Thirstr.Profiles do
     end
   end
 
+  # F-15 R-15.56 (#325): borderline → live at once (`main_ok` false), reviewed after publish;
+  # no verdict (classifier down) → stays hidden, `Jobs.HashRetry` re-runs the check.
   defp classify_photo(p, ph, hash_cols, thumb_ok) do
-    {status, reason, score} =
+    {status, reason, score, review} =
       case Classifier.impl().classify(ph.storage_key, ph.slot, "now") do
-        {:review, score} -> {"pending", nil, score}
-        {ok, score} when ok in [:ok_main, :ok_public] -> {Atom.to_string(ok), nil, score}
-        {:rejected, why, score} -> {"rejected", Atom.to_string(why), score}
+        {:review, %{"error" => true} = score} ->
+          {"pending", nil, score, nil}
+
+        {:review, score} ->
+          {if(ph.slot == 0, do: "ok_main", else: "ok_public"), nil,
+           Map.put(score, "main_ok", false), "after"}
+
+        {ok, score} when ok in [:ok_main, :ok_public] ->
+          {Atom.to_string(ok), nil, score, nil}
+
+        {:rejected, why, score} ->
+          {"rejected", Atom.to_string(why), score, nil}
       end
 
     ph =
@@ -200,9 +216,11 @@ defmodule Thirstr.Profiles do
           status: status,
           reject_reason: reason,
           classifier_score: score,
-          review_state: if(status == "pending", do: "queued"),
+          review_state: review,
           thumb_key:
-            if(thumb_ok and status in ~w(ok_main ok_public), do: checked_thumb(ph, status))
+            if(thumb_ok and status in ~w(ok_main ok_public),
+              do: checked_thumb(ph, status, review == "after")
+            )
         })
       )
       |> Repo.update!()
@@ -256,23 +274,49 @@ defmodule Thirstr.Profiles do
     }
   end
 
-  @doc "R-15.43: re-run the gate on photos whose hash check failed; after 30 min a person decides (A-03)."
+  @doc """
+  R-15.43 / R-15.56: re-run the whole check on hidden photos without a verdict: hash provider
+  down (a person decides after 30 min, A-03) or classifier down (a person decides after 6 h).
+  """
   def retry_hash_checks do
     Repo.all(
       from ph in Photo,
         join: p in Profile,
         on: p.id == ph.profile_id,
-        where: ph.hash_state == "retry" and is_nil(ph.review_state),
+        where:
+          ph.status == "pending" and is_nil(ph.review_state) and
+            (ph.hash_state == "retry" or fragment("?->>'error' = 'true'", ph.classifier_score)),
         select: {ph, p.account_id},
         limit: 200
     )
     |> Enum.each(fn {ph, aid} ->
       with %Account{} = a <- Repo.get(Account, aid),
-           {:ok, %Photo{hash_state: "retry"} = ph2, _} <- check_photo(a, ph.profile_id, ph.id),
-           true <- DateTime.diff(DateTime.utc_now(), ph.inserted_at) > 30 * 60 do
+           {:ok, %Photo{status: "pending"} = ph2, _} <- check_photo(a, ph.profile_id, ph.id),
+           true <-
+             DateTime.diff(DateTime.utc_now(), ph.inserted_at) >
+               if(ph2.hash_state == "retry", do: 30 * 60, else: 6 * 3600) do
         ph2 |> Ecto.Changeset.change(review_state: "queued") |> Repo.update!()
       end
     end)
+  end
+
+  @doc """
+  F-15 R-15.56 (#325): daily random sample of live photos from the last 7 days, not reviewed yet,
+  for the A-03 "Daily sample" list. Returns how many were marked.
+  """
+  def sample_live_photos(n \\ Application.get_env(:thirstr, :photo_sample_per_day, 20)) do
+    {count, _} =
+      Repo.query!(
+        """
+        UPDATE photos SET review_state = 'sample' WHERE id IN (
+          SELECT id FROM photos WHERE status IN ('ok_main', 'ok_public') AND review_state IS NULL
+            AND inserted_at > now() - interval '7 days' ORDER BY random() LIMIT $1)
+        """,
+        [n]
+      )
+      |> then(&{&1.num_rows, nil})
+
+    count
   end
 
   @doc "Moves a checked photo into its slot, dropping whatever was there before."

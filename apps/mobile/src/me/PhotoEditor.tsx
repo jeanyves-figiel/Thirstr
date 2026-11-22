@@ -1,8 +1,7 @@
-import * as ImagePicker from 'expo-image-picker';
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { api, ApiError, Me, Photo as P } from '../api/client';
-import { uploadPublicPhoto } from '../api/photoUpload';
+import { pickPublicPhoto, uploadPublicPhoto } from '../api/photoUpload';
 import type { MyProfile } from '../api/types';
 import { tx } from '../i18n/app';
 import { color, radius, space, type } from '../theme/tokens';
@@ -18,6 +17,7 @@ export const PhotoEditor = forwardRef<PhotoEditorHandle, { profile: MyProfile; a
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const picking = useRef(false);
   const live = [...profile.photos].filter((x) => x.status !== 'rejected').sort((a, b) => a.slot - b.slot);
   const rejected = profile.photos.find((x) => x.status === 'rejected');
@@ -34,27 +34,31 @@ export const PhotoEditor = forwardRef<PhotoEditorHandle, { profile: MyProfile; a
     picking.current = true;
     setErr(null);
     feel('tap');
-    let r: ImagePicker.ImagePickerResult;
+    let picked: Awaited<ReturnType<typeof pickPublicPhoto>>;
     try {
-      r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, aspect: [4, 5] });
+      picked = await pickPublicPhoto();
     } catch (e) {
       setErr(e instanceof Error && e.message ? e.message : tx.common.error);
       return;
     } finally {
       picking.current = false;
     }
-    if (r.canceled || !r.assets?.length) return;
+    if (!picked) return;
+    // #305: the picked photo shows in its slot at once while it uploads and is checked.
     setBusy(slot);
+    setPreview(picked.uri);
     try {
-      const asset = r.assets[0];
-      const ct = asset.mimeType ?? 'image/jpeg';
-      const id = await uploadPublicPhoto(profile.id, slot, asset.uri, ct);
-      await api<{ photo: P; account: Me }>('POST', `/me/profiles/${profile.id}/photos/${id}/check`);
-      await reload();
+      const id = await uploadPublicPhoto(profile.id, slot, picked.uri);
+      const r = await api<{ photo: P; account: Me }>('POST', `/me/profiles/${profile.id}/photos/${id}/check`);
+      // The check answers with the fresh account: no second round trip.
+      const fresh = r.account?.profiles?.find((x) => x.id === profile.id) ?? (r.account?.profile?.id === profile.id ? r.account.profile : null);
+      if (fresh) onChange(fresh);
+      else await reload();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : tx.common.error);
     } finally {
       setBusy(null);
+      setPreview(null);
     }
   }
 
@@ -100,6 +104,16 @@ export const PhotoEditor = forwardRef<PhotoEditorHandle, { profile: MyProfile; a
     const r = i === 0 ? 22 : 18;
     if (!ph) {
       const loading = busy !== null && i === live.length;
+      if (loading && preview) {
+        return (
+          <View key={`add${i}`} testID="photo-uploading" accessibilityLabel={tx.edit.checking} accessibilityState={{ busy: true }} style={[style, { borderRadius: r, overflow: 'hidden', backgroundColor: color.bgRaised }]}>
+            <Image source={{ uri: preview }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: `${color.bgBase}8C`, alignItems: 'center', justifyContent: 'center' }]}>
+              <ActivityIndicator color={accent} />
+            </View>
+          </View>
+        );
+      }
       return (
         <Pressable
           key={`add${i}`}
@@ -108,7 +122,9 @@ export const PhotoEditor = forwardRef<PhotoEditorHandle, { profile: MyProfile; a
           accessibilityLabel={tx.edit.add}
           accessibilityState={{ disabled: freeSlot === undefined || busy !== null, busy: loading }}
           disabled={freeSlot === undefined || busy !== null}
-          onPress={() => freeSlot !== undefined && add(freeSlot)}
+          onPress={() => {
+            if (freeSlot !== undefined) void add(freeSlot);
+          }}
           style={({ pressed }) => [
             style,
             { borderRadius: r, borderWidth: 2, borderStyle: 'dashed', borderColor: pressed ? accent : color.line, backgroundColor: pressed ? color.bgRaised : `${color.bgRaised}80`, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.97 : 1 }] },
@@ -131,7 +147,8 @@ export const PhotoEditor = forwardRef<PhotoEditorHandle, { profile: MyProfile; a
         }}
         style={({ pressed }) => [style, { borderRadius: r, borderWidth: 3, borderColor: sel === ph.id ? accent : 'transparent', overflow: 'hidden', opacity: pressed ? 0.85 : 1 }]}
       >
-        <Photo uri={ph.thumb_url ?? ph.url} id={ph.id} label="" style={{ width: '100%', height: '100%' }} />
+        {/* #305: absolute fill. A % height here resolved against the ScrollView viewport on iOS and blew slot 0 up to full screen. */}
+        <Photo uri={ph.thumb_url ?? ph.url} id={ph.id} label="" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
         {i > 0 && ph.status !== 'pending' && ph.main_ok === false ? (
           <View style={{ position: 'absolute', left: 6, bottom: 6, height: 22, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: color.hookup, justifyContent: 'center' }}>
             <Text numberOfLines={1} style={{ ...type.caption, color: color.onAccent }}>{tx.edit.hookupOnly}</Text>

@@ -53,6 +53,15 @@ export function startDataSaver() {
   }
 }
 
+/** Reads the network once (background launches, where the listener above never started). */
+export async function refreshNetwork() {
+  try {
+    net = fromState(await NetInfo.fetch());
+  } catch {
+    // keep the last known state
+  }
+}
+
 export async function setMode(m: SaverMode) {
   await setPrefs({ dataSaver: m });
   emit();

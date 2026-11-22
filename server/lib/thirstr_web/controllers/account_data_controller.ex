@@ -87,11 +87,12 @@ defmodule ThirstrWeb.AccountDataController do
   def linked(conn, %{"id" => pid}), do: Linked.list(me(conn), pid) |> done(conn)
 
   def link_account(conn, p) do
-    with {:ok, r} <- Linked.add(me(conn), p), do: conn |> put_status(201) |> json(r)
+    with {:ok, r} <- Linked.add(me(conn), p, conn.assigns[:client] || %{}),
+         do: conn |> put_status(201) |> json(r)
   end
 
   def update_linked(conn, %{"id" => id} = p), do: Linked.update(me(conn), id, p) |> done(conn)
-  def verify_linked(conn, %{"id" => id}), do: Linked.verify(me(conn), id) |> done(conn)
+  def verify_linked(conn, %{"id" => id} = p), do: Linked.verify(me(conn), id, p) |> done(conn)
   def remove_linked(conn, %{"id" => id}), do: Linked.remove(me(conn), id) |> done(conn)
 
   # share links
@@ -102,5 +103,12 @@ defmodule ThirstrWeb.AccountDataController do
 
   def share(conn, %{"id" => pid}), do: Linked.share(me(conn), pid) |> done(conn)
   def unshare(conn, %{"id" => pid}), do: Linked.unshare(me(conn), pid) |> done(conn)
-  def resolve(conn, %{"slug" => s}), do: Linked.resolve(s) |> done(conn)
+
+  def update_share(conn, %{"id" => pid} = p),
+    do: Linked.set_show_photo(me(conn), pid, p["show_photo"]) |> done(conn)
+
+  def share_preview(conn, %{"id" => pid} = p),
+    do: Linked.put_preview(me(conn), pid, p["photo_id"], p["jpeg_b64"]) |> done(conn)
+
+  def resolve(conn, %{"slug" => s}), do: Linked.resolve(me(conn), s) |> done(conn)
 end

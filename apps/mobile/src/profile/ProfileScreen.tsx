@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Image, Linking, Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { Dimensions, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, ApiError } from '../api/client';
 import type { Mode, MyProfile, ProfileView, Visibility } from '../api/types';
@@ -10,7 +10,7 @@ import { rememberTrip } from '../travel/peerTrips';
 import { color, font, modeColor, radius, space, type } from '../theme/tokens';
 import { v3 } from '../i18n/v3';
 import { AUDIENCES, allowedFor, cycle } from '../me/look';
-import { afterSheet, useNavSpace, Badge, Banner, Button, ErrorState, Icon, Loading, Photo, Scrim, useAccent, VerifiedTick } from '../ui';
+import { useNavSpace, Badge, Banner, Button, ErrorState, Icon, Loading, Photo, Scrim, useAccent, VerifiedTick } from '../ui';
 import { getLocal } from '../me/localFields';
 import { FieldList } from './FieldList';
 import { PrivateNote } from './PrivateNote';
@@ -33,6 +33,7 @@ import { watchedAll } from '../moments/api';
 import { mx } from '../i18n/moments';
 import { PhotoViewer } from '../ui/PhotoViewer';
 import { saving } from '../app/dataSaver';
+import { Elsewhere } from '../links/LinkCard';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void; setParams?: (p: Partial<Params>) => void };
 type Params = { id: string; preview?: 'stranger' | 'verified' | 'chats'; mode?: Mode; /** F-19 G10: grid order around this profile. */ ids?: string[]; /** F-20: opened while looking around this trip city */ trip?: string };
@@ -474,15 +475,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
                 <Badge key={b.kind} label={tx.profile.hostRating(b.up_pct ?? 0, b.total ?? 0)} fill={color.hookup} />
               ))}
           </View>
-          {p.linked_accounts.length ? (
-            <View testID="profile-linked" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-              {p.linked_accounts.map((l) => (
-                <Pressable key={l.platform + l.handle} accessibilityRole="link" onPress={() => l.url && Linking.openURL(l.url)}>
-                  <Badge label={`${tx.linked.platforms[l.platform] ?? l.platform} @${l.handle}${l.verified ? ` · ${tx.profile.linkedVerified}` : ''}`} fill={color.fgSoft} />
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
+          <Elsewhere profileId={p.id} links={p.linked_accounts} self={!!p.self || !!preview} />
           {p.tapped && p.tapped_me ? <Banner tone="personal" text={tx.profile.mutual} /> : null}
           <FieldList fields={{ ...p.fields, ...(getConvs().find((c) => c.peer === p.id)?.peerFields ?? {}) }} accent={accent} />
           {!p.self && !preview ? <PrivateNote profileId={p.id} /> : null}
@@ -581,14 +574,9 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
         onReport={(t) => navigation.navigate('Report', { profileId: t.id })}
         onGone={() => navigation.goBack()}
       >
-        {friendRows.map((r) => (
-          <SheetRow key={r.label} testID="profile-friend" title={r.label} onPress={r.on} />
+        {friendRows.map((r, i) => (
+          <SheetRow key={r.label} testID="profile-friend" title={r.label} onPress={r.on} last={i === friendRows.length - 1 && !(p.vouched || p.can_vouch)} />
         ))}
-        <SheetRow title={tx.profile.share} onPress={() => {
-            // #124: close the sheet first; the system share sheet opens once it is gone.
-            setMenu(false);
-            afterSheet(() => Share.share({ message: `https://thirstr.fun/p/${p.id}` }).catch(() => {}));
-          }} last={!(p.vouched || p.can_vouch)} />
         {p.vouched || p.can_vouch ? (
           <SheetRow last title={p.vouched ? tx.profile.unvouch : tx.profile.vouch} onPress={() => act(() => api(p.vouched ? 'DELETE' : 'POST', `/profiles/${p.id}/vouch`), () => { setMenu(false); load(); })} />
         ) : null}

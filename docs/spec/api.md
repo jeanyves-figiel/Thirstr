@@ -54,7 +54,7 @@ Errors: `{ "error": { "code": "rate_limited", "message": "...", "retry_after": 3
 | POST | /devices/link/{code}/confirm | → 204 (after app lock / Face ID on the old device) |
 | GET | /devices/attest | → {attested, has_key, attested_at} for the calling device (#25) |
 | POST | /devices/attest/challenge | → {challenge (base64url, 43 chars), expires_in: 300}; single use, bound to the device; 20/h |
-| POST | /devices/attest | {key_id, attestation (base64), challenge} → {attested: true}; iOS App Attest, once per install. 422 `attestation_invalid` / `challenge` |
+| POST | /devices/attest | {key_id, attestation (base64), challenge} → {attested: true}; iOS App Attest, once per install. Android (#168): {platform: "android", token, challenge}, Play Integrity verdict with request hash = challenge, daily. 422 `attestation_invalid` / `challenge` |
 | POST | /devices/assert | {assertion (base64), challenge} → {attested: true}; at most daily. 409 `not_attested`, 422 `assertion_invalid` / `challenge` |
 | POST | /auth/device-link | no auth, 10/min/IP. {code, platform, xfer_pub?} → {claim, xfer_pub?} (old phone's key); {code, claim} → 202 {state} until confirmed, then Session |
 
@@ -77,7 +77,7 @@ Outside `/v1`: `GET /.well-known/apple-app-site-association` → `{webcredential
 
 ### Verification (F-03)
 | POST | /verification/challenge | → {nonce, steps: 3 of turn_left\|turn_right\|smile\|look_up (blink dropped, #131), expires_in: 300, key: {n: b64url, e, bits: 3072, hash: "SHA-384"}}. 403 during the 24 h cooldown (R-03.10) |
-| POST | /verification/attest | {nonce, passed: bool, blinded?: b64url} → {signature: b64url} when passed, else {passed: false, attempts_left}. Nonce single use (AC-03.3); 3 fails / 24 h → cooldown |
+| POST | /verification/attest | {nonce, passed: bool, blinded?: b64url, assertion? \| integrity_token?} → {signature: b64url} when passed, else {passed: false, attempts_left}. Nonce single use (AC-03.3); 3 fails / 24 h → cooldown. #270: on staging/prod a pass needs device proof over `"<nonce>.<blinded>"` (App Attest `assertion` or Play Integrity `integrity_token`), else 422 `attestation_required`; 3 issuances / device / 24 h (403) |
 | POST | /verification/redeem | {token: b64url 32–64 B, signature: b64url} → Me (verified, epoch + 1; onboarding `verify` → `done`). Signature check: `sᵉ mod n = MGF1-SHA-384(token) mod n`; sha256(token) stored once (spent) |
 Blind signature (R-03.4, Chaum RSA-FDH): client picks random `token` and `r`, sends `FDH(token)·rᵉ mod n`, unblinds `s = s'·r⁻¹ mod n`. The issuer key is generated once and kept in `server_keys`. Credentials lapse after 12 months (daily sweep, R-03.7).
 
@@ -183,12 +183,12 @@ One MLS identity per (own profile, device): credential identity = `{"p": profile
 | GET | /mls/keypackages | → {counts: {profile_id: {count, last_resort}}, device_id} for this device |
 | POST | /mls/keypackages | {profile_id, key_packages: [b64] (≤ 200 stored per device), last_resort?: b64 (replaces previous)} → {counts, device_id} |
 | POST | /mls/keypackages/claim | {from_profile_id, to_profile_id, context?} → {key_packages: [{id, device_id, key_package}]}, one per recipient device, single-use (last-resort reused). First contact needs caller verified unless replying (R-07.2); recipient without packages → 409 `unavailable` |
-| POST | /mls/messages | {client_id: hex ≤ 32 (R-07.18, idempotency: a repeat from the same device within 7 d returns the first result and stores nothing), from_profile_id, group_id: b64, franking_tag?: b64, context?, envelopes: [{to_profile_id, to_device_id, kind: welcome\|commit\|app, key_package_id?, ciphertext: b64 ≤ 256 KB}] ≤ 200} → {delivered: [profile_id], undelivered: [profile_id]}. Blocked recipients land in `undelivered` (generic "Not delivered", no block reveal). New-contact limit 30/h. Emits `message.new` (no content) + push. All-or-nothing (R-07.22) |
+| POST | /mls/messages | {client_id: hex ≤ 32 (R-07.18, idempotency: a repeat from the same device within 7 d returns the first result and stores nothing), from_profile_id, group_id: b64, franking_tag?: b64, context?, lh?: hex 16 (I-01 R-I01.23: per-sender link hash from a device-only key; counted per sender, never logged), envelopes: [{to_profile_id, to_device_id, kind: welcome\|commit\|app, key_package_id?, ciphertext: b64 ≤ 256 KB}] ≤ 200, blobs?: [blob_id] ≤ 200 (#271: the accounts this message is delivered to may fetch these blobs; only the sender's own blobs count, others ignored)} → {delivered: [profile_id], undelivered: [profile_id]}. Blocked recipients land in `undelivered` (generic "Not delivered", no block reveal). New-contact limit 30/h. Emits `message.new` (no content) + push. All-or-nothing (R-07.22) |
 | GET | /mls/messages?after= | → {messages: [{id, to_profile_id, from_profile_id, group_id, kind, key_package_id, ciphertext, at}], expired: [{group_id, count}]} for this device, ≤ 200, ordered by id. `expired` = messages swept unread for this device since last pull (R-07.22) |
 | POST | /mls/messages/ack | {ids} → deletes them (R-07.12); unacked swept after 30 d |
-| POST | /media/upload | {size ≤ 210 MB, ttl_s?, album?: bool} → 201 {blob_id, put_url}; ciphertext only (AES-256-GCM on device). Chat media ≤ 30 d; album items until deleted |
+| POST | /media/upload | {size ≤ 210 MB, ttl_s?, album?: bool, scoped?: bool (#271: fetchable only by the uploader and accounts a message carrying it was delivered to; the app always sets it)} → 201 {blob_id, put_url}; ciphertext only (AES-256-GCM on device). Chat media ≤ 30 d; album items until deleted |
 | POST | /media/upload (once) | `once: true` (video check, R-18.12): size ≤ 3 MB, TTL 24 h fixed, 20 per account per day |
-| GET | /media/{blob_id} | → {url} signed GET (1 h). Once blob (R-18.12): first call binds to the caller (`fetched_by`), URL valid 2 min; repeat only by that account ≤ 10 min after first fetch, else 404 |
+| GET | /media/{blob_id} | → {url} signed GET (1 h). Scoped blob (#271): only the uploader's account or an account it was sent to (`blobs` on `/mls/messages`), else 404; URL valid 15 min. Unscoped (app builds before #271): any signed-in account, until the blob expires. Once blob (R-18.12): first call binds to the caller (`fetched_by`), URL valid 2 min; repeat only by that account ≤ 10 min after first fetch, else 404 |
 | DELETE | /media/{blob_id} | owner only; album revoke and item delete. Once blob: owner or `fetched_by` |
 | PUT | /me/push | {token, platform: ios\|android} → 204 (device push token) |
 
@@ -224,15 +224,17 @@ Contact side (no account; `rid` from the link fragment; 60 req/min per IP):
 | DELETE | /relay/{rid} | → 204 (opt out, R-13.3) |
 
 ### Social (I-01, I-02, F-18)
-| GET | /me/profiles/{id}/linked-accounts | → {linked: [{id, platform, handle, visibility, verified, code?}]} |
-| POST | /me/linked-accounts | {profile_id, platform: x\|bluesky\|onlyfans\|jff\|instagram, handle, visibility: everyone\|verified\|chats} → 201 {id, proof_method: bio_code\|none, code?} (max 5 per profile) |
+| GET | /me/profiles/{id}/linked-accounts | → {linked: [{id, platform, handle, visibility, proof: bio_code\|post_code\|none, state: unproven\|proven\|manual_pending, code?}]} (I-01 R-I01.14–19) |
+| POST | /me/linked-accounts | {profile_id, platform: x\|bluesky\|onlyfans\|jff\|instagram, handle (or profile URL), visibility: everyone\|verified\|chats} → 201 {id, proof_method: bio_code\|post_code\|none, code?}. Max 5 per profile, one per platform (409). OF/JFF refused (422 `unavailable`) when `adult_links` is off for this build or Safe Mode is on (R-I01.28, R-I01.30) |
 | PATCH | /me/linked-accounts/{id} | {visibility} → 204 |
-| POST | /me/linked-accounts/{id}/verify | → {verified} (Bluesky: code in public bio) |
+| POST | /me/linked-accounts/{id}/verify | {post_url?} → {state} (X: `post_url` required, an x.com/twitter.com post by the linked handle containing the code, read via public oEmbed; 422 `x_wrong_author`. Bluesky: code in bio/display name via AppView, stores DID; OF/JFF: public page fetch, unreadable → `manual_pending`). 409 `taken` if the platform account is proven by another Thirstr account (R-I01.20). Limit 10/h |
 | DELETE | /me/linked-accounts/{id} | → 204 |
-| GET | /me/profiles/{id}/share | → {share: {slug, url} \| null} |
-| POST | /me/profiles/{id}/share | → {slug, url} (creates or rotates) |
+| GET | /me/profiles/{id}/share | → {share: {slug, url, short, show_photo, has_preview} \| null} |
+| POST | /me/profiles/{id}/share | → {slug, url, short, show_photo, has_preview} (creates or renews; renew keeps show_photo, clears preview) |
+| PATCH | /me/profiles/{id}/share | {show_photo} → share |
+| PUT | /me/profiles/{id}/share/preview | {photo_id, jpeg_b64} (≤ 2 KB, JPEG, ≤ 32 px each side; photo_id must be the ok_main photo) → 204 |
 | DELETE | /me/profiles/{id}/share | → 204 (link dead) |
-| GET | /share/{slug} | → {profile_id} (signed in; then GET /profiles/{id}) |
+| GET | /share/{slug} | → {profile_id} or 404 (signed in; blocked either way = 404; rate limit 30/min; then GET /profiles/{id}) |
 Public page `GET /p/{slug}` (HTML, no scripts) — I-02.
 | POST · DELETE | /profiles/{id}/vouch | vouch / withdraw. Verified, account ≥ 30 d (403, AC-18.1), ≥ 10 messages each way with that profile, ≤ 5 per 30 d. Profile view adds `vouches` (weighted, anonymous), `vouched`, `can_vouch` |
 

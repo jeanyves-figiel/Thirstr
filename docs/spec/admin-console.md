@@ -22,15 +22,19 @@ Internal web app (`/server/apps/admin`, Phoenix LiveView). Implements back offic
 ## Queues (screens)
 | ID | Screen | Content | Actions |
 |---|---|---|---|
-| A-01 | Report queue | reports sorted by severity (minor safety, violence, CSAM, scam, spam, other) then age; SLA timer | open → A-02 |
+| A-01 | Queue (#179) | one prioritised list of reports, photo reviews, hash hits, quarantine reviews and appeals, sorted by tier (0 hash hit/CSAM · 1 underage/violence/non-consensual · 2 scam · 3 harassment/hate · 4 spam/impersonation · 5 other), trusted flagger, then SLA left (F-15 R-15.51); tier counts, type filter, j/k + Enter | open → A-02 / A-03 / A-05 / A-12 |
 | A-02 | Report detail | reason, reporter note, franked messages/media the reporter attached, public profile snapshot, prior actions on account (counts), account age, trust signals (verified, vouches, attestation) | dismiss, warn, remove content, suspend (1/3/7 d), ban, escalate; reason code required |
-| A-03 | Photo review | AI-flagged public photos (F-15 R-15.10) below confidence threshold | approve, reject (reason), mark explicit → private-only |
+| A-03 | Photo review | AI-flagged public photos (F-15 R-15.10) below confidence threshold, and photos whose hash check failed for 30 min (R-15.43); reviewer tools R-15.52 | approve, reject (reason), mark explicit → private-only, escalate to A-12 (CSAM) |
+| A-03b | Linked accounts hand check (I-01, #17) | OnlyFans / JustFor.Fans links whose bio code could not be fetched (`manual_pending_at`), oldest first: platform, handle, code, profile link (opens the creator page), age | approve (✓ proof `manual`), reject (link stays, no ✓). Impersonation reports (≥ 2 reporters) hide the link automatically (R-I01.24). Every action audited |
 | A-04 | Quarantine | accounts in shadow quarantine (F-15) with signals | release, extend, ban |
-| A-05 | Appeals | user appeals of bans/rejections | uphold, overturn; user notified in app |
+| A-05 | Appeals | user and notifier appeals (F-15 R-15.30–33): original decision, facts, statement of reasons as sent, appeal text; 12 h cooling-off when the same person decided (beta) | uphold, reverse (reason ≤ 300 required); user notified in app (S-81 timeline) |
 | A-06 | Verification appeals | failed/cooldown cases (no images stored) | grant re-try, reset cooldown |
 | A-07 | Venues & clubs | submissions, edits, claims | approve, edit, reject |
 | A-07b | Places (#113, #191) | venue catalogue counts by source/kind, places added by members (newest 50: name, kind, nearest city, time, check-ins, map link; never the creator), last OSM import (time, added/updated/removed), upcoming official parties | Import now (OSM, F-12 R-12.9); hide/unhide venue; delete a member place (F-12 R-12.11); add official party (venue search by name + city, title, start, end, link); remove party. Every action audited |
 | A-08 | Legal register | requests, jurisdiction, response, hold | log; respond with templated "data held" summary |
+| A-12 | Hash hits & CSAM cases (#179) | open/confirmed/false-positive cases: provider, match id, account, time, SLA 1 h; image never revealed by default (reveal = reason + confirm, audited); monthly PhotoDNA calls vs cap | confirm (ban + blocklist + report pack), false positive (release photo + account), legal hold |
+| A-13 | Legal reports (#179) | per confirmed case: report pack (JSON + summary), where filed (NCMEC, fedpol, country hotline, Art. 18 police), date, external ref, filer; evidence expiry (1 y) | mark filed, add ref, extend hold, download pack (legal only, audited) |
+| A-14 | My moderation day (#179) | own items today, time on tiers 0–1, breaks taken | — |
 | A-09 | Config | rate limits, k-anon k, view caps, flags | change with 2-person approval |
 | A-10 | Audit log | filter by actor, action, time | read-only |
 | A-11 | Costs & capacity (#180, EN-21) | this month's cost per vendor, cost per MAU, budget bar, 6-month history, capacity forecast | add/edit/end a cost item; set budget, alert email, FX rate, capacity inputs. Every action audited. See § Costs & capacity |
@@ -43,7 +47,8 @@ Internal web app (`/server/apps/admin`, Phoenix LiveView). Implements back offic
 - R-AD.9 Every enforcement sends the user an in-app notice with rule cited and appeal link (DSA Art. 17 statement of reasons).
 - R-AD.10 Transparency report figures (counts per action, per reason) computed from audit log, no user ids.
 - R-AD.12 Closed beta: owner is sole admin and moderator. Two-person rules (R-AD.3, A-09) degrade to owner self-approval with mandatory reason; audit log unchanged. Re-enable before public beta.
-- R-AD.11 Moderator wellbeing: queue rotation, max 4 h/day on severe queues, opt-out of categories.
+- R-AD.11 Moderator wellbeing: queue rotation, max 4 h/day on severe queues, opt-out of categories. Details F-15 R-15.53 (break card at 2 h, lock at 4 h, 60 s pause after tier 0; beta owner: warnings only).
+- R-AD.13 Evidence (F-15 R-15.47) is readable only by `legal` and `senior_mod`, with a reason, one audit entry per read; `moderator` gets 403 (AC-15.16).
 
 ## Acceptance
 - AC-AD.1 Login without FIDO2 key is impossible (automated).

@@ -24,12 +24,14 @@ import { EditSectionScreen } from '../me/EditSectionScreen';
 import { MeScreen } from '../me/MeScreen';
 import { backOf, hiddenExpired, stayOf, untilFor } from '../me/hidden';
 import { gx } from '../i18n/gestures';
+import { sl } from '../i18n/shareLink';
 import { toast } from '../ui/Toast';
 import { quickLevel } from '../explore/level';
 import { LensPreviewScreen } from '../me/LensPreviewScreen';
 import { SettingsScreen } from '../me/SettingsScreen';
 import { DataSaverSettings } from '../me/settings/DataSaverScreen';
 import { ChatBackupSettings, RestoreWordsScreen } from '../me/settings/ChatBackupScreen';
+import { syncBackgroundBackup } from '../chat/backgroundBackup';
 import { backupIfDue as chatBackupIfDue } from '../chat/backup';
 import { AccountSettings, ChatSettings, DeleteAccount, NotificationSettings, PrivacySettings, SafetySettings } from '../me/settings/screens';
 import { TapsScreen } from '../me/TapsScreen';
@@ -65,6 +67,8 @@ import { color, modeColor, radius, space, type } from '../theme/tokens';
 import { BackButton, Icon, ModeContext, useBottomPanel, useKeyboardShown } from '../ui';
 import { useSession } from './session';
 import { WhatsNewCard, WhatsNewScreen } from '../whatsnew/WhatsNew';
+import { ShareSheetScreen } from '../links/ShareSheet';
+import { LinkedAccountsScreen } from '../links/LinkedAccounts';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -261,6 +265,7 @@ function useAttestation() {
     ensureAttested();
     backupIfDue();
     chatBackupIfDue(); // R-01.15: daily, Wi-Fi unless allowed on mobile data
+    syncBackgroundBackup(); // #260: and from the OS on days the app isn't opened
     const s = AppState.addEventListener('change', (st) => {
       if (st === 'active') {
         ensureAttested();
@@ -309,15 +314,32 @@ function useCheckinWatch() {
   }, []);
 }
 
-/** I-02 R-I02.3: thirstr://p/{slug} and https://<site>/p/{slug} open the profile. */
+/** I-02 R-I02.3: thirstr://p/{slug} and https://<site>/p/{slug} open the profile (own link → Preview). */
 function useShareLinks() {
   React.useEffect(() => {
     const open = async (url: string | null | undefined) => {
+      // I-01 R-I01.1 (#17): the iOS share extension hands the shared link over as thirstr://share?url=…
+      const sh = url?.match(/^thirstr:\/\/share\?(?:.*&)?url=([^&]+)/);
+      if (sh) {
+        for (let i = 0; i < 20 && !nav.isReady(); i++) await new Promise((res) => setTimeout(res, 250));
+        let shared = '';
+        try {
+          shared = decodeURIComponent(sh[1]);
+        } catch {
+          return;
+        }
+        if (nav.isReady()) nav.navigate('ShareSheet', { url: shared.slice(0, 4000) });
+        return;
+      }
       const m = url?.match(/(?:^thirstr:\/\/p\/|\/p\/)([a-z0-9]{10})(?:[/?#]|$)/);
       if (!m) return;
-      const r = await api<{ profile_id: string }>('GET', `/share/${m[1]}`).catch(() => null);
+      const r = await api<{ profile_id: string; own?: boolean }>('GET', `/share/${m[1]}`).catch(() => null);
       for (let i = 0; i < 20 && !nav.isReady(); i++) await new Promise((res) => setTimeout(res, 250));
-      if (r && nav.isReady()) nav.navigate('Profile', { id: r.profile_id });
+      if (!nav.isReady()) return;
+      // Same words for dead, blocked or hidden: nobody learns why (R-I02.3).
+      if (!r) toast(sl.unavailable);
+      else if (r.own) nav.navigate('LensPreview');
+      else nav.navigate('Profile', { id: r.profile_id });
     };
     Linking.getInitialURL().then(open);
     const s = Linking.addEventListener('url', (e) => open(e.url));
@@ -439,6 +461,8 @@ export function Main() {
           <Stack.Screen name="AppLock" component={AppLockScreen} options={sub} />
           <Stack.Screen name="Devices" component={DevicesScreen} options={sub} />
           <Stack.Screen name="Recovery" component={RecoveryScreen as React.ComponentType} options={{ headerShown: false }} />
+          <Stack.Screen name="ShareSheet" component={ShareSheetScreen as React.ComponentType} options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="LinkedAccounts" component={LinkedAccountsScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="WhatsNew" component={WhatsNewScreen as React.ComponentType} options={sub} />
         </Stack.Navigator>
         {!kb && !panel && !(top && NO_BAR.has(top.name)) ? <PillBar active={active} onPick={pick} /> : null}

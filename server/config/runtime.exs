@@ -56,6 +56,20 @@ config :thirstr,
      end),
   # #25 App Attest: keys from Xcode debug builds ("development" aaguid) are refused in prod.
   app_attest_allow_dev: System.get_env("DEPLOY_ENV") not in ["prod", "production"],
+  # #270: verification issuance needs device proof (App Attest / Play Integrity) on staging + prod.
+  verification_requires_attest:
+    env.(
+      "VERIFICATION_REQUIRE_ATTEST",
+      if(System.get_env("DEPLOY_ENV") in ~w(staging prod production), do: "true", else: "false")
+    ) in ~w(true 1),
+  # #168 Android Play Integrity: service account JSON as a secret; unset = Android attestation off.
+  play_integrity: [
+    service_account: System.get_env("PLAY_INTEGRITY_SERVICE_ACCOUNT_JSON"),
+    package: env.("ANDROID_PACKAGE", "app.thirstr"),
+    cert_digests:
+      String.split(System.get_env("PLAY_INTEGRITY_CERT_SHA256") || "", ",", trim: true),
+    allow_unrecognized: System.get_env("DEPLOY_ENV") not in ["prod", "production"]
+  ],
   # Admin console (admin-console.md, R-AD.12): owner account ids; empty = console off (404).
   admin_account_ids: String.split(System.get_env("ADMIN_ACCOUNT_IDS") || "", ",", trim: true),
   # testing.md › Chat test bot: shared key for the bot service; unset = feature off (404).
@@ -98,6 +112,20 @@ end
 if System.get_env("CLASSIFIER_URL") not in [nil, ""] do
   config :thirstr, :photo_classifier, Thirstr.Moderation.NudeNetClassifier
   config :thirstr, :classifier_token, System.get_env("CLASSIFIER_TOKEN")
+end
+
+# F-15 R-15.42 (#179): pre-publish hash match. Staging/prod: noop until the PhotoDNA keys arrive.
+if config_env() == :prod or System.get_env("HASH_MATCH_PROVIDER") do
+  provider =
+    case System.get_env("HASH_MATCH_PROVIDER", "noop") do
+      "photodna" -> Thirstr.Moderation.HashMatch.PhotoDNA
+      "dev" -> Thirstr.Moderation.HashMatch.Dev
+      _ -> Thirstr.Moderation.HashMatch.Noop
+    end
+
+  config :thirstr, :hash_match, provider
+  config :thirstr, :photodna_key, System.get_env("PHOTODNA_KEY")
+  config :thirstr, :photodna_url, System.get_env("PHOTODNA_URL")
 end
 
 s3 = URI.parse(env.("S3_ENDPOINT", "http://localhost:9000"))

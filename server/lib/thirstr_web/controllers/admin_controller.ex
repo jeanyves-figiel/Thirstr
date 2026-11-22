@@ -3,7 +3,7 @@ defmodule ThirstrWeb.AdminController do
   Admin & moderation console (admin-console.md), beta form: server-rendered pages in the API app,
   owner-only passkey login (R-AD.12), every view and action written to `admin_audit` (R-AD.4).
 
-  Screens: A-01 reports, A-02 report detail, A-03 photo review, A-04 quarantine, A-05 appeals,
+  Screens: A-02 report detail, A-03 photo review, A-04 quarantine, A-05 appeals,
   A-10 audit log. Never shown: location, email, device ids, IPs, chats not attached by a reporter
   (R-AD.6, AC-AD.3).
   """
@@ -114,40 +114,11 @@ defmodule ThirstrWeb.AdminController do
 
   defp forwarded?(conn), do: get_req_header(conn, "x-forwarded-proto") != []
 
-  # ------------------------------------------------------------------ A-01 report queue
-
-  def reports(conn, _) do
-    audit(conn.assigns.admin, "view_queue", nil, nil)
-
-    rows =
-      q(
-        """
-        SELECT r.id::text, r.reason, r.severity, r.context, r.created_at, p.display_name,
-               (r.franked IS NOT NULL), (SELECT count(*) FROM reports x WHERE x.target_account = r.target_account AND x.state = 'open')
-        FROM reports r LEFT JOIN profiles p ON p.id = r.target_profile
-        WHERE r.state = 'open' ORDER BY r.severity, r.created_at LIMIT 200
-        """,
-        []
-      )
-
-    list =
-      Enum.map_join(rows, "", fn [id, reason, sev, ctx, at, name, fr, n] ->
-        """
-        <tr><td><a href="/admin/reports/#{id}">#{e(name || "—")}</a></td><td>#{e(reason)}</td>
-        <td>#{sev}</td><td>#{e(ctx)}#{if fr, do: " · 🔏", else: ""}</td><td>#{n}</td><td>#{sla(sev, at)}</td></tr>
-        """
-      end)
-
-    page(conn, "Reports", """
-    #{nav()}
-    <h1>A-01 Reports</h1>
-    <table><tr><th>Profile</th><th>Reason</th><th>Sev</th><th>Context</th><th>Open</th><th>SLA</th></tr>#{list}</table>
-    #{if rows == [], do: ~s(<p class="muted">Queue empty.</p>), else: ""}
-    """)
-  end
+  # A-01 queue: ThirstrWeb.ModController.queue/2 (#179).
 
   # R-AD.8 severity SLAs: 1–2 ≤ 1 h, 3 ≤ 12 h, others ≤ 48 h.
-  defp sla(sev, at) do
+  @doc false
+  def sla(sev, at) do
     limit = if(sev <= 2, do: 3600, else: if(sev == 3, do: 12 * 3600, else: 48 * 3600))
     left = limit - DateTime.diff(DateTime.utc_now(), at)
 
@@ -160,16 +131,17 @@ defmodule ThirstrWeb.AdminController do
 
   def report(conn, %{"id" => id}) do
     with {:ok, _} <- Ecto.UUID.cast(id),
-         [[rid, reason, ctx, note, franked, state, at, pid, aid]] <-
+         [[rid, reason, ctx, note, franked, state, at, pid, aid, sev]] <-
            q(
              """
              SELECT r.id::text, r.reason, r.context, r.note, r.franked, r.state, r.created_at,
-                    r.target_profile::text, r.target_account::text
+                    r.target_profile::text, r.target_account::text, r.severity
              FROM reports r WHERE r.id = $1
              """,
              [Nearby.dump(id)]
            ) do
       audit(conn.assigns.admin, "view_report", rid, nil)
+      conn = ThirstrWeb.ModController.track(conn, ThirstrWeb.ModController.report_tier(sev))
 
       msgs =
         Enum.map_join((franked || %{})["messages"] || [], "", fn m ->
@@ -280,9 +252,14 @@ defmodule ThirstrWeb.AdminController do
     """
   end
 
-  # R-AD.7: blurred by default, click to reveal.
-  defp photo_tile(ph) do
-    ~s{<label class="ph"><input type="radio" name="photo_id" form="act" value="#{ph.id}"><img src="#{e(Storage.presigned_get(ph.storage_key))}" onclick="this.classList.toggle('show')"><span>slot #{ph.slot} · #{e(ph.status)}</span></label>}
+  # R-AD.7 / F-15 R-15.52 (#179): blurred + grayscale by default, the card-size copy when it
+  # exists (≤ 480 px), hold to peek (3 s), Reveal (audited), Grayscale toggle. Script in page/3.
+  @doc false
+  def photo_tile(ph) do
+    key = ph.thumb_key || ph.storage_key
+    hash = if ph.hash_state, do: " · hash #{e(ph.hash_state)}", else: ""
+
+    ~s{<div class="ph"><label><input type="radio" name="photo_id" form="act" value="#{ph.id}"> pick</label><div class="img blur" data-id="#{ph.id}"><img alt="" src="#{e(Storage.presigned_get(key))}"></div><div class="tools"><button type="button" data-t="peek">Hold to peek</button><button type="button" data-t="reveal" aria-pressed="false">Reveal</button><button type="button" data-t="gray" aria-pressed="true">Grayscale</button></div><span class="muted">slot #{ph.slot} · #{e(ph.status)}#{hash}</span></div>}
   end
 
   defp action_form(path, _pid) do
@@ -320,6 +297,10 @@ defmodule ThirstrWeb.AdminController do
             <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
             <button name="decision" value="approve">Approve</button>
             <button name="decision" value="reject">Reject</button>
+          </form>
+          <form method="post" action="/admin/photos/#{ph.id}/escalate">
+            <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
+            <button class="danger">Escalate as CSAM</button>
           </form></div>
         """
       end)
@@ -351,6 +332,44 @@ defmodule ThirstrWeb.AdminController do
         send_resp(conn, 404, "")
     end
   end
+
+  # ------------------------------------------------------------------ A-03b linked accounts (I-01 R-I01.17)
+
+  def linked(conn, _) do
+    audit(conn.assigns.admin, "view_linked", nil, nil)
+
+    list =
+      Thirstr.Linked.manual_queue()
+      |> Enum.map_join("", fn l ->
+        """
+        <div class="card"><p><b>#{e(l.platform)}</b> @#{e(l.handle)}: code <code>#{e(l.code)}</code></p>
+          <p class="muted">Open <code>#{e(l.url)}</code> in a clean private window and look for the code in the bio.</p>
+          <form method="post" action="/admin/linked/#{l.id}">
+            <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
+            <button name="decision" value="approve">Code found: approve</button>
+            <button name="decision" value="reject">Not found: reject</button>
+          </form></div>
+        """
+      end)
+
+    page(conn, "Linked accounts", """
+    #{nav()}<h1>A-03b Linked accounts: check by hand</h1>
+    #{if list == "", do: ~s(<p class="muted">Nothing waiting.</p>), else: list}
+    """)
+  end
+
+  def linked_decision(conn, %{"id" => id, "decision" => d}) when d in ~w(approve reject) do
+    case Thirstr.Linked.manual_decision(id, d) do
+      {:error, :not_found} ->
+        send_resp(conn, 404, "")
+
+      _ ->
+        audit(conn.assigns.admin, "linked_" <> d, id, nil)
+        redirect(conn, to: "/admin/linked")
+    end
+  end
+
+  def linked_decision(conn, _), do: send_resp(conn, 422, "")
 
   # ------------------------------------------------------------------ A-04 quarantine
 
@@ -632,27 +651,31 @@ defmodule ThirstrWeb.AdminController do
 
   # Every caller passes a literal SQL string; values go through params.
   # sobelow_skip ["SQL.Query"]
-  defp q(sql, params), do: (Repo.query!(sql, params).rows || []) |> Nearby.utc()
+  @doc false
+  def q(sql, params), do: (Repo.query!(sql, params).rows || []) |> Nearby.utc()
 
-  defp e(nil), do: ""
-  defp e(s), do: s |> to_string() |> Plug.HTML.html_escape()
+  @doc false
+  def e(nil), do: ""
+  def e(s), do: s |> to_string() |> Plug.HTML.html_escape()
 
   defp fmt_ms(n) when is_integer(n),
     do: n |> DateTime.from_unix!(:millisecond) |> DateTime.to_iso8601()
 
   defp fmt_ms(_), do: ""
 
-  defp nav do
+  @doc false
+  def nav do
     """
-    <nav><a href="/admin">Reports</a><a href="/admin/photos">Photos</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a>
-    <a href="/admin/appeals">Appeals</a><a href="/admin/audit">Audit</a>
+    <nav><a href="/admin">Queue</a><a href="/admin/cases">Hash hits &amp; cases</a><a href="/admin/photos">Photos</a><a href="/admin/linked">Linked</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a><a href="/admin/costs">Costs</a>
+    <a href="/admin/appeals">Appeals</a><a href="/admin/me">My day</a><a href="/admin/audit">Audit</a>
     <form method="post" action="/admin/logout" style="display:inline"><input type="hidden" name="_csrf_token" value="#{get_csrf_token()}"><button>Sign out</button></form></nav>
     """
   end
 
   # All dynamic values are escaped with e/1 before they reach `body`.
   # sobelow_skip ["XSS.SendResp"]
-  defp page(conn, title, body) do
+  @doc false
+  def page(conn, title, body) do
     conn
     |> put_resp_content_type("text/html")
     |> put_resp_header("cache-control", "no-store")
@@ -668,9 +691,46 @@ defmodule ThirstrWeb.AdminController do
     table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #2c2650;padding:6px;text-align:left;vertical-align:top}
     button,select,input{font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px;padding:4px 10px}
     .photos{display:flex;gap:8px;flex-wrap:wrap}.ph{display:inline-flex;flex-direction:column;gap:4px}
-    .ph img{width:140px;height:180px;object-fit:cover;border-radius:8px;filter:blur(18px) grayscale(1);cursor:pointer}
-    .ph img.show{filter:none}.card{background:#1f1a3d;border-radius:12px;padding:12px;margin:8px 0}
-    </style></head><body>#{body}</body></html>
+    .img{width:180px;height:240px;border-radius:10px;overflow:hidden;background:#0c0a1c}
+    .img img{width:100%;height:100%;object-fit:cover;filter:grayscale(1)}
+    .img.blur img{filter:blur(24px) grayscale(1)}.img.color img{filter:none}.img.blur.color img{filter:blur(24px)}
+    .tools{display:flex;gap:4px;flex-wrap:wrap}.tools button{font-size:12px;padding:3px 8px}
+    button[aria-pressed="true"]{border-color:#2ee6c5;color:#2ee6c5}
+    .card{background:#1f1a3d;border-radius:12px;padding:12px;margin:8px 0}
+    .sev{display:inline-block;width:4px;height:18px;border-radius:2px;vertical-align:middle;margin-right:6px}
+    .chip{font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid #463e7a;color:#9a93c0;white-space:nowrap}
+    tr.sel td{background:#2a2350}.banner{background:#3a1022;border:1px solid #ff2e63;border-radius:12px;padding:10px 14px}
+    .warn{background:#3a2a10;border:1px solid #ffb547;border-radius:12px;padding:10px 14px}
+    </style></head><body>#{body}
+    <script>
+    // F-15 R-15.52: reviewer tools. Reveal is written to the audit log.
+    const toolsCsrf = #{Jason.encode!(get_csrf_token())};
+    document.querySelectorAll('.ph').forEach(ph => {
+      const im = ph.querySelector('.img'); if (!im) return;
+      const rev = ph.querySelector('[data-t=reveal]');
+      let to;
+      const off = () => { if (rev.getAttribute('aria-pressed') !== 'true') im.classList.add('blur'); };
+      const peek = ph.querySelector('[data-t=peek]');
+      peek.addEventListener('pointerdown', () => { im.classList.remove('blur'); clearTimeout(to); to = setTimeout(off, 3000); });
+      ['pointerup', 'pointerleave'].forEach(ev => peek.addEventListener(ev, off));
+      rev.addEventListener('click', () => {
+        const on = rev.getAttribute('aria-pressed') !== 'true';
+        rev.setAttribute('aria-pressed', on); im.classList.toggle('blur', !on);
+        if (on) fetch('/admin/reveal', {method: 'POST', headers: {'content-type': 'application/json', 'x-csrf-token': toolsCsrf}, body: JSON.stringify({id: im.dataset.id})});
+      });
+      const g = ph.querySelector('[data-t=gray]');
+      g.addEventListener('click', () => { const on = g.getAttribute('aria-pressed') !== 'true'; g.setAttribute('aria-pressed', on); im.classList.toggle('color', !on); });
+    });
+    // A-01 keyboard: j/k move, Enter opens.
+    const rows = [...document.querySelectorAll('tr[data-href]')]; let i = 0;
+    const sel = () => rows.forEach((r, n) => r.classList.toggle('sel', n === i));
+    if (rows.length) { sel(); document.addEventListener('keydown', ev => {
+      if (ev.target.matches('input,textarea,select')) return;
+      if (ev.key === 'j') { i = Math.min(i + 1, rows.length - 1); sel(); }
+      if (ev.key === 'k') { i = Math.max(i - 1, 0); sel(); }
+      if (ev.key === 'Enter') location.href = rows[i].dataset.href;
+    }); }
+    </script></body></html>
     """)
   end
 end

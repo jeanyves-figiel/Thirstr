@@ -61,6 +61,16 @@ defmodule Thirstr.Storage do
     end)
   end
 
+  @doc "Object bytes for server-side checks (hash match, F-15 R-15.42). Public images are ≤ 15 MB."
+  def get(key), do: adapter().get(key)
+
+  def s3_get(key) do
+    case ExAws.S3.get_object(bucket(), key) |> ExAws.request() do
+      {:ok, %{body: body}} -> {:ok, body}
+      _ -> {:error, :not_found}
+    end
+  end
+
   def delete_many([]), do: :ok
   def delete_many(keys), do: adapter().delete_many(keys)
 
@@ -89,11 +99,14 @@ end
 defmodule Thirstr.Storage.S3 do
   @moduledoc false
   def head(key), do: Thirstr.Storage.s3_head(key)
+  def get(key), do: Thirstr.Storage.s3_get(key)
   def delete_many(keys), do: Thirstr.Storage.s3_delete_many(keys)
 end
 
 defmodule Thirstr.Storage.Fake do
   @moduledoc "Test adapter: every object exists with a small size."
   def head(_key), do: {:ok, %{size: 1234}}
+  # Bytes = the key, so tests can blocklist one exact "image".
+  def get(key), do: {:ok, "fake:" <> key}
   def delete_many(_keys), do: :ok
 end

@@ -12,7 +12,8 @@ module.exports = ({ config }) => {
   return {
     ...config,
     // #168: TLS pinning of the API hosts to CA keys (plugins/with-cert-pinning.js).
-    plugins: [...(config.plugins ?? []), './plugins/with-cert-pinning'],
+    // #175: R8 keep rules so Room/WorkManager survive minified release builds.
+    plugins: [...(config.plugins ?? []), './plugins/with-cert-pinning', './plugins/with-proguard-rules'],
     ios: {
       ...config.ios,
       // CI sets IOS_BUILD_NUMBER (run number + offset); TestFlight needs it to grow.

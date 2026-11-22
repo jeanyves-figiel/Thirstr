@@ -55,12 +55,16 @@ public class ThirstrFaceModule: Module {
           let rects = VNDetectFaceRectanglesRequest()
           rects.revision = VNDetectFaceRectanglesRequestRevision3
           try handler.perform([rects])
-          let boxes = (rects.results ?? [])
-            .map { $0.boundingBox }
-            .sorted { $0.width * $0.height > $1.width * $1.height }
-            .prefix(20)
-            .map { b in [Double(b.minX), Double(1 - b.maxY), Double(b.width), Double(b.height)] }
-          promise.resolve(Array(boxes))
+          // Explicit types: the chained form hit Swift's type-check time limit (#175 device matrix).
+          let faces: [VNFaceObservation] = rects.results ?? []
+          let rectsByArea: [CGRect] = faces.map { (f: VNFaceObservation) -> CGRect in f.boundingBox }
+            .sorted { (a: CGRect, b: CGRect) -> Bool in a.width * a.height > b.width * b.height }
+          var boxes: [[Double]] = []
+          for b in rectsByArea.prefix(20) {
+            let top: Double = 1.0 - Double(b.maxY)
+            boxes.append([Double(b.minX), top, Double(b.width), Double(b.height)])
+          }
+          promise.resolve(boxes)
         } catch {
           promise.reject("E_VISION", error.localizedDescription)
         }

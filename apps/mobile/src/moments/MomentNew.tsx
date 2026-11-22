@@ -15,6 +15,9 @@ import { feel } from '../ui/haptics';
 import { toast } from '../ui/Toast';
 import * as M from './api';
 import { CaptionPreview } from './MomentViewer';
+import * as B from './blur';
+import { BlurPreview, bake } from './BlurCanvas';
+import { faceBoxes, faceBoxesAvailable } from '../../modules/thirstr-face';
 
 type Nav = { goBack: () => void; navigate: (r: string, p?: object) => void; replace?: (r: string, p?: object) => void };
 type Picked = { uri: string; w: number; h: number };
@@ -51,6 +54,13 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
   const [busy, setBusy] = useState(false);
   const [rejected, setRejected] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // R-21.2 Blur tool (D-21c A): brush + Blur faces, burned in on the phone before upload.
+  const [blurOn, setBlurOn] = useState(false);
+  const [bs, setBs] = useState<B.BlurState>(B.empty);
+  const [brush, setBrush] = useState<B.Brush>('m');
+  const [finding, setFinding] = useState(false);
+  const [ready, setReady] = useState<{ key: string; uri: string; w: number; h: number } | null>(null);
+  const marks = useMemo(() => B.spots(bs), [bs]);
   const counts = useMemo(() => ({ chats: chatPeers().length, favorites: favPeers().length, friends: friendPeers().length }), []);
 
   async function pick(camera: boolean) {
@@ -64,8 +74,47 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
     if (r.canceled) return;
     const a = r.assets[0];
     setSrc({ uri: a.uri, w: a.width, h: a.height });
+    setBs(B.empty());
+    setReady(null);
     setRejected(false);
   }
+
+  /** Cropped, EXIF-free copy for this crop (also what face finding looks at). */
+  async function prepared() {
+    const key = `${src!.uri}|${crop}`;
+    if (ready?.key === key) return ready;
+    const r = await M.prepare(src!.uri, src!.w, src!.h, crop);
+    const next = { key, ...r };
+    setReady(next);
+    return next;
+  }
+
+  async function findFaces() {
+    if (finding) return;
+    if (bs.faces) return setBs(B.blurFaces(bs));
+    setFinding(true);
+    try {
+      const out = await prepared();
+      const faces = B.facesFrom(await faceBoxes(out.uri));
+      if (!faces.length) {
+        setBs({ ...bs, faces: [] });
+        toast(mx.noFaces);
+        return;
+      }
+      feel('tick');
+      setBs(B.blurFaces({ ...bs, faces }, faces));
+    } catch {
+      toast(tx.common.retry);
+    } finally {
+      setFinding(false);
+    }
+  }
+
+  const changeCrop = () => {
+    if (B.count(bs) || bs.faces) toast(mx.blurCleared);
+    setBs(B.empty());
+    setCrop(CROPS[(CROPS.indexOf(crop) + 1) % CROPS.length]);
+  };
 
   async function shareNow() {
     if (!src || busy) return;
@@ -74,8 +123,9 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
     setBusy(true);
     setErr(null);
     try {
-      const ready = await M.prepare(src.uri, src.w, src.h, crop);
-      const res = await M.share(ready.uri, { audience, audience_ids: ids, ttl_s: ttl, intents: lenses, caption, caption_style: style });
+      const out = await prepared();
+      const uri = marks.length ? await bake(out.uri, out.w, out.h, marks) : out.uri;
+      const res = await M.share(uri, { audience, audience_ids: ids, ttl_s: ttl, intents: lenses, caption, caption_style: style });
       last = { audience, ttl };
       if (res.status === 'rejected') {
         feel('warning');
@@ -154,6 +204,23 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
       <View style={{ paddingTop: insets.top + space.s, alignItems: 'center' }}>
         <View style={{ width: frameW, height: frameH, borderRadius: 22, overflow: 'hidden', backgroundColor: color.bgRaised }}>
           <Image source={{ uri: src.uri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} accessibilityLabel={mx.newTitle} />
+          {marks.length ? <BlurPreview uri={src.uri} width={frameW} height={frameH} spots={marks} /> : null}
+          {blurOn ? (
+            <View
+              testID="moment-blur-canvas"
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={(e) => {
+                const x = e.nativeEvent.locationX / frameW;
+                const y = e.nativeEvent.locationY / frameH;
+                const f = B.faceAt(bs, x, y);
+                if (f >= 0 && bs.faces?.[f].on) setBs(B.toggleFace(bs, f));
+                else setBs(B.begin(bs, x, y, brush, frameW / frameH));
+              }}
+              onResponderMove={(e) => setBs((cur) => B.extend(cur, e.nativeEvent.locationX / frameW, e.nativeEvent.locationY / frameH, brush, frameW / frameH))}
+            />
+          ) : null}
           {caption.trim() ? <CaptionPreview text={caption.trim()} style={style} top={frameH * 0.58} /> : null}
         </View>
         {/* tools: crop ratios, caption style */}
@@ -161,14 +228,31 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
           <Pressable accessibilityRole="button" accessibilityLabel={mx.close} onPress={navigation.goBack} style={tool(false)}>
             <Icon.Close />
           </Pressable>
-          <Pressable testID="moment-crop" accessibilityRole="button" accessibilityLabel={`${mx.crop} ${crop}`} onPress={() => setCrop(CROPS[(CROPS.indexOf(crop) + 1) % CROPS.length])} style={tool(false)}>
+          <Pressable testID="moment-crop" accessibilityRole="button" accessibilityLabel={`${mx.crop} ${crop}`} onPress={changeCrop} style={tool(false)}>
             <Text style={{ fontFamily: font.heavy, fontSize: 10.5, color: color.fgPrimary }}>{crop}</Text>
+          </Pressable>
+          <Pressable testID="moment-blur" accessibilityRole="button" accessibilityState={{ selected: blurOn }} accessibilityLabel={mx.blur} onPress={() => setBlurOn(!blurOn)} style={tool(false, blurOn)}>
+            <Text style={{ fontFamily: font.heavy, fontSize: 10, color: blurOn ? color.onAccent : color.fgPrimary }}>{mx.blur}</Text>
           </Pressable>
           <Pressable testID="moment-style" accessibilityRole="button" accessibilityLabel={`${mx.caption}: ${mx.styles[style]}`} onPress={() => setStyle(STYLES[(STYLES.indexOf(style) + 1) % STYLES.length])} style={tool(style !== 'clean')}>
             <Text style={{ fontFamily: font.heavy, fontSize: 15, color: style !== 'clean' ? color.onAccent : color.fgPrimary }}>Aa</Text>
           </Pressable>
         </View>
       </View>
+      {blurOn ? (
+        <BlurTray
+          state={bs}
+          brush={brush}
+          finding={finding}
+          faces={faceBoxesAvailable}
+          bottom={insets.bottom}
+          onFaces={findFaces}
+          onKeep={(k) => setBs(B.setKeepMine(bs, k))}
+          onBrush={setBrush}
+          onUndo={() => setBs(B.undo(bs))}
+          onDone={() => setBlurOn(false)}
+        />
+      ) : (
       <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ backgroundColor: color.bgOverlay, borderTopLeftRadius: 26, borderTopRightRadius: 26, marginTop: -26, padding: space.l, paddingBottom: insets.bottom + space.l, gap: space.m, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
         <TextInput
           testID="moment-caption"
@@ -232,11 +316,77 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
         </Pressable>
         <Text style={{ ...type.meta, fontSize: 12, color: color.trust }}>{mx.privacyNote}</Text>
       </ScrollView>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
-const tool = (on: boolean) => ({ width: 42, height: 42, borderRadius: 21, backgroundColor: on ? color.hookup : 'rgba(23,20,46,0.62)', alignItems: 'center' as const, justifyContent: 'center' as const });
+const tool = (on: boolean, teal = false) => ({ width: 42, height: 42, borderRadius: 21, backgroundColor: teal ? color.trust : on ? color.hookup : 'rgba(23,20,46,0.62)', alignItems: 'center' as const, justifyContent: 'center' as const });
+
+const SIZES: { k: B.Brush; dot: number }[] = [
+  { k: 's', dot: 6 },
+  { k: 'm', dot: 11 },
+  { k: 'l', dot: 16 },
+];
+
+/** D-21c A: the Blur tray under the photo (Blur faces, Keep mine, brush sizes, Undo, Done). */
+function BlurTray(p: {
+  state: B.BlurState;
+  brush: B.Brush;
+  finding: boolean;
+  faces: boolean;
+  bottom: number;
+  onFaces: () => void;
+  onKeep: (k: boolean) => void;
+  onBrush: (b: B.Brush) => void;
+  onUndo: () => void;
+  onDone: () => void;
+}) {
+  const n = B.count(p.state);
+  return (
+    <View testID="moment-blur-tray" style={{ flex: 1, backgroundColor: color.bgOverlay, borderTopLeftRadius: 26, borderTopRightRadius: 26, marginTop: -26, padding: space.l, paddingBottom: p.bottom + space.l, gap: space.m }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ ...type.headline, fontSize: 15, color: color.fgPrimary }}>{mx.blur}</Text>
+        <Text style={{ ...type.meta, fontSize: 12, color: color.fgSecondary }}>{mx.blurred(n)}</Text>
+      </View>
+      {p.faces ? (
+        <>
+          <Pressable testID="moment-blur-faces" accessibilityRole="button" disabled={p.finding} onPress={p.onFaces} style={{ height: 44, borderRadius: radius.pill, backgroundColor: color.bgRaised, borderWidth: 1.5, borderColor: color.line, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: space.s }}>
+            {p.finding ? <ActivityIndicator color={color.fgPrimary} /> : null}
+            <Text style={{ ...type.headline, fontSize: 13, color: color.fgPrimary }}>{p.finding ? mx.findingFaces : mx.blurFaces}</Text>
+          </Pressable>
+          <Pressable testID="moment-keep-mine" accessibilityRole="switch" accessibilityState={{ checked: p.state.keepMine }} onPress={() => p.onKeep(!p.state.keepMine)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: color.bgRaised, borderRadius: 14, paddingHorizontal: space.m, paddingVertical: space.s + 2 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ ...type.headline, fontSize: 13, color: color.fgPrimary }}>{mx.keepMine}</Text>
+              <Text style={{ ...type.meta, fontSize: 11.5, color: color.fgSecondary }}>{mx.keepMineSub}</Text>
+            </View>
+            <View style={{ width: 38, height: 22, borderRadius: 11, backgroundColor: p.state.keepMine ? color.trust : color.line, padding: 3, alignItems: p.state.keepMine ? 'flex-end' : 'flex-start' }}>
+              <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color.fgPrimary }} />
+            </View>
+          </Pressable>
+        </>
+      ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', gap: space.s }}>
+          {SIZES.map(({ k, dot }) => {
+            const on = p.brush === k;
+            return (
+              <Pressable key={k} testID={`moment-brush-${k}`} accessibilityRole="radio" accessibilityLabel={mx.brush[k]} accessibilityState={{ checked: on }} onPress={() => p.onBrush(k)} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: on ? color.trust : color.line, backgroundColor: color.bgRaised, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: dot, height: dot, borderRadius: dot / 2, backgroundColor: color.fgPrimary }} />
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable testID="moment-blur-undo" accessibilityRole="button" disabled={!p.state.history.length} onPress={p.onUndo} style={{ height: 44, paddingHorizontal: space.l, borderRadius: radius.pill, borderWidth: 1.5, borderColor: color.line, justifyContent: 'center', opacity: p.state.history.length ? 1 : 0.45 }}>
+          <Text style={{ ...type.headline, fontSize: 13, color: color.fgPrimary }}>{`↶ ${mx.undo}`}</Text>
+        </Pressable>
+      </View>
+      <Pressable testID="moment-blur-done" accessibilityRole="button" onPress={p.onDone} style={{ height: 48, borderRadius: radius.pill, backgroundColor: color.fgPrimary, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ ...type.headline, color: color.onAccent }}>{mx.done}</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 function Shell({ children, onClose, insets, title }: { children: React.ReactNode; onClose: () => void; insets: { top: number }; title?: string }) {
   return (

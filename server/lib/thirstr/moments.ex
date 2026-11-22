@@ -370,6 +370,54 @@ defmodule Thirstr.Moments do
     |> hd()
   end
 
+  @doc "Admin A-03 (#221, R-21.24): borderline Moments still live in time, oldest first."
+  def review_queue do
+    Repo.query!(
+      """
+      SELECT id::text, storage_key, caption, main_ok, expires_at FROM moments
+      WHERE status = 'review' AND expires_at > now() ORDER BY created_at LIMIT 100
+      """,
+      []
+    ).rows
+    |> Enum.map(fn [id, key, caption, main_ok, exp] ->
+      %{
+        id: id,
+        url: Storage.presigned_get(key, @signed_ttl),
+        caption: caption,
+        main_ok: main_ok,
+        expires_at: exp
+      }
+    end)
+  end
+
+  @doc """
+  Admin decision on a `review` Moment. Approve → live for the time it has left (thumb made now);
+  reject → files and row deleted, same as a classifier reject.
+  """
+  def review(id, decision) when decision in ~w(approve reject) do
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         %{rows: [[pid, key]]} <-
+           Repo.query!(
+             "SELECT profile_id::text, storage_key FROM moments WHERE id = $1 AND status = 'review'",
+             [dump(id)]
+           ) do
+      if decision == "approve" do
+        Repo.query!("UPDATE moments SET status = 'live', thumb_key = $2 WHERE id = $1", [
+          dump(id),
+          checked_thumb(key)
+        ])
+      else
+        Storage.delete_many([key, thumb_of(key)])
+        Repo.query!("DELETE FROM moments WHERE id = $1", [dump(id)])
+      end
+
+      broadcast(pid)
+      :ok
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
   @doc "DELETE /moments/:id: instant (R-21.13)."
   def delete(%Account{} = a, id) do
     with {:ok, m} <- own(a, id) do
@@ -516,6 +564,20 @@ defmodule Thirstr.Moments do
   defp thumb_url(%{thumb: t}) when is_binary(t), do: Storage.presigned_get(t, @signed_ttl)
   defp thumb_url(_), do: nil
 
+  @doc """
+  Live rings (#221, R-21.9): badges for a set of profiles, same shape and rules as on cards
+  (`nil` when nothing is visible to this viewer). Used by the socket watch in UserChannel.
+  """
+  def rings(%Account{} = viewer, ids, intents) do
+    ids
+    |> Enum.map(&%{id: &1})
+    |> annotate(%{account: viewer, intents: intents})
+    |> Map.new(&{&1.id, &1.moments})
+  end
+
+  @doc "PubSub topic that carries {:moments, profile_id} when a profile's Moments change."
+  def topic(profile_id), do: "moments:" <> profile_id
+
   @doc "Profile view field (S-20): same shape as on cards."
   def summary(%Account{} = viewer, profile_id, lens) do
     case for_profile(viewer, profile_id, lens) do
@@ -639,7 +701,7 @@ defmodule Thirstr.Moments do
   # ------------------------------------------------------------------ helpers
 
   defp broadcast(profile_id),
-    do: Phoenix.PubSub.broadcast(Thirstr.PubSub, "moments:" <> profile_id, {:moments, profile_id})
+    do: Phoenix.PubSub.broadcast(Thirstr.PubSub, topic(profile_id), {:moments, profile_id})
 
   defp blank_nil(t) when is_binary(t) do
     case String.trim(t) do

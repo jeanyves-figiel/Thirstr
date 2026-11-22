@@ -264,6 +264,8 @@ Connect: `wss://<api host>/socket/websocket?token=<access token>&vsn=2.0.0`, the
 | `party:{id}` | `seat.update`, `status` | — |
 | `venue:{id}` | `here.diff` (checked-in, visible) | — |
 
+**Live Moment rings (F-21 R-21.9, #221).** Client → `moments.watch {ids: [profile_id ≤ 60], intents: [hookup|friends|sport]}` (replaces the previous set; ≤ 30 / min) → reply `ok`. Server → `moments.ring {profile_id, moments: {live, unseen, thumb} | null}` (same badge as on cards), sent only when that viewer's badge for a watched profile changes (post, approve, delete).
+
 **Envelopes over the socket (SR-13, #153).** Join `user:me` with `{env: true}`: this device's new envelopes come as `message.env {messages: [...]}` (same objects as `GET /mls/messages`) when one send's envelopes for the device total ≤ 48 KB, else `message.pull` (content-free); the account-wide `message.new` is not sent to that socket. The client stores each message (or its pending copy) before acking with `ack {ids}` (≤ 500) → reply `{acked: n}`; same rule and deletion as `POST /mls/messages/ack`. Nothing changes for durability: envelopes stay on the server until acked, and the app still pulls over REST at start, on foreground, on reconnect and when a socket step fails. Saves the GET (and the REST ack) per message while the app is open.
 
 Rate limits (beta defaults, per account): messages to new contacts 30/h (unverified: 0), taps 100/day, location updates 1/30 s, pin set 6/h, party create 3/day, report 20/day.

@@ -129,6 +129,7 @@ defmodule ThirstrWeb.Router do
     post "/reports/:id/action", AdminController, :report_action
     get "/photos", AdminController, :photos
     post "/photos/:id", AdminController, :photo_decision
+    post "/moments/:id", AdminController, :moment_decision
     get "/linked", AdminController, :linked
     post "/linked/:id", AdminController, :linked_decision
     get "/quarantine", AdminController, :quarantine

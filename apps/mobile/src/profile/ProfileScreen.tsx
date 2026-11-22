@@ -29,7 +29,7 @@ import { cachedProfile, fetchProfile, markDead, putProfile, stepIndex, storedPro
 import { feel } from '../ui/haptics';
 import { settle } from '../ui/motion';
 import { RingAvatar } from '../moments/Ring';
-import { watchedAll } from '../moments/api';
+import { badgeOf, useRings, watchedAll } from '../moments/api';
 import { mx } from '../i18n/moments';
 import { PhotoViewer } from '../ui/PhotoViewer';
 import { saving } from '../app/dataSaver';
@@ -421,20 +421,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
             </View>
           ) : null}
           {/* F-21 R-21.9 (#212): his Moments, ring + tag on the photo. */}
-          {p.moments && p.moments.live > 0 && !preview ? (
-            <Pressable
-              testID="profile-moments"
-              accessibilityRole="button"
-              accessibilityLabel={mx.openA11y(p.display_name, p.moments.live, p.moments.unseen)}
-              onPress={() => navigation.navigate('Moments', { queue: [{ id: p.id, name: p.display_name, age: p.age, photo: p.photos[0] ?? null, where: p.self ? undefined : distanceLabel(p.distance) }], index: 0, mode, self: p.self })}
-              style={{ position: 'absolute', right: space.l, bottom: 84, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4, paddingRight: 12, height: 44, borderRadius: radius.pill, backgroundColor: color.scrim }}
-            >
-              <RingAvatar size={36} unseen={p.moments.unseen && !watchedAll(p.id)}>
-                <Photo uri={p.photos[0]} id={p.id} label="" style={{ width: '100%', height: '100%' }} />
-              </RingAvatar>
-              <Text style={{ ...type.caption, fontSize: 12, color: color.fgPrimary }}>{`▶ ${mx.moments} · ${p.moments.live}`}</Text>
-            </Pressable>
-          ) : null}
+          {!preview ? <MomentsTag p={p} mode={mode} navigation={navigation} /> : null}
         </View>
         <View style={{ marginTop: -64, paddingHorizontal: space.xl, gap: 14, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
           {preview ? (
@@ -616,5 +603,26 @@ function Chip({ text, fg = color.fgSecondary }: { text: string; fg?: string }) {
     <View style={{ paddingHorizontal: space.m, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: color.bgRaised }}>
       <Text style={{ ...type.meta, fontFamily: type.headline.fontFamily, color: fg }}>{text}</Text>
     </View>
+  );
+}
+
+/** F-21 R-21.9 (#212, #221): ring + "▶ Moments" tag on the photo; follows live ring updates. */
+function MomentsTag({ p, mode, navigation }: { p: ProfileView; mode: Mode; navigation: Nav }) {
+  useRings();
+  const pm = badgeOf(p.id, p.moments);
+  if (!pm || pm.live <= 0) return null;
+  return (
+    <Pressable
+      testID="profile-moments"
+      accessibilityRole="button"
+      accessibilityLabel={mx.openA11y(p.display_name, pm.live, pm.unseen)}
+      onPress={() => navigation.navigate('Moments', { queue: [{ id: p.id, name: p.display_name, age: p.age, photo: p.photos[0] ?? null, where: p.self ? undefined : distanceLabel(p.distance) }], index: 0, mode, self: p.self })}
+      style={{ position: 'absolute', right: space.l, bottom: 84, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4, paddingRight: 12, height: 44, borderRadius: radius.pill, backgroundColor: color.scrim }}
+    >
+      <RingAvatar size={36} unseen={pm.unseen && !watchedAll(p.id)}>
+        <Photo uri={p.photos[0]} id={p.id} label="" style={{ width: '100%', height: '100%' }} />
+      </RingAvatar>
+      <Text style={{ ...type.caption, fontSize: 12, color: color.fgPrimary }}>{`▶ ${mx.moments} · ${pm.live}`}</Text>
+    </Pressable>
   );
 }

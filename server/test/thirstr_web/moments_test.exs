@@ -1,5 +1,7 @@
 defmodule ThirstrWeb.MomentsTest do
   use ThirstrWeb.ConnCase, async: false
+  import Phoenix.ChannelTest, except: [connect: 2, push: 3]
+  require Phoenix.ChannelTest
 
   # F-21 Moments (#212): temporary photos, audience per Moment, rings on cards, Seen by (D-21b C).
 
@@ -215,5 +217,65 @@ defmodule ThirstrWeb.MomentsTest do
     ])
 
     assert share(p.c) |> json_response(422)
+  end
+
+  # #221 R-21.24: borderline Moments stay hidden until the owner approves them in Admin A-03.
+  test "review queue: borderline hidden, approve makes it live, reject deletes", %{
+    poster: p,
+    viewer: v
+  } do
+    # The permissive public rules rarely land in review, so set the state the classifier would.
+    borderline = fn ->
+      id = share!(p.c)["id"]
+
+      Thirstr.Repo.query!(
+        "UPDATE moments SET status = 'review', thumb_key = NULL WHERE id = $1",
+        [Ecto.UUID.dump!(id)]
+      )
+
+      id
+    end
+
+    a = borderline.()
+    b = borderline.()
+    assert moments_of(v.c, p.pid) |> json_response(404)
+    assert Enum.map(Thirstr.Moments.review_queue(), & &1.id) |> Enum.sort() == Enum.sort([a, b])
+
+    assert :ok = Thirstr.Moments.review(a, "approve")
+    assert :ok = Thirstr.Moments.review(b, "reject")
+    assert {:error, :not_found} = Thirstr.Moments.review(b, "approve")
+    assert Thirstr.Moments.review_queue() == []
+
+    assert [%{"id" => ^a}] =
+             moments_of(v.c, p.pid) |> json_response(200) |> Map.get("moments")
+  end
+
+  # #221 R-21.9: live rings over the socket, only for watched profiles the viewer may see.
+  test "socket: moments.watch pushes ring changes, never for hidden Moments", %{
+    poster: p,
+    viewer: v,
+    conn: conn
+  } do
+    [auth] = Plug.Conn.get_req_header(v.c, "authorization")
+    token = String.replace_prefix(auth, "Bearer ", "")
+    {:ok, socket} = Phoenix.ChannelTest.connect(ThirstrWeb.UserSocket, %{"token" => token})
+    {:ok, _, ch} = subscribe_and_join(socket, ThirstrWeb.UserChannel, "user:me")
+
+    ref =
+      Phoenix.ChannelTest.push(ch, "moments.watch", %{"ids" => [p.pid], "intents" => ["hookup"]})
+
+    assert_reply ref, :ok
+
+    m = share!(p.c)
+    pid = p.pid
+    assert_push "moments.ring", %{profile_id: ^pid, moments: %{live: 1, unseen: true}}
+
+    p.c |> req() |> delete("/v1/moments/#{m["id"]}") |> response(204)
+    assert_push "moments.ring", %{profile_id: ^pid, moments: nil}
+
+    # favorites-only Moment for someone else: no event at all for this viewer
+    other = onboarded(conn, cell: zurich_ring(2))
+    share!(p.c, %{audience: "favorites", audience_ids: [other.pid]})
+    refute_push "moments.ring", _, 200
   end
 end

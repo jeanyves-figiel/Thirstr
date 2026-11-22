@@ -20,6 +20,7 @@ type Native = {
   analyze(uri: string): Promise<FaceReading>;
   matchClip?(clipUri: string, photoUrls: string[]): Promise<ClipMatch>;
   matchStills?(stillUris: string[], photoUrls: string[]): Promise<StillMatch>;
+  faceBoxes?(uri: string): Promise<number[][]>;
 };
 
 const native = requireOptionalNativeModule<Native>('ThirstrFace');
@@ -32,3 +33,7 @@ export const matchClip = (clipUri: string, photoUrls: string[]): Promise<ClipMat
 export const selfieMatchAvailable = !!native?.matchStills;
 export const matchStills = (stillUris: string[], photoUrls: string[]): Promise<StillMatch> =>
   native?.matchStills ? native.matchStills(stillUris, photoUrls) : Promise.reject(new Error('unavailable'));
+
+/** F-21 R-21.2 (#221): face boxes [x, y, w, h] (0…1, top-left origin, largest first) for "Blur faces". */
+export const faceBoxesAvailable = !!native?.faceBoxes;
+export const faceBoxes = (uri: string): Promise<number[][]> => (native?.faceBoxes ? native.faceBoxes(uri) : Promise.reject(new Error('unavailable')));

@@ -143,6 +143,66 @@ defmodule ThirstrWeb.ChatTest do
     assert b.c |> recycle_authed() |> get("/v1/media/#{id}") |> json_response(404)
   end
 
+  @tag ac: "AC-08.9"
+  test "#271 scoped blob: only uploader and accounts it was sent to; legacy unscoped unchanged",
+       %{alice: a, bob: b, conn: conn} do
+    carol = onboarded(conn, basics: [display_name: "Carol"])
+    get_blob = fn u, id -> u.c |> recycle_authed() |> get("/v1/media/#{id}") end
+
+    %{"blob_id" => id} =
+      a.c
+      |> recycle_authed()
+      |> post("/v1/media/upload", %{size: 1000, scoped: true})
+      |> json_response(201)
+
+    # Before any message carries it: only the uploader.
+    assert %{"url" => url} = get_blob.(a, id) |> json_response(200)
+    assert url =~ "blob/"
+    assert get_blob.(b, id) |> json_response(404)
+
+    # Carol tries to grant Alice's blob to herself through her own message: ignored.
+    send_raw(carol, %{
+      from_profile_id: carol.pid,
+      group_id: b64("g-c"),
+      envelopes: [env(a, "x")],
+      blobs: [id]
+    })
+
+    assert get_blob.(carol, id) |> json_response(404)
+
+    # Alice sends it to Bob: Bob may fetch it, Carol still may not.
+    assert send_raw(a, %{
+             from_profile_id: a.pid,
+             group_id: b64("g-ab"),
+             envelopes: [env(b, "media")],
+             blobs: [id, Ecto.UUID.generate(), "not-a-uuid"]
+           })
+           |> json_response(200)
+
+    assert %{"url" => _} = get_blob.(b, id) |> json_response(200)
+    assert get_blob.(carol, id) |> json_response(404)
+
+    assert send_raw(a, %{
+             from_profile_id: a.pid,
+             group_id: b64("g"),
+             envelopes: [env(b, "y")],
+             blobs: "x"
+           })
+           |> json_response(422)
+
+    # Deleting the blob removes the grants with it.
+    assert a.c |> recycle_authed() |> delete("/v1/media/#{id}") |> response(204)
+    assert get_blob.(b, id) |> json_response(404)
+
+    %{rows: [[0]]} = Thirstr.Repo.query!("SELECT count(*)::int FROM media_blob_grants")
+
+    # Blobs from app builds before #271 keep the old behaviour.
+    %{"blob_id" => old} =
+      a.c |> recycle_authed() |> post("/v1/media/upload", %{size: 1000}) |> json_response(201)
+
+    assert %{"url" => _} = get_blob.(carol, old) |> json_response(200)
+  end
+
   @tag ac: "AC-18.4"
   test "once blob (video check): bound to first fetcher, fetcher can delete, swept", %{
     alice: a,

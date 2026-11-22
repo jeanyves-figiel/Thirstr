@@ -5,8 +5,8 @@ defmodule Thirstr.Linked do
   Bluesky handles are proven with a one-time code in the public bio, read from the public
   AppView; other platforms are shown as plain links without ✓ in beta.
   """
-  alias Thirstr.{Repo, Storage}
   alias Thirstr.Accounts.Account
+  alias Thirstr.Repo
 
   @platforms ~w(x bluesky onlyfans jff instagram)
   @visibility ~w(everyone verified chats)
@@ -174,18 +174,24 @@ defmodule Thirstr.Linked do
 
   # ------------------------------------------------------------------ share links (I-02)
 
-  @alphabet ~c"abcdefghijkmnpqrstuvwxyz23456789"
+  @alphabet "abcdefghijkmnpqrstuvwxyz23456789"
+  @preview_max 2048
+  @preview_side 32
 
+  @doc "R-I02.1: 10 chars from a 32-letter alphabet, CSPRNG (32 divides 256, so no bias)."
+  def new_slug do
+    for <<b <- :crypto.strong_rand_bytes(10)>>, into: "", do: String.at(@alphabet, rem(b, 32))
+  end
+
+  @doc "Creates or renews the link. Renew keeps show_photo and drops the old preview."
   def share(%Account{} = a, profile_id) do
     with :ok <- own(a, profile_id) do
-      slug = for _ <- 1..10, into: "", do: <<Enum.random(@alphabet)>>
-
       q!(
-        "INSERT INTO profile_shares (slug, profile_id, created_at) VALUES ($1, $2, now()) ON CONFLICT (profile_id) DO UPDATE SET slug = EXCLUDED.slug, created_at = now()",
-        [slug, uuid(profile_id)]
+        "INSERT INTO profile_shares (slug, profile_id, created_at) VALUES ($1, $2, now()) ON CONFLICT (profile_id) DO UPDATE SET slug = EXCLUDED.slug, created_at = now(), preview = NULL, preview_photo_id = NULL",
+        [new_slug(), uuid(profile_id)]
       )
 
-      {:ok, %{slug: slug, url: site() <> "/p/" <> slug}}
+      {:ok, current_share(profile_id)}
     end
   end
 
@@ -196,38 +202,147 @@ defmodule Thirstr.Linked do
     end
   end
 
-  def current_share(profile_id) do
-    case q!("SELECT slug FROM profile_shares WHERE profile_id = $1", [uuid(profile_id)]) do
-      [[s]] -> %{slug: s, url: site() <> "/p/" <> s}
-      [] -> nil
+  @doc "R-I02.2: name only, or name + blurred photo."
+  def set_show_photo(%Account{} = a, profile_id, show) when is_boolean(show) do
+    with :ok <- own(a, profile_id),
+         [_] <-
+           q!("UPDATE profile_shares SET show_photo = $2 WHERE profile_id = $1 RETURNING 1", [
+             uuid(profile_id),
+             show
+           ]) do
+      {:ok, current_share(profile_id)}
+    else
+      [] -> {:error, :not_found}
+      e -> e
     end
   end
 
-  @doc "Public page data: only active, visible profiles (paused/banned/quarantined → nil)."
-  def page(slug) when is_binary(slug) and byte_size(slug) == 10 do
+  def set_show_photo(_, _, _),
+    do: {:error, {:unprocessable, "validation", "show_photo must be true or false"}}
+
+  @doc """
+  R-I02.2: the phone sends a tiny JPEG of its approved main photo (≤ 2 KB, ≤ 32 px each side).
+  Only that goes on the public page, never the photo itself or a link to it.
+  """
+  def put_preview(%Account{} = a, profile_id, photo_id, b64)
+      when is_binary(photo_id) and is_binary(b64) do
+    with :ok <- own(a, profile_id),
+         {:ok, jpeg} <- decode_preview(b64),
+         {:ok, _} <- Ecto.UUID.cast(photo_id),
+         [[1]] <-
+           q!(
+             "SELECT 1 FROM photos WHERE id = $1 AND profile_id = $2 AND status = 'ok_main'",
+             [uuid(photo_id), uuid(profile_id)]
+           ),
+         [_] <-
+           q!(
+             "UPDATE profile_shares SET preview = $3, preview_photo_id = $2 WHERE profile_id = $1 RETURNING 1",
+             [uuid(profile_id), uuid(photo_id), jpeg]
+           ) do
+      :ok
+    else
+      {:error, _} = e -> e
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def put_preview(_, _, _, _), do: bad_preview()
+
+  defp decode_preview(b64) do
+    with true <- byte_size(b64) <= div(@preview_max * 4, 3) + 4,
+         {:ok, bin} <- Base.decode64(b64, ignore: :whitespace),
+         true <- byte_size(bin) <= @preview_max,
+         {:ok, w, h} <- jpeg_size(bin),
+         true <- w in 1..@preview_side and h in 1..@preview_side do
+      {:ok, bin}
+    else
+      _ -> bad_preview()
+    end
+  end
+
+  defp bad_preview,
+    do: {:error, {:unprocessable, "validation", "Preview must be a JPEG up to 32 px and 2 KB"}}
+
+  @doc "Width and height from a JPEG's first SOF marker (baseline or progressive)."
+  def jpeg_size(<<0xFF, 0xD8, rest::binary>>), do: scan_jpeg(rest)
+  def jpeg_size(_), do: :error
+
+  defp scan_jpeg(<<0xFF, m, _len::16, _p, h::16, w::16, _::binary>>) when m in 0xC0..0xC3,
+    do: {:ok, w, h}
+
+  defp scan_jpeg(<<0xFF, 0xFF, rest::binary>>), do: scan_jpeg(<<0xFF, rest::binary>>)
+
+  defp scan_jpeg(<<0xFF, m, len::16, rest::binary>>)
+       when m not in [0xD8, 0xD9, 0xDA] and len >= 2 do
+    case rest do
+      <<_::binary-size(len - 2), more::binary>> -> scan_jpeg(more)
+      _ -> :error
+    end
+  end
+
+  defp scan_jpeg(_), do: :error
+
+  def current_share(profile_id) do
     case q!(
            """
-           SELECT p.id, p.display_name,
-                  (SELECT storage_key FROM photos ph WHERE ph.profile_id = p.id AND ph.status = 'ok_main' ORDER BY slot LIMIT 1)
-           FROM profile_shares s JOIN profiles p ON p.id = s.profile_id JOIN accounts a ON a.id = p.account_id
-           WHERE s.slug = $1 AND a.status = 'active'
+           SELECT slug, show_photo,
+                  COALESCE(preview IS NOT NULL AND preview_photo_id = (SELECT ph.id FROM photos ph WHERE ph.profile_id = $1 AND ph.status = 'ok_main' ORDER BY ph.slot LIMIT 1), false)
+           FROM profile_shares WHERE profile_id = $1
            """,
-           [slug]
+           [uuid(profile_id)]
          ) do
-      [[id, name, key]] ->
-        %{profile_id: cast(id), name: name, photo: key && Storage.presigned_get(key)}
+      [[s, show, has]] ->
+        %{
+          slug: s,
+          url: site() <> "/p/" <> s,
+          short: short_host() <> "/p/" <> s,
+          show_photo: show,
+          has_preview: has
+        }
 
       [] ->
         nil
     end
   end
 
+  @doc """
+  Public page data: only active accounts (paused / suspended / quarantined / banned / deleted → nil).
+  The preview shows only while it still comes from the approved main photo.
+  """
+  def page(slug) when is_binary(slug) and byte_size(slug) == 10 do
+    case q!(
+           """
+           SELECT p.id, p.display_name,
+                  CASE WHEN s.show_photo AND s.preview_photo_id = (SELECT ph.id FROM photos ph WHERE ph.profile_id = p.id AND ph.status = 'ok_main' ORDER BY ph.slot LIMIT 1)
+                       THEN s.preview END
+           FROM profile_shares s JOIN profiles p ON p.id = s.profile_id JOIN accounts a ON a.id = p.account_id
+           WHERE s.slug = $1 AND a.status = 'active'
+           """,
+           [slug]
+         ) do
+      [[id, name, preview]] -> %{profile_id: cast(id), name: name, preview: preview}
+      [] -> nil
+    end
+  end
+
   def page(_), do: nil
 
-  def resolve(slug) do
-    case page(slug) do
-      %{profile_id: id} -> {:ok, %{profile_id: id}}
-      nil -> {:error, :not_found}
+  @doc "R-I02.3: in-app open. Blocked either way, own-only or dead → the same not_found."
+  def resolve(%Account{} = viewer, slug) do
+    with %{profile_id: id} <- page(slug),
+         [[owner]] <- q!("SELECT account_id FROM profiles WHERE id = $1", [uuid(id)]),
+         owner = cast(owner),
+         false <- owner != viewer.id and Thirstr.Social.blocked?(viewer.id, owner) do
+      {:ok, %{profile_id: id, own: owner == viewer.id}}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  defp short_host do
+    case Application.get_env(:thirstr, :site_host) do
+      nil -> ThirstrWeb.Endpoint.url() |> String.replace(~r{^https?://}, "")
+      h -> h
     end
   end
 

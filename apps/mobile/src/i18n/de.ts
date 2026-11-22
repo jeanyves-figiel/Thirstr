@@ -694,14 +694,6 @@ export const de: Partialize<AppStrings> = {
     notProven: 'Noch nicht bestätigt',
     remove: 'Entfernen',
   },
-  share: {
-    title: 'Teilen-Link',
-    hint: 'Ein Link und QR-Code für deine Bio in anderen Apps. Er zeigt nur dein verschwommenes Hauptfoto und deinen Namen.',
-    create: 'Link erstellen',
-    rotate: 'Neuer Link (der alte funktioniert nicht mehr)',
-    off: 'Link deaktivieren',
-    send: 'Teilen',
-  },
   prefs: {
     app: 'App',
     units: 'Entfernungseinheit',

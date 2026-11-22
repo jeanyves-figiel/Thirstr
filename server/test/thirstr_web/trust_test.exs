@@ -301,7 +301,8 @@ defmodule ThirstrWeb.TrustTest do
         _csrf_token: csrf,
         action: "suspend",
         reason: "scam",
-        days: "7"
+        days: "7",
+        facts: "Asked for money in first messages."
       })
       |> redirected_to()
 

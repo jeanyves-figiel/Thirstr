@@ -201,7 +201,28 @@ defmodule ThirstrWeb.ModController do
         }
       end)
 
-    cases ++ reports ++ photos ++ appeals ++ quarantine
+    reviews =
+      q(
+        """
+        SELECT r.severity, r.reason, r.notifier_review_at, p.display_name
+        FROM reports r LEFT JOIN profiles p ON p.id = r.target_profile
+        WHERE r.notifier_review_state = 'open' LIMIT 500
+        """,
+        []
+      )
+      |> Enum.map(fn [sev, reason, at, name] ->
+        %{
+          tier: Map.get(@report_tier, sev, 5),
+          type: "appeal",
+          name: name,
+          why: "notifier review (#{e(reason)}) " <> chip("appeal"),
+          open: 1,
+          due: DateTime.add(at || DateTime.utc_now(), 72 * 3600, :second),
+          href: "/admin/appeals"
+        }
+      end)
+
+    cases ++ reports ++ photos ++ appeals ++ reviews ++ quarantine
   end
 
   # R-AD.8: tiers 0–1 ≤ 1 h, scam ≤ 12 h, others ≤ 48 h.
@@ -605,6 +626,154 @@ defmodule ThirstrWeb.ModController do
   end
 
   def reveal(conn, _), do: send_resp(conn, 422, "")
+
+  # ------------------------------------------------------------------ A-05 appeals (#288)
+
+  # R-15.31 beta: the owner reviews his own decisions; a 12 h cooling-off stands in for a
+  # second person. All console actions are logged with actor "admin" (R-AD.12).
+  @cooling_s 12 * 3600
+
+  def appeals(conn, _) do
+    conn = track(conn, nil)
+    audit(conn.assigns.admin, "view_appeals", nil, nil)
+    csrf = ~s(<input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">)
+
+    rows =
+      q(
+        """
+        SELECT m.id::text, m.action, m.reason, m.appeal_text, m.created_at, m.facts, m.ground,
+               m.law_ref, m.detected_by, m.decided_by, m.actor, m.ends_at,
+               (SELECT display_name FROM profiles WHERE account_id = m.target_account ORDER BY inserted_at LIMIT 1)
+        FROM moderation_actions m WHERE m.appeal_state = 'open' ORDER BY m.created_at LIMIT 200
+        """,
+        []
+      )
+
+    list =
+      Enum.map_join(rows, "", fn [
+                                   id,
+                                   act,
+                                   reason,
+                                   text,
+                                   at,
+                                   facts,
+                                   ground,
+                                   law,
+                                   det,
+                                   dec,
+                                   actor,
+                                   ends,
+                                   name
+                                 ] ->
+        ready = DateTime.add(at, @cooling_s, :second)
+        cooling = actor == "admin" and DateTime.compare(DateTime.utc_now(), ready) == :lt
+
+        """
+        <div class="card">
+          <p><b>#{e(name || "—")}</b> · #{e(act)}#{if ends, do: " until " <> DateTime.to_iso8601(ends), else: ""} · #{e(reason)} · #{DateTime.to_iso8601(at)} #{due(DateTime.add(at, 72 * 3600, :second))}</p>
+          <h3>Decision as sent</h3>
+          <p>Ground: #{if ground == "law", do: "illegal · " <> e(law || ""), else: "our rules"} · Found by #{e(det)} · Decided by #{e(dec)}</p>
+          <p>Facts: #{e(facts || "—")}</p>
+          <h3>Their appeal</h3>
+          <p>#{e(text || "—")}</p>
+          #{if cooling, do: ~s{<p class="warn">You took this decision. Review it from #{DateTime.to_iso8601(ready)} (12 h cooling-off, R-15.31).</p>}, else: ""}
+          <form method="post" action="/admin/appeals/#{id}">#{csrf}
+            <textarea name="reason" required maxlength="300" rows="2" placeholder="Reason, shown to them (required)" style="width:100%;font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px"></textarea>
+            <button name="decision" value="overturned"#{if cooling, do: " disabled", else: ""}>Reverse</button>
+            <button name="decision" value="upheld"#{if cooling, do: " disabled", else: ""}>Uphold</button>
+          </form>
+        </div>
+        """
+      end)
+
+    page(conn, "Appeals", """
+    #{nav()}<h1>A-05 Appeals</h1>
+    <p class="muted">Reverse restores the account at once. Their notice shows your reason and "Reviewed again by a person".</p>
+    #{if list == "", do: ~s(<p class="muted">No open appeals.</p>), else: list}
+    <h2>Reviews asked by people who reported (R-15.32)</h2>
+    #{notifier_reviews(csrf)}
+    """)
+  end
+
+  def appeal_decision(conn, %{"id" => id, "decision" => d} = p) when d in ~w(upheld overturned) do
+    reason = String.trim(p["reason"] || "")
+
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         true <- reason != "" || {:error, :reason},
+         [[actor, at]] <-
+           q(
+             "SELECT actor, created_at FROM moderation_actions WHERE id = $1 AND appeal_state = 'open'",
+             [
+               Nearby.dump(id)
+             ]
+           ),
+         true <-
+           actor != "admin" or DateTime.diff(DateTime.utc_now(), at) >= @cooling_s ||
+             {:error, :cooling},
+         :ok <- Moderation.decide_appeal(id, d, "admin", reason) do
+      audit(conn.assigns.admin, "appeal_" <> d, id, String.slice(reason, 0, 200))
+      redirect(conn, to: "/admin/appeals")
+    else
+      {:error, :reason} -> send_resp(conn, 422, "Write a reason: it is shown to them")
+      {:error, :cooling} -> send_resp(conn, 409, "12 h cooling-off: you took this decision")
+      _ -> send_resp(conn, 404, "")
+    end
+  end
+
+  def appeal_decision(conn, _), do: send_resp(conn, 422, "")
+
+  # The reported person's name is shown to the moderator, never to the notifier (AC-15.8);
+  # a web notifier's sealed contact is never opened here.
+  defp notifier_reviews(csrf) do
+    rows =
+      q(
+        """
+        SELECT r.id::text, r.reason, r.legal_type, r.explanation, r.decision, r.decided_at,
+               r.notifier_review_text, r.notifier_review_at, r.channel, p.display_name
+        FROM reports r LEFT JOIN profiles p ON p.id = r.target_profile
+        WHERE r.notifier_review_state = 'open' ORDER BY r.notifier_review_at LIMIT 200
+        """,
+        []
+      )
+
+    if rows == [] do
+      ~s(<p class="muted">None open.</p>)
+    else
+      Enum.map_join(rows, "", fn [id, reason, ltype, expl, dec, dat, text, at, chan, name] ->
+        """
+        <div class="card">
+          <p><b>#{e(name || "—")}</b> · reported for #{e(ltype || reason)} via #{e(chan)} · our decision: <b>#{e(dec || "—")}</b>#{if dat, do: " (" <> DateTime.to_iso8601(dat) <> ")", else: ""} #{if at, do: due(DateTime.add(at, 72 * 3600, :second)), else: ""}</p>
+          #{if expl, do: "<p>Their notice: #{e(expl)}</p>", else: ""}
+          <p>Their review request: #{e(text || "—")}</p>
+          <form method="post" action="/admin/reviews/#{id}">#{csrf}
+            <textarea name="reason" required maxlength="300" rows="2" placeholder="Reason, shown to them (required)" style="width:100%;font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px"></textarea>
+            <button name="decision" value="overturned">Reopen the report</button>
+            <button name="decision" value="upheld">Keep the decision</button>
+          </form>
+        </div>
+        """
+      end)
+    end
+  end
+
+  def review_decision(conn, %{"id" => id, "decision" => d} = p) when d in ~w(upheld overturned) do
+    reason = String.trim(p["reason"] || "")
+
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         true <- reason != "" || {:error, :reason},
+         :ok <- Thirstr.Reports.decide_review(id, d, "admin", reason) do
+      audit(conn.assigns.admin, "notifier_review_" <> d, id, String.slice(reason, 0, 200))
+
+      redirect(conn,
+        to: if(d == "overturned", do: "/admin/reports/#{id}", else: "/admin/appeals")
+      )
+    else
+      {:error, :reason} -> send_resp(conn, 422, "Write a reason: it is shown to them")
+      _ -> send_resp(conn, 404, "")
+    end
+  end
+
+  def review_decision(conn, _), do: send_resp(conn, 422, "")
 
   # ------------------------------------------------------------------ wellbeing (R-15.53)
 

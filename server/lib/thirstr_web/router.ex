@@ -35,6 +35,14 @@ defmodule ThirstrWeb.Router do
     plug ThirstrWeb.Plugs.RateLimit, bucket: "dlink", limit: 10, window: 60
   end
 
+  pipeline :share_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "share", limit: 30, window: 60
+  end
+
+  pipeline :share_page_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "sharep", limit: 60, window: 60
+  end
+
   pipeline :page do
     plug :accepts, ["html"]
 
@@ -44,6 +52,11 @@ defmodule ThirstrWeb.Router do
       "referrer-policy" => "no-referrer",
       "x-robots-tag" => "noindex"
     }
+  end
+
+  # F-15 R-15.25: web notices, 5 per hashed IP per day
+  pipeline :notice_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "notice", limit: 5, window: 86_400
   end
 
   pipeline :email_limit do
@@ -113,8 +126,9 @@ defmodule ThirstrWeb.Router do
     post "/photos/:id", AdminController, :photo_decision
     get "/quarantine", AdminController, :quarantine
     post "/accounts/:id/action", AdminController, :account_action
-    get "/appeals", AdminController, :appeals
-    post "/appeals/:id", AdminController, :appeal_decision
+    get "/appeals", ModController, :appeals
+    post "/appeals/:id", ModController, :appeal_decision
+    post "/reviews/:id", ModController, :review_decision
     get "/audit", AdminController, :audit_log
     get "/delivery", AdminController, :delivery
     get "/places", AdminController, :places
@@ -127,8 +141,19 @@ defmodule ThirstrWeb.Router do
   # iOS passkeys / universal links (I-03). Apple fetches this without auth.
   # I-02 public profile share page (no scripts)
   scope "/p", ThirstrWeb do
-    pipe_through :page
+    pipe_through [:share_page_limit, :page]
     get "/:slug", SharePageController, :page
+  end
+
+  # F-15 R-15.25 DSA notice form for non-users (no scripts, no cookies)
+  scope "/report", ThirstrWeb do
+    pipe_through [:share_page_limit, :page]
+    get "/", ReportPageController, :form
+  end
+
+  scope "/report", ThirstrWeb do
+    pipe_through [:notice_limit, :page]
+    post "/", ReportPageController, :submit
   end
 
   scope "/.well-known", ThirstrWeb do
@@ -309,6 +334,10 @@ defmodule ThirstrWeb.Router do
       get "/me/notices", TrustController, :notices
       post "/me/notices/seen", TrustController, :notices_seen
       post "/me/notices/:id/appeal", TrustController, :appeal
+      # R-15.27 / R-15.32 (#170): outcomes of my reports + notifier review
+      get "/me/reports", TrustController, :my_reports
+      post "/me/reports/seen", TrustController, :my_reports_seen
+      post "/me/reports/:id/review", TrustController, :review
       post "/profiles/:id/vouch", TrustController, :vouch
       delete "/profiles/:id/vouch", TrustController, :unvouch
 
@@ -365,7 +394,14 @@ defmodule ThirstrWeb.Router do
       delete "/me/linked-accounts/:id", AccountDataController, :remove_linked
       get "/me/profiles/:id/share", AccountDataController, :get_share
       post "/me/profiles/:id/share", AccountDataController, :share
+      patch "/me/profiles/:id/share", AccountDataController, :update_share
+      put "/me/profiles/:id/share/preview", AccountDataController, :share_preview
       delete "/me/profiles/:id/share", AccountDataController, :unshare
+    end
+
+    # I-02 R-I02.4c: in-app open of a share link, 30/min per IP
+    scope "/" do
+      pipe_through [:share_limit, :auth]
       get "/share/:slug", AccountDataController, :resolve
     end
 

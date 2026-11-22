@@ -16,6 +16,15 @@ defmodule ThirstrWeb.AdminController do
   @idle_s 30 * 60
   @session_s 8 * 3600
   @actions ~w(dismiss warn remove_photo suspend ban release)
+  # Report outcome shown to the notifier (R-15.27) per console action.
+  @decision_of %{
+    "dismiss" => "no_action",
+    "warn" => "warned",
+    "remove_photo" => "removed",
+    "suspend" => "suspended",
+    "ban" => "banned",
+    "release" => "no_action"
+  }
   @reason_codes ~w(spam_bot scam underage harassment non_consensual hate impersonation creator_undeclared other no_violation)
 
   # ------------------------------------------------------------------ plugs
@@ -131,11 +140,30 @@ defmodule ThirstrWeb.AdminController do
 
   def report(conn, %{"id" => id}) do
     with {:ok, _} <- Ecto.UUID.cast(id),
-         [[rid, reason, ctx, note, franked, state, at, pid, aid, sev]] <-
+         [
+           [
+             rid,
+             reason,
+             ctx,
+             note,
+             franked,
+             state,
+             at,
+             pid,
+             aid,
+             sev,
+             illegal,
+             ltype,
+             cc,
+             expl,
+             chan
+           ]
+         ] <-
            q(
              """
              SELECT r.id::text, r.reason, r.context, r.note, r.franked, r.state, r.created_at,
-                    r.target_profile::text, r.target_account::text, r.severity
+                    r.target_profile::text, r.target_account::text, r.severity,
+                    r.illegal, r.legal_type, r.country, r.explanation, r.channel
              FROM reports r WHERE r.id = $1
              """,
              [Nearby.dump(id)]
@@ -153,6 +181,7 @@ defmodule ThirstrWeb.AdminController do
       <h1>A-02 Report</h1>
       <p><b>#{e(reason)}</b> · #{e(ctx)} · #{e(state)} · #{DateTime.to_iso8601(at)}</p>
       #{if note, do: "<p>Reporter note: #{e(note)}</p>", else: ""}
+      #{if illegal, do: ~s{<div class="banner"><b>Illegal content notice</b> (DSA Art. 16) · #{e(ltype)} · #{e(cc || "—")} · via #{e(chan)}<br>#{e(expl || "")}</div>}, else: ""}
       <h2>Attached messages (franking verified)</h2>
       #{if msgs == "", do: ~s(<p class="muted">None.</p>), else: "<ul>#{msgs}</ul>"}
       #{profile_snapshot(pid, aid)}
@@ -165,9 +194,17 @@ defmodule ThirstrWeb.AdminController do
 
   def report_action(conn, %{"id" => id, "action" => action, "reason" => reason} = p)
       when action in @actions and reason in @reason_codes do
+    facts = String.trim(p["facts"] || "")
+
     case open_report_target(id) do
-      nil -> send_resp(conn, 404, "")
-      aid -> apply_report_action(conn, id, aid, action, reason, p)
+      _ when action != "dismiss" and facts == "" ->
+        send_resp(conn, 422, "Write the facts: they go into the notice the person gets (R-15.28)")
+
+      nil ->
+        send_resp(conn, 404, "")
+
+      aid ->
+        apply_report_action(conn, id, aid, action, reason, p)
     end
   end
 
@@ -193,7 +230,10 @@ defmodule ThirstrWeb.AdminController do
           Moderation.enforce(aid, action, reason, "admin",
             report_id: id,
             days: p["days"],
-            photo_id: p["photo_id"]
+            photo_id: p["photo_id"],
+            facts: p["facts"],
+            ground: p["ground"],
+            law_ref: p["law_ref"]
           )
 
     case result do
@@ -201,10 +241,16 @@ defmodule ThirstrWeb.AdminController do
         state = if action == "dismiss", do: "dismissed", else: "actioned"
 
         # Dismiss closes this report; an enforcement closes every open report on the account.
-        q(
-          "UPDATE reports SET state = $2, action = $3, resolved_at = now() WHERE target_account = (SELECT target_account FROM reports WHERE id = $1) AND state = 'open' AND (id = $1 OR $3 <> 'dismiss')",
-          [Nearby.dump(id), state, action]
-        )
+        closed =
+          q(
+            "UPDATE reports SET state = $2, action = $3, resolved_at = now() WHERE target_account = (SELECT target_account FROM reports WHERE id = $1) AND state = 'open' AND (id = $1 OR $3 <> 'dismiss') RETURNING id::text",
+            [Nearby.dump(id), state, action]
+          )
+
+        # R-15.27: every notifier learns the outcome; R-15.34 misuse check on "no action".
+        Enum.each(closed, fn [rid] ->
+          Thirstr.Reports.decide(rid, @decision_of[action], unfounded: p["unfounded"] == "yes")
+        end)
 
         audit(conn.assigns.admin, "report_" <> action, id, reason)
         redirect(conn, to: "/admin")
@@ -270,6 +316,11 @@ defmodule ThirstrWeb.AdminController do
       <select name="action">#{Enum.map_join(@actions, "", &"<option>#{&1}</option>")}</select>
       <select name="reason">#{Enum.map_join(@reason_codes, "", &"<option>#{&1}</option>")}</select>
       <label>days <input name="days" type="number" min="1" max="30" value="3" style="width:4em"></label>
+      <p><label>Facts, shown to them (required for any action, 300 max)<br>
+        <textarea name="facts" maxlength="300" rows="2" style="width:100%;font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px"></textarea></label></p>
+      <p><select name="ground"><option value="tos">Breaks our rules</option><option value="law">Illegal</option></select>
+        <input name="law_ref" placeholder="Law and country, if illegal" maxlength="200"></p>
+      <p><label><input type="checkbox" name="unfounded" value="yes"> Dismiss: manifestly unfounded (counts toward report misuse, R-15.34)</label></p>
       <button>Apply</button>
       <p class="muted">remove_photo: pick a photo above. Every action sends the user a notice with appeal (R-AD.9).</p>
     </form>
@@ -379,47 +430,7 @@ defmodule ThirstrWeb.AdminController do
 
   def account_action(conn, _), do: send_resp(conn, 422, "")
 
-  # ------------------------------------------------------------------ A-05 appeals
-
-  def appeals(conn, _) do
-    audit(conn.assigns.admin, "view_appeals", nil, nil)
-
-    rows =
-      q(
-        """
-        SELECT m.id::text, m.action, m.reason, m.appeal_text, m.created_at,
-               (SELECT display_name FROM profiles WHERE account_id = m.target_account ORDER BY inserted_at LIMIT 1)
-        FROM moderation_actions m WHERE m.appeal_state = 'open' ORDER BY m.created_at LIMIT 200
-        """,
-        []
-      )
-
-    list =
-      Enum.map_join(rows, "", fn [id, act, reason, text, _at, name] ->
-        """
-        <div class="card"><p><b>#{e(name || "—")}</b> · #{e(act)} · #{e(reason)}</p><p>#{e(text)}</p>
-        <form method="post" action="/admin/appeals/#{id}">
-          <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
-          <button name="decision" value="upheld">Uphold</button>
-          <button name="decision" value="overturned">Overturn</button>
-        </form></div>
-        """
-      end)
-
-    page(conn, "Appeals", """
-    #{nav()}<h1>A-05 Appeals</h1>
-    #{if list == "", do: ~s(<p class="muted">No open appeals.</p>), else: list}
-    """)
-  end
-
-  def appeal_decision(conn, %{"id" => id, "decision" => d}) when d in ~w(upheld overturned) do
-    with {:ok, _} <- Ecto.UUID.cast(id), :ok <- Moderation.decide_appeal(id, d, "admin") do
-      audit(conn.assigns.admin, "appeal_" <> d, id, nil)
-      redirect(conn, to: "/admin/appeals")
-    else
-      _ -> send_resp(conn, 404, "")
-    end
-  end
+  # A-05 appeals: ThirstrWeb.ModController (#288).
 
   # ------------------------------------------------------------------ A-10 audit log
 

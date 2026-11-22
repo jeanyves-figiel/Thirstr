@@ -8,12 +8,13 @@ defmodule ThirstrWeb.Plugs.Site do
     * anything else → `404.html` with status 404
     * hosts other than `:site_host` get `X-Robots-Tag: noindex`
 
-  API paths (`/v1`, `/socket`, `/.well-known`, `/admin`, `/p` share pages) and other methods pass through.
+  API paths (`/v1`, `/socket`, `/.well-known`, `/admin`, `/p` share pages, `/report` DSA notice
+  form) and other methods pass through.
   """
   @behaviour Plug
   import Plug.Conn
 
-  @api ~w(v1 socket .well-known admin p)
+  @api ~w(v1 socket .well-known admin p report)
   @csp "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' data:; " <>
          "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
   # Trusted-contact page (F-13): own scripts, service worker, same-origin relay API only.

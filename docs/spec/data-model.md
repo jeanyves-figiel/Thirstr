@@ -8,7 +8,7 @@ Principle: store the minimum; anything audience-restricted is E2EE or coarse-fla
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | internal; never shown |
-| created_at | timestamptz | |
+| inserted_at, updated_at | timestamptz | (Ecto timestamps; there is no `created_at`) |
 | auth_passkey_ids | bytea[] | WebAuthn credential IDs |
 | auth_oidc_hash | bytea null | SHA-256(provider‖sub‖pepper) for Apple/Google |
 | email_hash | bytea null | magic link / recovery only |

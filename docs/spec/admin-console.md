@@ -50,6 +50,15 @@ Internal web app (`/server/apps/admin`, Phoenix LiveView). Implements back offic
 - R-AD.11 Moderator wellbeing: queue rotation, max 4 h/day on severe queues, opt-out of categories. Details F-15 R-15.53 (break card at 2 h, lock at 4 h, 60 s pause after tier 0; beta owner: warnings only).
 - R-AD.13 Evidence (F-15 R-15.47) is readable only by `legal` and `senior_mod`, with a reason, one audit entry per read; `moderator` gets 403 (AC-15.16).
 
+### Owner passkey enrolment (R-AD.16, #179)
+Console sign-in is passkey only (R-AD.12). An owner who signed up with Apple, Google or email has no passkey for the console host, so the console enrols one through a one-time link that only someone with Fly SSH access can create.
+- R-AD.16 `bin/thirstr rpc 'Thirstr.AdminEnrol.link("<account id>")'` prints `https://<APP_URL host>/admin/enrol?t=<token>`. Refused (`{:error, :not_admin}`) unless the id is in `ADMIN_ACCOUNT_IDS`. Token: 32 random bytes; Valkey keeps only its HMAC (`ae:<hash>`) → account id, TTL 10 min, single use. Audit `enrol_link` (actor `console`, object = account hash).
+- R-AD.16a `GET /admin/enrol?t=` shows "Create console passkey" (no account data on the page) or "Link expired or used" (410). `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
+- R-AD.16b The browser creates a discoverable passkey for the console host's RP id (`WEBAUTHN_RP_ID`: `staging.thirstr.fun`, `api.thirstr.fun`, DEV `localhost`) with user verification **required**. `POST /admin/enrol` takes the token (GETDEL, single use), checks the id is still in `ADMIN_ACCOUNT_IDS`, verifies the attestation, stores the passkey on that account, audits `passkey_enrolled`, and starts the console session (8 h / idle 30 min).
+- R-AD.16c Failures (expired, reused, not admin, bad attestation) → 403/410, audit `enrol_failed`, no detail on the page. 10 attempts per IP per hour (rate limit `enrol`).
+- R-AD.16d The same passkey also signs in to the app on that host (it is an ordinary account passkey). iCloud Keychain or Google Password Manager syncs it to the owner's other devices; a hardware security key works too. Enrol staging and prod separately (different RP ids).
+- AC-AD.8 Given an admin id, when the owner opens a fresh link and creates a passkey, then they land on `/admin` signed in, and the link no longer works. Given an id not in `ADMIN_ACCOUNT_IDS`, `link/1` returns `{:error, :not_admin}`.
+
 ## Acceptance
 - AC-AD.1 Login without FIDO2 key is impossible (automated).
 - AC-AD.2 Every action in A-02…A-09 creates exactly one audit entry (automated).

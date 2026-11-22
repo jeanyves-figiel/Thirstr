@@ -107,6 +107,7 @@ ${L.uid ? `<h2>${esc(t.legal_uid)}</h2><p>${esc(L.uid)}</p>` : ""}
 <h2>${esc(t.legal_resp)}</h2><p>${esc(L.responsible ?? L.name)}</p>
 <h2>${esc(t.legal_liab_h)}</h2><p>${esc(t.legal_liab)}</p>
 <h2>${esc(t.legal_odr_h)}</h2><p>${esc(t.legal_odr)}</p>
+<h2>${esc(t.legal_report_h)}</h2><p>${esc(t.legal_report)}</p><p><a class="btn" href="/report?lang=${l}">${esc(t.legal_report_btn)}</a></p>
 <p class="back"><a class="btn" href="${prefix(l)}">${esc(t.back_home)}</a></p></article>`;
   return page(l, "legal/", `${t.legal_page_title} · Thirstr`, t.legal_page_title, body);
 }

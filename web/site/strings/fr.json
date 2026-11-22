@@ -86,5 +86,8 @@
   "legal_liab_h": "Responsabilité",
   "legal_liab": "Nous vérifions ce site avec soin, sans pouvoir garantir qu'il soit complet ou à jour. Nous ne sommes pas responsables du contenu des sites externes vers lesquels nous renvoyons.",
   "legal_odr_h": "Litiges",
-  "legal_odr": "Nous ne sommes ni obligés ni disposés à participer à une procédure de règlement des litiges devant un organe de conciliation pour consommateurs."
+  "legal_odr": "Nous ne sommes ni obligés ni disposés à participer à une procédure de règlement des litiges devant un organe de conciliation pour consommateurs.",
+  "legal_report_h": "Signaler un contenu illicite",
+  "legal_report": "Tout le monde peut signaler un contenu illicite sur Thirstr, même sans l'app : utilise notre formulaire. Les membres signalent depuis un profil ou une discussion.",
+  "legal_report_btn": "Formulaire de signalement"
 }

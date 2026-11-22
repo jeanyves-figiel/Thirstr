@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { hx } from '../i18n/help';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -8,7 +9,6 @@ import { loginPasskey, passkeysAvailable, registerPasskey } from '../auth/passke
 import { o } from '../i18n/onboarding';
 import { t } from '../i18n/strings';
 import { BackButton, BigButton, Enter, k, StepShell } from '../onboarding/kit';
-import { rx } from '../i18n/recovery';
 import { color, font, radius, space } from '../theme/tokens';
 import { ErrorText, useKeyboardShown, Wordmark } from '../ui';
 
@@ -84,7 +84,7 @@ export function CreateAccountScreen({ mode, onDone, onEmailSent, onUnderage, onB
           <MethodButton testID="email-start" kind="text" icon={<MailGlyph />} title={o.signup.email} onPress={() => setShowEmail(true)} />
         )}
         <ErrorText text={err} />
-        {!signup && onRecover ? <BigButton kind="text" testID="recover-start" title={rx.lost} onPress={onRecover} /> : null}
+        {!signup && onRecover ? <BigButton kind="text" testID="recover-start" title={hx.cant} onPress={onRecover} /> : null}
         {signup ? (
           <Text style={c.consent}>
             {o.signup.consent[0]}

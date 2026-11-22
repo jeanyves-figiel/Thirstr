@@ -276,12 +276,14 @@ Rate limits (beta defaults, per account): messages to new contacts 30/h (unverif
 | GET | /support/requests · /support/requests/{id} | → list `[{id, ref, topic, status, last, updated_at, unread}]` · thread `{…, messages: [{from, body, attachments, at}]}` |
 | POST | /support/requests/{id}/messages · /solve | {body} → 201 · → 204 (reopen by message within 14 d) |
 | POST | /feedback | {type: idea\|off\|love, part?, text (10–1 000), app} → 202; scrubbed + queued (R-22.31–34); 5 / 24 h |
-| POST | /auth/recovery/claim | (signed in with any method) → {claim_id, challenge}; 409 `claim_active`; 429 |
-| POST | /auth/recovery/claim/{id}/selfie | {liveness_result (signed), match: {passed, model, threshold}, attestation} → {state, hold_ends_at}; 401 `recovery_check_failed` (attempts left) |
-| GET · DELETE | /auth/recovery/claim/{id} | → {state, hold_ends_at} · cancel own claim |
-| POST | /me/recovery/claims/{id}/cancel | from another device: {device_auth, liveness_result, match} → 204; refused without a passing selfie |
-| POST | /auth/recovery/claim/{id}/complete | → tokens + {signed_out, removed_methods}; only when state `ready` |
-Push types `support_reply`, `recovery_claim` use the generic payload (§ Push payloads).
+| POST | /auth/recovery/claim | {method: apple\|google\|passkey\|email} (signed in with it) → 201 {id, state: started\|holding\|conflict, hold_ends_at, attempts_left}; unverified → `holding` 72 h; 409 `claim_active`; 403 after 3 failed selfies (24 h); 3 claims / 30 d |
+| GET | /auth/recovery/claim · /auth/recovery/claim/{id} | → {claim: active claim + `mine` (started on this phone) or null; other phones only see it once `holding`} (S-84 banner) · claim (`ready` once the hold is over) |
+| POST | /auth/recovery/claim/{id}/challenge | {purpose?: claim\|cancel} → {nonce, steps} (one use, 10 min) |
+| POST | /auth/recovery/claim/{id}/selfie | {nonce, passed} (claiming phone, F-03 liveness + on-device match) → {state: holding, hold_ends_at} (24 h if another phone was used in 14 d, else 1 h); 422 `recovery_check_failed` (tries left) |
+| POST | /auth/recovery/claim/{id}/cancel | {nonce (purpose cancel), passed: true} from another phone (after Face ID / passcode on it) → 204; 422 without a passing selfie |
+| DELETE | /auth/recovery/claim/{id} | claiming phone withdraws → 204 |
+| POST | /auth/recovery/claim/{id}/complete | after the hold → {signed_out, removed_methods}; 422 before |
+Push events `support.reply`, `recovery.claim` use the generic payload (§ Push payloads); `recovery.claim` ignores quiet hours.
 
 ## Push payloads
 Beta (no notification service extension yet): a **visible, generic** alert, identical for every event type:

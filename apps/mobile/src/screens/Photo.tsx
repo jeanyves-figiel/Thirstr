@@ -1,9 +1,8 @@
-import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import { Animated, Easing, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { api, ApiError, Me, Photo } from '../api/client';
-import { uploadPublicPhoto } from '../api/photoUpload';
+import { pickPublicPhoto, uploadPublicPhoto } from '../api/photoUpload';
 import { o } from '../i18n/onboarding';
 import { t } from '../i18n/strings';
 import { STEP_OF } from '../onboarding/flow';
@@ -11,11 +10,10 @@ import { BigButton, k, StepShell } from '../onboarding/kit';
 import { color, font, radius, space, tiles } from '../theme/tokens';
 
 async function upload(profileId: string, slot: number): Promise<{ photo: Photo; account: Me } | null> {
-  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, aspect: [4, 5] });
-  if (r.canceled) return null;
-  const asset = r.assets[0];
-  const type = asset.mimeType ?? 'image/jpeg';
-  const id = await uploadPublicPhoto(profileId, slot, asset.uri, type);
+  // #305: fast picker + one on-device encode (≤ 2048 px, no EXIF/GPS) + native upload.
+  const picked = await pickPublicPhoto();
+  if (!picked) return null;
+  const id = await uploadPublicPhoto(profileId, slot, picked.uri);
   return api('POST', `/me/profiles/${profileId}/photos/${id}/check`);
 }
 

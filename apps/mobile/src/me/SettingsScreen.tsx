@@ -14,6 +14,8 @@ import { ErrorText, Icon } from '../ui';
 import { type Prefs, prefs, setPrefs } from './prefs';
 import { saverSummary, useDataSaver } from '../app/dataSaver';
 import { sv } from '../i18n/saver';
+import { hx } from '../i18n/help';
+import { article, search as helpSearch } from '../help/kit';
 import { Group, IconTile, Row, Seg, SwitchRow, useSettings } from './settings/parts';
 
 type Nav = { navigate: (s: string, p?: object) => void };
@@ -30,6 +32,9 @@ const INDEX: [string, string][] = [
   ...[tx.signInEmail.row, tx.devices.title, tx.exportData.title, S.pause, S.logoutAll, S.delete].map((l) => [l, 'AccountSettings'] as [string, string]),
   [wn.title, 'WhatsNew'],
   [sv.title, 'DataSaverSettings'],
+  [hx.row, 'Help'],
+  [hx.contact, 'HelpContact'],
+  [hx.feedback, 'HelpFeedback'],
 ];
 
 // S-61 Settings hub v3 (#102, F-17 R-17.10): 5 categories with live summaries, App + About inline.
@@ -54,6 +59,8 @@ export function SettingsScreen({ navigation }: { navigation: Nav }) {
     const seen = new Set<string>();
     return INDEX.filter(([l]) => l.toLowerCase().includes(t) && !seen.has(l) && seen.add(l)).slice(0, 12);
   }, [q]);
+  // F-22 (#178): help articles show under the settings that match.
+  const helpHits = useMemo(() => (q.trim().length >= 2 ? helpSearch(q).slice(0, 5) : []), [q]);
 
   const summary = {
     privacy: st ? `${st.hide_from_unverified ? S.sum.hideUnverified : S.sum.visibleAll} · ${S.sum.dist[st.show_distance]}` : undefined,
@@ -95,7 +102,10 @@ export function SettingsScreen({ navigation }: { navigation: Nav }) {
 
       {hits ? (
         <Group>
-          {hits.length ? hits.map(([l, route]) => <Row key={l} title={l} sub={cats.find((c) => c.route === route)?.title} onPress={() => navigation.navigate(route)} />) : <Row title={S.noResults} />}
+          {hits.length || helpHits.length ? hits.map(([l, route]) => <Row key={l} title={l} sub={cats.find((c) => c.route === route)?.title} onPress={() => navigation.navigate(route)} />) : <Row title={S.noResults} />}
+          {helpHits.map((m) => (
+            <Row key={m.id} title={article(m.id)?.t.title ?? m.id} sub={hx.title} onPress={() => navigation.navigate('HelpArticle', { id: m.id })} />
+          ))}
         </Group>
       ) : (
         <>
@@ -113,6 +123,10 @@ export function SettingsScreen({ navigation }: { navigation: Nav }) {
             <Row testID="settings-data-saver" title={sv.title} value={saverSummary(ds.mode, ds.saving)} onPress={() => navigation.navigate('DataSaverSettings')} />
             {Platform.OS !== 'web' ? <SwitchRow title={tx.prefs.haptics} value={pf.haptics} onChange={(v) => setPrefs({ haptics: v }).then(setPf)} /> : null}
             <Row title={tx.prefs.language} sub={tx.prefs.languageSub} onPress={() => Linking.openSettings().catch(() => {})} />
+          </Group>
+
+          <Group>
+            <Row testID="settings-help" title={hx.row} onPress={() => navigation.navigate('Help')} left={<IconTile tone={color.trust}><Text style={{ fontFamily: font.heavy, fontSize: 18, color: color.onAccent }}>?</Text></IconTile>} />
           </Group>
 
           <Group label={S.about}>

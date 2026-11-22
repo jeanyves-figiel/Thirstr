@@ -17,11 +17,11 @@ import { passes, type Step } from '../trust/liveness';
 import { Banner } from '../ui';
 
 type Challenge = { nonce: string; steps: Step[]; key: IssuerKey };
-type Shot = { takePictureAsync: (o: object) => Promise<{ uri: string }> };
+export type Shot = { takePictureAsync: (o: object) => Promise<{ uri: string }> };
 
 // DEV web build only (localhost): no camera module, so the liveness result is simulated.
-const devSimulate = Platform.OS === 'web' && typeof location !== 'undefined' && location.hostname === 'localhost';
-const supported = (Platform.OS === 'ios' && faceAvailable) || devSimulate;
+export const devSimulate = Platform.OS === 'web' && typeof location !== 'undefined' && location.hostname === 'localhost';
+export const supported = (Platform.OS === 'ios' && faceAvailable) || devSimulate;
 
 async function drop(uri: string) {
   const { File } = await import('expo-file-system');
@@ -70,6 +70,40 @@ async function photoMatch(stills: string[]): Promise<SelfieOutcome> {
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * F-22 R-22.22 (#178): the same on-device liveness + photo match as S-06, for the recovery identity check.
+ * Returns 'pass' | 'fail' (a try is spent) | 'noface' | 'offline' (no try spent). Stills are always deleted.
+ */
+export async function livenessCheck(cam: Shot, steps: Step[], say: (s: string) => void): Promise<'pass' | 'fail' | 'noface' | 'offline'> {
+  const stills: string[] = [];
+  try {
+    say(t.verify.steps.look);
+    await wait(800);
+    const base = await until(cam, frontal, 5000, selfieMatchAvailable);
+    if (!base) return 'noface';
+    if (base.uri) stills.push(base.uri);
+    for (const s of steps) {
+      say(t.verify.steps[s]);
+      await wait(400);
+      if (!(await until(cam, (r) => passes(s, base, r), 6000))) return 'fail';
+      say('✓');
+      await wait(500);
+    }
+    if (!selfieMatchAvailable) return 'pass';
+    say(t.verify.steps.look);
+    await wait(400);
+    const end = await until(cam, frontal, 4000, true);
+    if (!end) return 'noface';
+    if (end.uri) stills.push(end.uri);
+    say(t.verify.matching);
+    const out = await photoMatch(stills);
+    return out === 'pass' ? 'pass' : out === 'nomatch' ? 'fail' : out;
+  } finally {
+    say('');
+    await Promise.all(stills.map(drop));
+  }
+}
 
 // S-06 Verify (F-03): server nonce + 3 random steps → on-device liveness → blind-signed credential.
 export function VerifyScreen({ onDone }: { onDone: (me: Me) => void }) {

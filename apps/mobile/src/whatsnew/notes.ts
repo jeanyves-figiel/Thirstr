@@ -16,7 +16,7 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
-    id: 9,
+    id: 10,
     date: '2026-11-21',
     lines: [
       {
@@ -37,6 +37,32 @@ export const NOTES: Note[] = [
           en: ['Reply to a Moment', 'Your reply shows the Moment in chat.'],
           fr: ['Répondre à un Moment', 'Ta réponse montre le Moment au chat.'],
           de: ['Auf Moments antworten', 'Deine Antwort zeigt den Moment.'],
+        },
+      },
+    ],
+  },
+  {
+    id: 9,
+    date: '2026-11-22',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'spark',
+        to: { route: 'Help' },
+        text: {
+          en: ['Help in the app', '33 answers, offline. Ask us from there.'],
+          fr: ['L’aide dans l’app', '33 réponses hors ligne. Écris-nous.'],
+          de: ['Hilfe in der App', '33 Antworten offline. Schreib uns dort.'],
+        },
+      },
+      {
+        tone: 'hookup',
+        glyph: 'shield',
+        to: { route: 'Help' },
+        text: {
+          en: ['Locked out? Get back in', 'Selfie check. Support can’t hand it over.'],
+          fr: ['Bloqué ? Reviens', 'Selfie. Le support ne peut rien céder.'],
+          de: ['Ausgesperrt? Zurück', 'Selfie-Check. Support gibt nichts weiter.'],
         },
       },
     ],

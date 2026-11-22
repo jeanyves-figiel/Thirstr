@@ -1,0 +1,83 @@
+{
+  "_doc": "EN-16/EN-18 budgets per device-matrix profile (testing.md › Device matrix). enforce:true fails the run; others print ⚠ until 7 nightly runs give a baseline. Bytes, ms, MB.",
+  "android-low": {
+    "js_bundle_bytes": {
+      "max": 8200000,
+      "enforce": true
+    },
+    "apk_bytes": {
+      "max": 150000000
+    },
+    "first_frame_ms": {
+      "max": 8000
+    },
+    "tti_ms": {
+      "max": 20000
+    },
+    "pss_mb": {
+      "max": 400
+    },
+    "net_bytes": {
+      "max": 15000000
+    }
+  },
+  "android-mid": {
+    "js_bundle_bytes": {
+      "max": 8200000,
+      "enforce": true
+    },
+    "apk_bytes": {
+      "max": 150000000
+    },
+    "first_frame_ms": {
+      "max": 4000
+    },
+    "tti_ms": {
+      "max": 10000
+    },
+    "pss_mb": {
+      "max": 500
+    },
+    "net_bytes": {
+      "max": 15000000
+    }
+  },
+  "ios-old": {
+    "js_bundle_bytes": {
+      "max": 8500000
+    },
+    "app_bytes": {
+      "max": 250000000
+    },
+    "tti_ms": {
+      "max": 15000
+    },
+    "rss_mb": {
+      "max": 600
+    },
+    "net_bytes": {
+      "max": 15000000
+    }
+  },
+  "android-real": {
+    "js_bundle_bytes": {
+      "max": 8200000,
+      "enforce": true
+    },
+    "apk_bytes": {
+      "max": 150000000
+    },
+    "first_frame_ms": {
+      "max": 5000
+    },
+    "tti_ms": {
+      "max": 8000
+    },
+    "pss_mb": {
+      "max": 350
+    },
+    "net_bytes": {
+      "max": 15000000
+    }
+  }
+}

@@ -48,14 +48,14 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 
 ### F. Release safety
 - Graceful deploys (SR-03).
-- **EN-12** (#171) Canary deploys: one machine gets the new image first, auto-rollback on error rate / latency / crash gates; expand-and-contract DB migrations only (CI lint blocks destructive migrations in the same release); migration dry run on a prod snapshot. CI lint ✔ (`scripts/check-migrations.py`, `docs/runbooks/migrations.md`); canary + dry run open.
+- **EN-12** (#171) Canary deploys: one machine gets the new image first, auto-rollback on error rate / latency / crash gates; expand-and-contract DB migrations only (CI lint blocks destructive migrations in the same release); migration dry run on a prod snapshot. CI lint ✔ (`scripts/check-migrations.py`, `docs/runbooks/migrations.md`); canary + dry run ✔ (`promote-prod.yml`, `scripts/ops/canary.sh`, `docs/runbooks/canary.md`).
 - **EN-13** (#172) Feature flags + kill switches: server-driven, per cohort/country/app version, no third-party tracking; every risky feature ships dark first. ✔ `GET /v1/config`, `docs/runbooks/flags.md`.
 - **EN-14** (#173) Mobile release safety: phased App Store / Play staged rollout, minimum supported version + forced-update screen, API versioning with 2 app versions supported, OTA config kill switches. Minimum build + forced update ✔; phased rollout and API versioning open.
 
 ### G. Testing & resilience
 - Load test + sizing (SR-12).
-- **EN-15** (#174) Chaos and game days (monthly on staging, quarterly in a load env): kill an API machine, fail over the DB, stop Valkey (SR-11), drop the network between regions, fill a disk, expire APNs creds. Each result → runbook or fix.
-- **EN-16** (#175) Device test matrix: real-device runs (low-end Android, old iPhone, 3G profile) in CI nightly; performance budgets enforced (EN-18).
+- **EN-15** (#174) Chaos and game days (monthly on staging, quarterly in a load env): kill an API machine, fail over the DB, stop Valkey (SR-11), drop the network between regions, fill a disk, expire APNs creds. Each result → runbook or fix. ◐ Staging tool + game-day runbook ✔ (`scripts/chaos/`, `docs/runbooks/game-day.md`, testing.md › Chaos); DB failover / region split wait for EN-01/EN-02, load env waits for spend.
+- **EN-16** (#175) Device test matrix: real-device runs (low-end Android, old iPhone, 3G profile) in CI nightly; performance budgets enforced (EN-18). ◐ Emulator/simulator matrix nightly ✔ (low-end Android + 3G, mid Android, old iPhone + 3G; testing.md › Device matrix, no spend). Real-device farm = owner decision (costs or non-EU); signed-in iOS flows #267.
 
 ### H. Retention, backup & DR
 - **EN-17** (#176) Quarterly full DR drill: restore prod into the second region from backups only, measure RTO/RPO, log in `docs/runbooks/db-backups.md`. Automated checks that retention rules (data-model.md) actually delete (row age metrics). Retention probes ✔ (`Thirstr.Retention`, alert in monitoring.md); DR drill ✔ automated (`dr-drill.yml`, quarterly into `ams` from backups only, `db-backups.md` › Automated drill).

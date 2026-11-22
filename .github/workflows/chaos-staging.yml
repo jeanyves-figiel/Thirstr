@@ -1,0 +1,61 @@
+# EN-15 (#174): chaos experiments on STAGING ONLY. Manual, never scheduled.
+# Runbook: docs/runbooks/game-day.md. Tell the release orchestrator before running.
+name: Chaos (staging)
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: Fault to inject
+        type: choice
+        options: [api-stop, api-kill, valkey-down, db-restart, disk-fill, all]
+        default: api-stop
+      duration:
+        description: Seconds the fault lasts (valkey-down, disk-fill), 10–600
+        default: "120"
+      confirm:
+        description: Type "staging" to confirm
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: staging-chaos
+  cancel-in-progress: false
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: staging  # staging secrets only
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFIRM: ${{ inputs.confirm }}
+          REPO: ${{ github.repository }}
+        run: |
+          [ "$CONFIRM" = "staging" ] || { echo "::error::confirm must be 'staging'"; exit 1; }
+          for wf in deploy-staging.yml promote-prod.yml; do
+            n=$(gh api "repos/$REPO/actions/workflows/$wf/runs?status=in_progress" --jq .total_count)
+            q=$(gh api "repos/$REPO/actions/workflows/$wf/runs?status=queued" --jq .total_count)
+            [ "$n" = 0 ] && [ "$q" = 0 ] || { echo "::error::$wf is running; no chaos during a deploy/promotion"; exit 1; }
+          done
+      - name: Run ${{ inputs.experiment }}
+        env:
+          FLY_TOKEN: ${{ secrets.FLY_TOKEN }}
+          OUT: ${{ runner.temp }}/chaos
+          EXPERIMENT: ${{ inputs.experiment }}
+          DURATION: ${{ inputs.duration }}
+        run: ./scripts/chaos/chaos.sh "$EXPERIMENT" "$DURATION"
+      - name: Summary
+        if: always()
+        run: cat "$RUNNER_TEMP/chaos/summary.md" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: chaos-${{ inputs.experiment }}
+          path: ${{ runner.temp }}/chaos

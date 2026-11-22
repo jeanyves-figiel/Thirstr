@@ -1,0 +1,14 @@
+# EN-16 (#175) device matrix: hermetic backend for Android emulators on a CI runner.
+# docker compose -f docker-compose.yml -f infra/e2e/compose.e2e.yml up -d api
+# The emulator reaches the runner at 10.0.2.2; CI aliases 10.0.2.2 on the runner's loopback too,
+# so presigned S3 URLs work for both the app and the test bot. Never used on staging/prod.
+services:
+  api:
+    ports: ["4000:4000"]
+    environment:
+      APP_URL: http://10.0.2.2:4000
+      S3_PUBLIC_ENDPOINT: http://10.0.2.2:9000
+      # DEV-only test bot key (not a secret: only valid on this throwaway stack)
+      TESTBOT_KEY: e2e-device-matrix-testbot-key-0001
+  s3:
+    ports: ["9000:9000"]

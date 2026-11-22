@@ -11,6 +11,8 @@ module.exports = ({ config }) => {
   const site = host ? host.replace(/^api\./, '') : null;
   return {
     ...config,
+    // #168: TLS pinning of the API hosts to CA keys (plugins/with-cert-pinning.js).
+    plugins: [...(config.plugins ?? []), './plugins/with-cert-pinning'],
     ios: {
       ...config.ios,
       // CI sets IOS_BUILD_NUMBER (run number + offset); TestFlight needs it to grow.

@@ -32,6 +32,11 @@ import { flag } from '../app/config';
 import { vcAvailable, VcAskSheet, VcBadge, VcRecorder, VcRow, VcViewer } from './VideoCheck';
 import { vcx } from '../i18n/vcheck';
 import * as Clipboard from 'expo-clipboard';
+import { LinkCard, Glyph } from '../links/LinkCard';
+import { firstUrl } from '../links/links';
+import { buildPreview, type Preview } from '../links/preview';
+import { shareTo } from '../links/share';
+import { lx } from '../i18n/links';
 import { gx } from '../i18n/gestures';
 import { feel } from '../ui/haptics';
 import { toast } from '../ui/Toast';
@@ -95,6 +100,9 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
   const [cid, setCid] = useState<string | null>(route.params.cid ?? null);
   const [list, setList] = useState<E.Msg[] | null>(null);
   const [text, setText] = useState(route.params.draft ?? '');
+  // I-01 R-I01.4: one URL in the composer → preview chip (built on this phone, 600 ms debounce).
+  const [built, setBuilt] = useState<{ url: string; p: Preview | null } | null>(null);
+  const [noChip, setNoChip] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   // F-19 G1 reply being written, G3 held message (reaction bar + actions).
@@ -265,11 +273,40 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
     [conv, me.verified],
   );
 
+  const chipUrl = conv?.theyWrote ? firstUrl(text) : null;
+  const want = chipUrl && chipUrl !== noChip ? chipUrl : null;
+  const chip = want ? { url: want, p: built?.url === want ? built.p : null } : null;
+  useEffect(() => {
+    if (!want) return;
+    let live = true;
+    const t = setTimeout(() => {
+      buildPreview(want).then((p) => live && setBuilt({ url: want, p }));
+    }, 600);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [want]);
+
   if (!cid || !conv || !list) return <Loading />;
 
   const submit = () => {
     const t = text.trim();
     if (!t) return;
+    if (chip?.p && !reply) {
+      // I-01: one link.preview message; the rest of the composer goes along as its text.
+      const rest = t.replace(/\bhttps?:\/\/[^\s<>"']+/i, '').trim();
+      setText('');
+      shareTo([conv.id], chip.p, rest, me.safe_mode === 'on' || !!me.safe_mode_active).then(
+        (r) => {
+          if (r.limited) setProblem(lx.daily);
+          else if (r.asText) setProblem(lx.notAvailable);
+          else if (r.creatorNote) setProblem(lx.creatorNote);
+        },
+        (e) => setProblem(errorText(e)),
+      );
+      return;
+    }
     setText('');
     send(reply ? { t: 'text', text: t, re: reply.re } : { t: 'text', text: t });
     setReply(null);
@@ -780,6 +817,18 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
               </Pressable>
             </View>
           ) : null}
+          {chip ? (
+            <View testID="link-chip" style={{ marginHorizontal: space.l, marginBottom: space.xs, padding: space.s, borderRadius: 14, backgroundColor: color.bgRaised, flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+              <Glyph p={chip.p?.platform ?? 'web'} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...type.caption, fontSize: 13, color: color.fgPrimary }}>{chip.p ? lx.chipReady : lx.chipBuilding}</Text>
+                <Text numberOfLines={1} style={{ ...type.meta, fontSize: 12, color: color.fgSecondary }}>{chip.url.replace(/^https:\/\//, '')}</Text>
+              </View>
+              <Pressable testID="link-chip-off" accessibilityRole="button" accessibilityLabel={lx.asText} onPress={() => setNoChip(chip.url)} hitSlop={8} style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: color.bgOverlay }}>
+                <Icon.Close size={14} />
+              </Pressable>
+            </View>
+          ) : null}
           {/* #134: no home-indicator inset while the keyboard is up (it would leave a gap above the keys). */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.s, paddingHorizontal: space.l, paddingBottom: (tray ? 0 : navBottom) + space.s }}>
             {conv.theyWrote ? (
@@ -1008,6 +1057,8 @@ function Bubble({ m, mine, cid, conv, mark }: { m: E.Msg; mine: boolean; cid: st
       return <Text style={{ ...type.body, color: fg }}>🔒 {tx.chat.albumRevoked}</Text>;
     case 'location.share':
       return <Text style={{ ...type.body, color: fg }}>📍 {tx.chat.location}</Text>;
+    case 'link.preview':
+      return <LinkCard m={m} p={m.p} mine={mine} peer={conv.ctx ? m.by : conv.peer} />;
     case 'screenshot':
       return <Text style={{ ...type.meta, color: fg }}>📸 {mine ? tx.chat.you : conv.name} {tx.chat.screenshot}</Text>;
     default:

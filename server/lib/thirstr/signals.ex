@@ -8,7 +8,13 @@ defmodule Thirstr.Signals do
 
   @window 24 * 3600
   # signal => count within 24 h that triggers quarantine review
-  @thresholds %{velocity: 3, first_msg_dupe: 5, link_attempt: 5, unattested: 1_000_000}
+  @thresholds %{
+    velocity: 3,
+    first_msg_dupe: 5,
+    link_attempt: 5,
+    link_fanout: 3,
+    unattested: 1_000_000
+  }
 
   def record(%Account{id: id} = a, signal) when is_map_key(@thresholds, signal) do
     key = "sig:#{signal}:#{id}"

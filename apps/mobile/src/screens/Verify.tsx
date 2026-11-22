@@ -4,6 +4,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { analyzeFace, faceAvailable, matchStills, selfieMatchAvailable, type FaceReading } from '../../modules/thirstr-face';
 import { api, ApiError, Me } from '../api/client';
+import { proveAction } from '../auth/attest';
 import { rand } from '../chat/bytes';
 import { t } from '../i18n/strings';
 import { o } from '../i18n/onboarding';
@@ -85,7 +86,9 @@ export function VerifyScreen({ onDone }: { onDone: (me: Me) => void }) {
     setWhy(reason);
     const token = rand(32);
     const b = blind(token, ch.key, rand);
-    const r = await api<{ signature?: string; passed?: boolean; attempts_left?: number }>('POST', '/verification/attest', { nonce: ch.nonce, passed, blinded: passed ? b.blinded : undefined });
+    // #270: a pass only counts with proof from this genuine app on this phone (App Attest / Play Integrity).
+    const proof = passed && !devSimulate ? await proveAction(`${ch.nonce}.${b.blinded}`).catch(() => ({})) : {};
+    const r = await api<{ signature?: string; passed?: boolean; attempts_left?: number }>('POST', '/verification/attest', { nonce: ch.nonce, passed, blinded: passed ? b.blinded : undefined, ...proof });
     if (!r.signature) {
       setLeft(r.attempts_left ?? 0);
       setPhase('failed');

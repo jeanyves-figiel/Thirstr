@@ -25,6 +25,9 @@ try {
   require('./src/crypto/setup');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   App = require('./App').default;
+  // #260: the OS background backup task must be defined before the app finishes loading.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('./src/chat/backgroundBackup');
 } catch (e) {
   report(e);
 }

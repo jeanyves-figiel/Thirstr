@@ -122,10 +122,45 @@ defmodule ThirstrWeb.ModConsoleTest do
       })
       |> html_response(200)
 
-    assert html2 =~ "-hashhit"
+    # R-15.47: opened from the sealed evidence store, inline, never a storage URL.
+    [b64] = Regex.run(~r/data:image;base64,([A-Za-z0-9+\/=]+)/, html2, capture: :all_but_first)
+    assert Base.decode64!(b64) =~ "-hashhit"
+    [[ekey]] = Repo.query!("SELECT evidence_key FROM csam_cases").rows
+    assert ekey == "evidence/" <> cid
+    {:ok, sealed} = Thirstr.Storage.get(ekey)
+    refute sealed =~ "hashhit"
 
     assert [["verify match"]] =
              Repo.query!("SELECT reason FROM admin_audit WHERE action = 'case_image_view'").rows
+  end
+
+  test "evidence is deleted after its hold, kept on legal hold", %{admin: admin, bad: bad} do
+    cid = hash_hit(bad)
+    c = admin_conn(admin)
+    html = c |> recycle() |> get("/admin/cases/#{cid}") |> html_response(200)
+
+    c
+    |> recycle()
+    |> post("/admin/cases/#{cid}/decision", %{_csrf_token: csrf(html), decision: "confirm"})
+
+    Repo.query!("UPDATE csam_cases SET hold_until = now() - interval '1 day'")
+
+    assert [{"csam_evidence_1y", 1}] =
+             Enum.filter(Thirstr.Retention.overdue(), &(elem(&1, 0) == "csam_evidence_1y"))
+             |> Enum.map(fn {r, n} -> {r, min(n, 1)} end)
+
+    c
+    |> recycle()
+    |> post("/admin/cases/#{cid}/decision", %{_csrf_token: csrf(html), decision: "hold"})
+    |> redirected_to()
+
+    Thirstr.Moderation.Evidence.sweep()
+    assert [[k]] = Repo.query!("SELECT evidence_key FROM csam_cases").rows
+    assert k
+
+    Repo.query!("UPDATE csam_cases SET hold_until = now() - interval '1 day'")
+    Thirstr.Moderation.Evidence.sweep()
+    assert [[nil]] = Repo.query!("SELECT evidence_key FROM csam_cases").rows
   end
 
   test "false positive releases the account and sends the photo to a person", %{
@@ -177,6 +212,143 @@ defmodule ThirstrWeb.ModConsoleTest do
 
     assert [["classifier"]] = Repo.query!("SELECT source FROM csam_cases").rows
     assert status(bad) == "quarantined"
+  end
+
+  describe "A-05 appeal review (#288, R-15.54)" do
+    setup %{bad: bad} do
+      aid = account_of(bad.pid).id
+
+      {:ok, action} =
+        Thirstr.Moderation.enforce(aid, "suspend", "harassment", "admin",
+          days: 3,
+          facts: "Insults in 3 chats."
+        )
+
+      bad.c
+      |> recycle_authed()
+      |> post("/v1/me/notices/#{action}/appeal", %{text: "Wasn't me"})
+      |> response(204)
+
+      {:ok, action: action}
+    end
+
+    test "decision as sent + appeal shown; cooling-off, reason required, then reverse", %{
+      admin: admin,
+      bad: bad,
+      action: action
+    } do
+      c = admin_conn(admin)
+      html = c |> recycle() |> get("/admin/appeals") |> html_response(200)
+      assert html =~ "Insults in 3 chats." and html =~ "Wasn&#39;t me" and html =~ "cooling-off"
+
+      assert c
+             |> recycle()
+             |> post("/admin/appeals/#{action}", %{
+               _csrf_token: csrf(html),
+               decision: "overturned",
+               reason: "Not enough"
+             })
+             |> response(409)
+
+      Repo.query!("UPDATE moderation_actions SET created_at = now() - interval '13 hours'")
+
+      assert c
+             |> recycle()
+             |> post("/admin/appeals/#{action}", %{
+               _csrf_token: csrf(html),
+               decision: "overturned"
+             })
+             |> response(422)
+
+      c
+      |> recycle()
+      |> post("/admin/appeals/#{action}", %{
+        _csrf_token: csrf(html),
+        decision: "overturned",
+        reason: "Messages were from someone else."
+      })
+      |> redirected_to()
+
+      assert status(bad) == "active"
+
+      assert [["overturned", "Messages were from someone else."]] =
+               Repo.query!(
+                 "SELECT appeal_state, appeal_reason FROM moderation_actions WHERE appeal_state IS NOT NULL"
+               ).rows
+    end
+
+    test "appeals appear in the A-01 queue", %{admin: admin} do
+      html = admin_conn(admin) |> recycle() |> get("/admin") |> html_response(200)
+      assert html =~ "appeal"
+      assert html =~ "suspend (harassment)"
+    end
+  end
+
+  test "dismiss tells the notifier; their review lands in A-05 and can reopen the report", %{
+    admin: admin,
+    bad: bad,
+    reporter: r
+  } do
+    r.c
+    |> recycle_authed()
+    |> post("/v1/reports", %{profile_id: bad.pid, reason: "harassment"})
+    |> json_response(201)
+
+    [[rid]] = Repo.query!("SELECT id::text FROM reports").rows
+    c = admin_conn(admin)
+    html = c |> recycle() |> get("/admin/reports/#{rid}") |> html_response(200)
+
+    c
+    |> recycle()
+    |> post("/admin/reports/#{rid}/action", %{
+      _csrf_token: csrf(html),
+      action: "dismiss",
+      reason: "no_violation"
+    })
+    |> redirected_to()
+
+    assert [["no_action"]] = Repo.query!("SELECT decision FROM reports").rows
+
+    r.c
+    |> recycle_authed()
+    |> post("/v1/me/reports/#{rid}/review", %{text: "He keeps insulting me"})
+    |> response(204)
+
+    html = c |> recycle() |> get("/admin/appeals") |> html_response(200)
+    assert html =~ "He keeps insulting me"
+    assert c |> recycle() |> get("/admin") |> html_response(200) =~ "notifier review"
+
+    c
+    |> recycle()
+    |> post("/admin/reviews/#{rid}", %{
+      _csrf_token: csrf(html),
+      decision: "overturned",
+      reason: "Looked again: the messages are abusive."
+    })
+    |> redirected_to()
+
+    assert [["open", "overturned"]] =
+             Repo.query!("SELECT state, notifier_review_state FROM reports").rows
+  end
+
+  test "an action without facts is refused (R-15.28)", %{admin: admin, bad: bad, reporter: r} do
+    r.c
+    |> recycle_authed()
+    |> post("/v1/reports", %{profile_id: bad.pid, reason: "scam"})
+    |> json_response(201)
+
+    [[rid]] = Repo.query!("SELECT id::text FROM reports").rows
+    c = admin_conn(admin)
+    html = c |> recycle() |> get("/admin/reports/#{rid}") |> html_response(200)
+
+    assert c
+           |> recycle()
+           |> post("/admin/reports/#{rid}/action", %{
+             _csrf_token: csrf(html),
+             action: "warn",
+             reason: "scam"
+           })
+           |> response(422)
   end
 
   test "wellbeing: time on tier 0 pages is counted and the banner shows at 2 h", %{

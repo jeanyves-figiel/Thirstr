@@ -21,6 +21,25 @@ export const NOTES: Note[] = [
     lines: [
       {
         tone: 'trust',
+        glyph: 'shield',
+        to: { route: 'Notices' },
+        text: {
+          en: ['Your reports', 'See what we did and ask for a review.'],
+          fr: ['Tes signalements', 'Vois la suite et demande un réexamen.'],
+          de: ['Deine Meldungen', 'Sieh das Ergebnis, bitte um Prüfung.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'hand',
+        text: {
+          en: ['Report illegal content', 'A clear path, with a reference number.'],
+          fr: ['Signale l’illégal', 'Un chemin clair, avec une référence.'],
+          de: ['Illegales melden', 'Klarer Weg, mit Referenznummer.'],
+        },
+      },
+      {
+        tone: 'trust',
         glyph: 'spark',
         to: { route: 'Help' },
         text: {

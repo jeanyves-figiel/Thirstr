@@ -86,5 +86,8 @@
   "legal_liab_h": "Haftung",
   "legal_liab": "Wir prüfen diese Website sorgfältig, können aber keine Gewähr für Vollständigkeit und Aktualität übernehmen. Für Inhalte externer Links sind wir nicht verantwortlich.",
   "legal_odr_h": "Streitbeilegung",
-  "legal_odr": "Wir sind nicht verpflichtet und nicht bereit, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen."
+  "legal_odr": "Wir sind nicht verpflichtet und nicht bereit, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.",
+  "legal_report_h": "Illegale Inhalte melden",
+  "legal_report": "Jede Person kann illegale Inhalte auf Thirstr melden, auch ohne App: über unser Meldeformular. Mitglieder melden direkt im Profil oder Chat.",
+  "legal_report_btn": "Meldeformular"
 }

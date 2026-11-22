@@ -125,9 +125,26 @@ defmodule Thirstr.Moderation.HashMatch do
       ]
     )
 
+    seal_evidence(id, attrs[:key])
     Moderation.auto_quarantine(account, "csam_hash")
     Logger.error("csam hash case opened")
     {:ok, id}
+  end
+
+  # R-15.47: move the matched object into the sealed evidence store; the original is deleted.
+  defp seal_evidence(_id, nil), do: :ok
+
+  defp seal_evidence(id, key) do
+    with {:ok, bytes} <- Storage.get(key) do
+      {ekey, dek} = Thirstr.Moderation.Evidence.seal(id, bytes)
+
+      Repo.query!(
+        "UPDATE csam_cases SET evidence_key = $2, evidence_dek = $3 WHERE id = $1",
+        [Ecto.UUID.dump!(id), ekey, dek]
+      )
+
+      Storage.delete_many([key])
+    end
   end
 
   defp dump(nil), do: nil

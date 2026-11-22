@@ -201,7 +201,28 @@ defmodule ThirstrWeb.ModController do
         }
       end)
 
-    cases ++ reports ++ photos ++ appeals ++ quarantine
+    reviews =
+      q(
+        """
+        SELECT r.severity, r.reason, r.notifier_review_at, p.display_name
+        FROM reports r LEFT JOIN profiles p ON p.id = r.target_profile
+        WHERE r.notifier_review_state = 'open' LIMIT 500
+        """,
+        []
+      )
+      |> Enum.map(fn [sev, reason, at, name] ->
+        %{
+          tier: Map.get(@report_tier, sev, 5),
+          type: "appeal",
+          name: name,
+          why: "notifier review (#{e(reason)}) " <> chip("appeal"),
+          open: 1,
+          due: DateTime.add(at || DateTime.utc_now(), 72 * 3600, :second),
+          href: "/admin/appeals"
+        }
+      end)
+
+    cases ++ reports ++ photos ++ appeals ++ reviews ++ quarantine
   end
 
   # R-AD.8: tiers 0–1 ≤ 1 h, scam ≤ 12 h, others ≤ 48 h.
@@ -284,11 +305,11 @@ defmodule ThirstrWeb.ModController do
 
   defp load_case(id) do
     with {:ok, _} <- Ecto.UUID.cast(id),
-         [[cid, st, src, prov, ref, aid, key, snap, at, hold, by, dat, sha]] <-
+         [[cid, st, src, prov, ref, aid, key, snap, at, hold, by, dat, sha, dek]] <-
            q(
              """
              SELECT id::text, state, source, provider, match_ref, target_account::text, evidence_key,
-                    snapshot, created_at, hold_until, decided_by, decided_at, sha256
+                    snapshot, created_at, hold_until, decided_by, decided_at, sha256, evidence_dek
              FROM csam_cases WHERE id = $1
              """,
              [Nearby.dump(id)]
@@ -306,7 +327,8 @@ defmodule ThirstrWeb.ModController do
         hold: hold,
         by: by,
         decided_at: dat,
-        sha: sha
+        sha: sha,
+        dek: dek
       }
     else
       _ -> nil
@@ -352,7 +374,8 @@ defmodule ThirstrWeb.ModController do
         <p>SHA-256 <code>#{e(sha_hex(c.sha))}</code></p>
         <p>Opened #{DateTime.to_iso8601(c.at)} · SLA #{ThirstrWeb.AdminController.sla(1, c.at)}</p>
         <p>Profile at upload: <b>#{e(snap["display_name"] || "—")}</b>, #{e(snap["age"] || "")} · slot #{e(snap["slot"] || "—")}</p>
-        <p>Evidence kept until #{Date.to_iso8601(DateTime.to_date(c.hold))}</p>
+        <form method="post" action="/admin/cases/#{c.id}/decision">#{csrf}<button name="decision" value="hold">Legal hold +1 year</button></form>
+        <p>Evidence #{if c.key, do: "sealed, kept until #{Date.to_iso8601(DateTime.to_date(c.hold))}", else: "deleted (retention)"}</p>
         #{decision}
       </div>
     </div>
@@ -495,6 +518,22 @@ defmodule ThirstrWeb.ModController do
     end
   end
 
+  # Legal hold (R-15.47): keeps the evidence a year longer than today's deadline, e.g. on a
+  # preservation request.
+  def case_decision(conn, %{"id" => id, "decision" => "hold"}) do
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         %{num_rows: 1} <-
+           Repo.query!(
+             "UPDATE csam_cases SET hold_until = greatest(hold_until, now()) + interval '1 year' WHERE id = $1 AND evidence_key IS NOT NULL",
+             [Nearby.dump(id)]
+           ) do
+      audit(conn.assigns.admin, "case_legal_hold", id, nil)
+      redirect(conn, to: "/admin/cases/#{id}")
+    else
+      _ -> send_resp(conn, 404, "")
+    end
+  end
+
   def case_decision(conn, _), do: send_resp(conn, 422, "")
 
   defp apply_decision("confirm", id, aid, _photo_id, sha, _actor) do
@@ -523,9 +562,16 @@ defmodule ThirstrWeb.ModController do
   def case_view(conn, %{"id" => id, "reason" => reason, "confirm" => "yes"})
       when byte_size(reason) > 3 do
     case load_case(id) do
-      %{key: key} = c when is_binary(key) ->
+      %{key: key, dek: dek} = c when is_binary(key) and is_binary(dek) ->
         audit(conn.assigns.admin, "case_image_view", id, String.slice(reason, 0, 200))
-        page(conn, "Case", case_page(c, Storage.presigned_get(key, 60)))
+
+        case Thirstr.Moderation.Evidence.open(key, dek) do
+          {:ok, bytes} ->
+            page(conn, "Case", case_page(c, "data:image;base64," <> Base.encode64(bytes)))
+
+          _ ->
+            send_resp(conn, 500, "Evidence could not be opened")
+        end
 
       _ ->
         send_resp(conn, 404, "")
@@ -580,6 +626,154 @@ defmodule ThirstrWeb.ModController do
   end
 
   def reveal(conn, _), do: send_resp(conn, 422, "")
+
+  # ------------------------------------------------------------------ A-05 appeals (#288)
+
+  # R-15.31 beta: the owner reviews his own decisions; a 12 h cooling-off stands in for a
+  # second person. All console actions are logged with actor "admin" (R-AD.12).
+  @cooling_s 12 * 3600
+
+  def appeals(conn, _) do
+    conn = track(conn, nil)
+    audit(conn.assigns.admin, "view_appeals", nil, nil)
+    csrf = ~s(<input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">)
+
+    rows =
+      q(
+        """
+        SELECT m.id::text, m.action, m.reason, m.appeal_text, m.created_at, m.facts, m.ground,
+               m.law_ref, m.detected_by, m.decided_by, m.actor, m.ends_at,
+               (SELECT display_name FROM profiles WHERE account_id = m.target_account ORDER BY inserted_at LIMIT 1)
+        FROM moderation_actions m WHERE m.appeal_state = 'open' ORDER BY m.created_at LIMIT 200
+        """,
+        []
+      )
+
+    list =
+      Enum.map_join(rows, "", fn [
+                                   id,
+                                   act,
+                                   reason,
+                                   text,
+                                   at,
+                                   facts,
+                                   ground,
+                                   law,
+                                   det,
+                                   dec,
+                                   actor,
+                                   ends,
+                                   name
+                                 ] ->
+        ready = DateTime.add(at, @cooling_s, :second)
+        cooling = actor == "admin" and DateTime.compare(DateTime.utc_now(), ready) == :lt
+
+        """
+        <div class="card">
+          <p><b>#{e(name || "—")}</b> · #{e(act)}#{if ends, do: " until " <> DateTime.to_iso8601(ends), else: ""} · #{e(reason)} · #{DateTime.to_iso8601(at)} #{due(DateTime.add(at, 72 * 3600, :second))}</p>
+          <h3>Decision as sent</h3>
+          <p>Ground: #{if ground == "law", do: "illegal · " <> e(law || ""), else: "our rules"} · Found by #{e(det)} · Decided by #{e(dec)}</p>
+          <p>Facts: #{e(facts || "—")}</p>
+          <h3>Their appeal</h3>
+          <p>#{e(text || "—")}</p>
+          #{if cooling, do: ~s{<p class="warn">You took this decision. Review it from #{DateTime.to_iso8601(ready)} (12 h cooling-off, R-15.31).</p>}, else: ""}
+          <form method="post" action="/admin/appeals/#{id}">#{csrf}
+            <textarea name="reason" required maxlength="300" rows="2" placeholder="Reason, shown to them (required)" style="width:100%;font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px"></textarea>
+            <button name="decision" value="overturned"#{if cooling, do: " disabled", else: ""}>Reverse</button>
+            <button name="decision" value="upheld"#{if cooling, do: " disabled", else: ""}>Uphold</button>
+          </form>
+        </div>
+        """
+      end)
+
+    page(conn, "Appeals", """
+    #{nav()}<h1>A-05 Appeals</h1>
+    <p class="muted">Reverse restores the account at once. Their notice shows your reason and "Reviewed again by a person".</p>
+    #{if list == "", do: ~s(<p class="muted">No open appeals.</p>), else: list}
+    <h2>Reviews asked by people who reported (R-15.32)</h2>
+    #{notifier_reviews(csrf)}
+    """)
+  end
+
+  def appeal_decision(conn, %{"id" => id, "decision" => d} = p) when d in ~w(upheld overturned) do
+    reason = String.trim(p["reason"] || "")
+
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         true <- reason != "" || {:error, :reason},
+         [[actor, at]] <-
+           q(
+             "SELECT actor, created_at FROM moderation_actions WHERE id = $1 AND appeal_state = 'open'",
+             [
+               Nearby.dump(id)
+             ]
+           ),
+         true <-
+           actor != "admin" or DateTime.diff(DateTime.utc_now(), at) >= @cooling_s ||
+             {:error, :cooling},
+         :ok <- Moderation.decide_appeal(id, d, "admin", reason) do
+      audit(conn.assigns.admin, "appeal_" <> d, id, String.slice(reason, 0, 200))
+      redirect(conn, to: "/admin/appeals")
+    else
+      {:error, :reason} -> send_resp(conn, 422, "Write a reason: it is shown to them")
+      {:error, :cooling} -> send_resp(conn, 409, "12 h cooling-off: you took this decision")
+      _ -> send_resp(conn, 404, "")
+    end
+  end
+
+  def appeal_decision(conn, _), do: send_resp(conn, 422, "")
+
+  # The reported person's name is shown to the moderator, never to the notifier (AC-15.8);
+  # a web notifier's sealed contact is never opened here.
+  defp notifier_reviews(csrf) do
+    rows =
+      q(
+        """
+        SELECT r.id::text, r.reason, r.legal_type, r.explanation, r.decision, r.decided_at,
+               r.notifier_review_text, r.notifier_review_at, r.channel, p.display_name
+        FROM reports r LEFT JOIN profiles p ON p.id = r.target_profile
+        WHERE r.notifier_review_state = 'open' ORDER BY r.notifier_review_at LIMIT 200
+        """,
+        []
+      )
+
+    if rows == [] do
+      ~s(<p class="muted">None open.</p>)
+    else
+      Enum.map_join(rows, "", fn [id, reason, ltype, expl, dec, dat, text, at, chan, name] ->
+        """
+        <div class="card">
+          <p><b>#{e(name || "—")}</b> · reported for #{e(ltype || reason)} via #{e(chan)} · our decision: <b>#{e(dec || "—")}</b>#{if dat, do: " (" <> DateTime.to_iso8601(dat) <> ")", else: ""} #{if at, do: due(DateTime.add(at, 72 * 3600, :second)), else: ""}</p>
+          #{if expl, do: "<p>Their notice: #{e(expl)}</p>", else: ""}
+          <p>Their review request: #{e(text || "—")}</p>
+          <form method="post" action="/admin/reviews/#{id}">#{csrf}
+            <textarea name="reason" required maxlength="300" rows="2" placeholder="Reason, shown to them (required)" style="width:100%;font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px"></textarea>
+            <button name="decision" value="overturned">Reopen the report</button>
+            <button name="decision" value="upheld">Keep the decision</button>
+          </form>
+        </div>
+        """
+      end)
+    end
+  end
+
+  def review_decision(conn, %{"id" => id, "decision" => d} = p) when d in ~w(upheld overturned) do
+    reason = String.trim(p["reason"] || "")
+
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         true <- reason != "" || {:error, :reason},
+         :ok <- Thirstr.Reports.decide_review(id, d, "admin", reason) do
+      audit(conn.assigns.admin, "notifier_review_" <> d, id, String.slice(reason, 0, 200))
+
+      redirect(conn,
+        to: if(d == "overturned", do: "/admin/reports/#{id}", else: "/admin/appeals")
+      )
+    else
+      {:error, :reason} -> send_resp(conn, 422, "Write a reason: it is shown to them")
+      _ -> send_resp(conn, 404, "")
+    end
+  end
+
+  def review_decision(conn, _), do: send_resp(conn, 422, "")
 
   # ------------------------------------------------------------------ wellbeing (R-15.53)
 

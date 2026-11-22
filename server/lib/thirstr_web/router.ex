@@ -54,6 +54,11 @@ defmodule ThirstrWeb.Router do
     }
   end
 
+  # F-15 R-15.25: web notices, 5 per hashed IP per day
+  pipeline :notice_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "notice", limit: 5, window: 86_400
+  end
+
   # F-22 (#178): help votes, contact form (signed in or out), screenshot uploads
   pipeline :support_limit do
     plug ThirstrWeb.Plugs.RateLimit, bucket: "supp", limit: 60, window: 3600
@@ -128,8 +133,9 @@ defmodule ThirstrWeb.Router do
     post "/linked/:id", AdminController, :linked_decision
     get "/quarantine", AdminController, :quarantine
     post "/accounts/:id/action", AdminController, :account_action
-    get "/appeals", AdminController, :appeals
-    post "/appeals/:id", AdminController, :appeal_decision
+    get "/appeals", ModController, :appeals
+    post "/appeals/:id", ModController, :appeal_decision
+    post "/reviews/:id", ModController, :review_decision
     # A-12 support inbox (F-22, #178)
     get "/support", AdminSupportController, :index
     get "/support/macros", AdminSupportController, :macros
@@ -159,6 +165,17 @@ defmodule ThirstrWeb.Router do
   scope "/p", ThirstrWeb do
     pipe_through [:share_page_limit, :page]
     get "/:slug", SharePageController, :page
+  end
+
+  # F-15 R-15.25 DSA notice form for non-users (no scripts, no cookies)
+  scope "/report", ThirstrWeb do
+    pipe_through [:share_page_limit, :page]
+    get "/", ReportPageController, :form
+  end
+
+  scope "/report", ThirstrWeb do
+    pipe_through [:notice_limit, :page]
+    post "/", ReportPageController, :submit
   end
 
   scope "/.well-known", ThirstrWeb do
@@ -365,6 +382,10 @@ defmodule ThirstrWeb.Router do
       get "/me/notices", TrustController, :notices
       post "/me/notices/seen", TrustController, :notices_seen
       post "/me/notices/:id/appeal", TrustController, :appeal
+      # R-15.27 / R-15.32 (#170): outcomes of my reports + notifier review
+      get "/me/reports", TrustController, :my_reports
+      post "/me/reports/seen", TrustController, :my_reports_seen
+      post "/me/reports/:id/review", TrustController, :review
       post "/profiles/:id/vouch", TrustController, :vouch
       delete "/profiles/:id/vouch", TrustController, :unvouch
 

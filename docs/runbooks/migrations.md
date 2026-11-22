@@ -26,3 +26,6 @@ Check before marking: `git grep` the server for the column, and the oldest build
 ```sh
 python3 scripts/check-migrations.py
 ```
+
+## Dry run before prod (EN-12, #171)
+Every "Promote to production" first runs the new image's migrations against a copy of prod restored from backups (`scripts/ops/restore-drill.sh prod fra --migrate-image …`). A failing or slow migration shows there, before prod is touched. See `canary.md`.

@@ -25,6 +25,9 @@ adb install -r -g "$APK" >/dev/null || { echo "::error::install failed"; exit 1;
 put apk_bytes "$(stat -c %s "$APK")"
 put js_bundle_bytes "$(unzip -l "$APK" assets/index.android.bundle | awk 'NR==4{print $1}')"
 adb emu geo fix 8.4887 47.3914 >/dev/null 2>&1 || true   # Zurich Altstetten (Testbot's area)
+# No system "isn't responding" / crash dialogs over the app (emulator launcher ANRs on slow CI hosts);
+# app crashes still show up in the logcat diagnostics.
+adb shell settings put global hide_error_dialogs 1
 adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0; adb shell settings put global animator_duration_scale 0
 
 # Cold start to first frame (am start -W), app installed + never started before = worst case

@@ -21,14 +21,21 @@ put js_bundle_bytes "$(stat -f %z "$APP/main.jsbundle")"
 
 # Old-iPhone class device on the newest runtime on the image (older runtimes aren't installed).
 rt=$(xcrun simctl list runtimes -j | python3 -c "import json,sys;r=[x for x in json.load(sys.stdin)['runtimes'] if x['isAvailable'] and x['platform']=='iOS'];print(sorted(r,key=lambda x:[int(p) for p in x['version'].split('.')])[-1]['identifier'])")
-dt=$(xcrun simctl list devicetypes -j | python3 -c "
+# Smallest/oldest model first; skip models the runtime no longer supports (iOS 27 dropped SE 3).
+cands=$(xcrun simctl list devicetypes -j | python3 -c "
 import json,sys
 t={x['name']:x['identifier'] for x in json.load(sys.stdin)['devicetypes']}
-for n in ['iPhone SE (3rd generation)','iPhone 11','iPhone 12 mini','iPhone 13 mini','iPhone SE (2nd generation)','iPhone 16e','iPhone 15','iPhone 16']:
-    if n in t: print(n+'|'+t[n]); break
+for n in ['iPhone SE (3rd generation)','iPhone 11','iPhone 12 mini','iPhone 13 mini','iPhone SE (2nd generation)','iPhone 16e','iPhone 15','iPhone 16','iPhone 17']:
+    if n in t: print(n+'|'+t[n])
 ")
+udid=""
+while IFS= read -r dt; do
+  [ -n "$dt" ] || continue
+  if udid=$(xcrun simctl create e2e-old "${dt##*|}" "$rt" 2>/dev/null); then break; fi
+  echo "skip ${dt%%|*}: not supported on $rt"; udid=""
+done <<<"$cands"
+[ -n "$udid" ] || { echo "::error::no supported old-iPhone simulator on $rt"; exit 1; }
 put device "\"${dt%%|*} / ${rt##*.}\""
-udid=$(xcrun simctl create e2e-old "${dt##*|}" "$rt") || { echo "::error::no simulator for ${dt%%|*} on $rt (device may not support this iOS)"; exit 1; }
 xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
 xcrun simctl install "$udid" "$APP"
 xcrun simctl privacy "$udid" grant location app.thirstr 2>/dev/null || true

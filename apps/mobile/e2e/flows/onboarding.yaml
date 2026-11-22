@@ -40,8 +40,7 @@ name: onboarding
           id: identity-continue
 - tapOn:
     id: here-hookup
-- tapOn:
-    id: here-friends
+# One intent is enough; the others are below the fold on 720×1280.
 - tapOn:
     id: basics-continue
 - extendedWaitUntil:

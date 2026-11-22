@@ -66,7 +66,7 @@ Every F-01…F-18 / I-01…I-03 rule in beta scope ships before the closed beta 
 | 0 main (all kinds) | `*_GENITALIA_EXPOSED`, `ANUS_EXPOSED`, `BUTTOCKS_EXPOSED`, `FEMALE_BREAST_EXPOSED`; also `no_person` if no face/body detected |
 | 1–4 Now/Friends | `*_GENITALIA_EXPOSED`, `ANUS_EXPOSED` |
 | 1–4 Sport | same as main + `*_GENITALIA_COVERED` (> swimwear, AC-11.1) |
-Scores 0.4–0.6 → `pending_review` (A-03 queue), auto-hidden until reviewed (R-15.13).
+Scores 0.4–0.6 → live at once, `review_state = after`, `main_ok = false`; reviewed after publish in A-03 (F-15 R-15.56, #325).
 `FEMALE_BREAST_EXPOSED` is ignored when `MALE_BREAST_EXPOSED` scores at least as high on the same photo (NudeNet confuses bare male chests; shirtless is allowed on main, #26).
 
 ## Out of beta (unchanged "Later")

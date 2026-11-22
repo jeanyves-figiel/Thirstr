@@ -24,6 +24,9 @@ defmodule ThirstrWeb.MeJSON do
       has_email: not is_nil(a.email_hash),
       # F-22 (#178) "ways back in" card: Apple / Google sign-in linked
       has_oidc: not is_nil(a.auth_oidc_hash),
+      # R-01.16: "apple" | "google" | nil (nil = not known yet, or no OIDC)
+      oidc_provider: a.oidc_provider,
+      passkey_count: Thirstr.Accounts.passkey_count(a),
       created_at: a.inserted_at,
       profile: main && profile(main),
       profiles: Enum.map(profiles, &profile/1),

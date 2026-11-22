@@ -6,7 +6,8 @@ defmodule ThirstrWeb.AdminCostsController do
   """
   use ThirstrWeb, :controller
   alias Thirstr.Costs
-  import ThirstrWeb.AdminController, only: [audit: 4, page: 3, nav: 0, e: 1]
+  import ThirstrWeb.AdminController, only: [audit: 4, page: 3, e: 1]
+  alias ThirstrWeb.AdminUI
 
   @colors ~w(#a78bfa #ff7a59 #3dd6c6 #c6f56b #ffb547 #7a74a8 #f472b6 #60a5fa)
 
@@ -24,17 +25,63 @@ defmodule ThirstrWeb.AdminCostsController do
 
     page(conn, "Costs", """
     <style>#{css()}</style>
-    #{nav()}
-    <div class="head"><div><h1>Costs &amp; capacity</h1><div class="muted sm">#{source_line(sum, s)}</div></div>
-    <form method="get" action="/admin/costs"><label class="sm muted">Month <select name="m" onchange="this.form.submit()">#{month_options(sel, today)}</select></label> <noscript><button>Show</button></noscript></form></div>
+    #{AdminUI.head("Costs &amp; capacity", "#{Calendar.strftime(sel, "%B %Y")} · #{source_line(sum, s)}", month_nav(sel, today))}
+    #{setup_note(sum, s)}
     #{budget(sum, s)}
     #{kpis(sum, prev)}
-    <h2>By vendor</h2>#{vendor_table(sum, prev, color)}
-    <div class="grid2"><div class="card"><h2>Last 6 months</h2>#{chart(hist, color)}</div>
-    <div class="card"><h2>Cost items</h2>#{items(csrf, today)}</div></div>
+    <div class="cols"><div class="card"><h2>By vendor <span class="r">#{if sum.current, do: "projected month-end", else: "month total"}</span></h2>#{vendor_table(sum, prev, color)}</div>
+    <div class="card chart"><h2>Last 6 months <span class="r">EUR · line = cost per MAU</span></h2>#{chart(hist, color)}</div></div>
     #{forecast(f, today)}
+    <div class="card" id="items"><h2>Cost items <span class="r">typed in · applied per month</span></h2>#{items(csrf, today)}</div>
     #{settings_form(s, csrf, f)}
     """)
+  end
+
+  defp month_nav(sel, today) do
+    m0 = Date.beginning_of_month(today)
+    prev = Date.shift(sel, month: -1)
+    next = Date.shift(sel, month: 1)
+    ym = &String.slice(Date.to_iso8601(&1), 0, 7)
+    oldest = Date.shift(m0, month: -11)
+
+    p =
+      if Date.compare(prev, oldest) != :lt,
+        do:
+          ~s(<a class="btn ghost" href="/admin/costs?m=#{ym.(prev)}">‹ #{Calendar.strftime(prev, "%b")}</a>),
+        else: ""
+
+    n =
+      if Date.compare(next, m0) != :gt,
+        do:
+          ~s(<a class="btn ghost" href="/admin/costs?m=#{ym.(next)}">#{Calendar.strftime(next, "%b")} ›</a>),
+        else: ""
+
+    p <> n <> ~s(<a class="btn pri" href="#add">+ Cost item</a>)
+  end
+
+  # Empty or half set-up page: say exactly what to do, in order (R-AD.13).
+  defp setup_note(sum, s) do
+    steps =
+      [
+        !Costs.fly_configured?() &&
+          "Set the read-only Fly token on the API app: <code>fly tokens create readonly thirstr</code>, then <code>fly secrets set FLY_COST_TOKEN=…</code> (runbook <code>costs.md</code>, #301).",
+        Costs.items() == [] &&
+          ~s(Add what has no API as <a href="#add">cost items</a>: Tigris, Amazon SES, Apple Developer, domain, Google Play.),
+        !(is_number(s["budget_eur"]) and s["budget_eur"] > 0) &&
+          ~s(Set a monthly <a href="#settings">budget</a> to get email alerts at 80 % and 100 %.)
+      ]
+      |> Enum.filter(& &1)
+
+    cond do
+      steps == [] ->
+        ""
+
+      sum.vendors == [] ->
+        ~s(<div class="note warn"><b>Nothing to show yet.</b><ol>#{Enum.map_join(steps, "", &"<li>#{&1}</li>")}</ol></div>)
+
+      true ->
+        ~s(<div class="note"><b>To finish setting up:</b><ol>#{Enum.map_join(steps, "", &"<li>#{&1}</li>")}</ol></div>)
+    end
   end
 
   # ------------------------------------------------------------------ actions
@@ -156,7 +203,7 @@ defmodule ThirstrWeb.AdminCostsController do
     fly =
       cond do
         not Costs.fly_configured?() ->
-          "Fly token not set (runbook costs.md), Fly typed in"
+          "Fly token not set, Fly typed in"
 
         sum.vendors |> Enum.any?(&(&1[:source] == "fly_api")) ->
           "Fly from API, updated daily 02:10 UTC"
@@ -166,17 +213,6 @@ defmodule ThirstrWeb.AdminCostsController do
       end
 
     "#{fly} · other vendors typed in · EUR, USD at #{s["usd_eur"]}"
-  end
-
-  defp month_options(sel, today) do
-    m0 = Date.beginning_of_month(today)
-
-    Enum.map_join(0..11, "", fn i ->
-      m = Date.shift(m0, month: -i)
-      v = String.slice(Date.to_iso8601(m), 0, 7)
-
-      ~s|<option value="#{v}"#{if m == sel, do: " selected"}>#{Calendar.strftime(m, "%B %Y")}</option>|
-    end)
   end
 
   defp budget(sum, s) do
@@ -196,13 +232,12 @@ defmodule ThirstrWeb.AdminCostsController do
         end
 
       """
-      <div class="budget"><div class="brow"><span><b class="big">#{Costs.eur(sum.total)}</b> #{if sum.current, do: "projected month-end · <b>#{Costs.eur(sum.mtd)}</b> so far (#{sum.elapsed} of #{sum.days} days)", else: "month total"}</span>
-      <span>Budget <b>#{Costs.eur(round(bc))}</b> · <span class="pill #{cls}">#{pct} %</span></span></div>
-      <div class="bbar #{cls}" role="img" aria-label="#{mtd} percent spent, #{pct} percent projected, alert at 80 percent"><i class="proj" style="width:#{proj}%"></i><i class="mtd" style="width:#{mtd}%"></i><span class="tick" style="left:80%"></span></div>
-      <div class="brow sm muted"><span>Solid: spent · striped: projected</span><span>Email alert at 80 % and 100 % → #{e(s["alert_email"])}</span></div></div>
+      <div class="card budget"><h2>Budget <b>#{Costs.eur(round(bc))}</b> <span class="pill #{cls}">#{pct} % projected</span><span class="r">alerts at 80 % and 100 % to #{e(s["alert_email"])}</span></h2>
+      <div class="btrack #{cls}" role="img" aria-label="#{mtd} percent spent, #{pct} percent projected, alert at 80 percent"><i class="proj" style="width:#{proj}%"></i><i class="spent" style="width:#{mtd}%"></i><span class="mark" style="left:80%"></span></div>
+      <div class="blegend"><span><i class="k-spent"></i><b class="mono">#{Costs.eur(sum.mtd)}</b> spent#{if sum.current, do: " (#{sum.elapsed} of #{sum.days} days)", else: ""}</span>#{if sum.current, do: ~s(<span><i class="k-proj"></i><b class="mono">#{Costs.eur(sum.total)}</b> projected month-end</span>), else: ""}<span><i class="k-mark"></i>alert at <b class="mono">#{Costs.eur(round(bc * 0.8))}</b></span></div></div>
       """
     else
-      ~s|<div class="budget"><div class="brow"><span><b class="big">#{Costs.eur(sum.total)}</b> #{if sum.current, do: "projected month-end", else: "month total"}</span><span class="muted">No budget set, alerts off (Settings below)</span></div></div>|
+      ~s|<div class="card budget"><h2>No budget set <span class="r">alerts off · <a href="#settings">set one</a></span></h2><div class="blegend"><span><b class="mono">#{Costs.eur(sum.total)}</b> #{if sum.current, do: "projected month-end", else: "month total"}</span></div></div>|
     end
   end
 
@@ -223,33 +258,33 @@ defmodule ThirstrWeb.AdminCostsController do
   end
 
   defp vendor_table(%{vendors: []}, _, _),
-    do:
-      ~s|<p class="muted">Nothing yet. Add cost items below, or set the Fly token (runbook costs.md).</p>|
+    do: AdminUI.empty("No costs yet", "Add cost items below, or set the Fly token.")
 
   defp vendor_table(sum, prev, color) do
     pv = Map.new(prev.vendors, &{&1.vendor, &1.cents})
+    top = sum.vendors |> Enum.map(& &1.cents) |> Enum.max(fn -> 1 end) |> max(1)
+    prev_apps = Enum.find_value(prev.vendors, [], & &1[:apps])
 
     rows =
       Enum.map_join(sum.vendors, "", fn v ->
         last = Map.get(pv, v.vendor, 0)
+        c = color.(v.vendor)
 
         apps =
           for a <- v[:apps] || [] do
-            prev_app =
-              prev.vendors
-              |> Enum.find_value([], & &1[:apps])
-              |> Enum.find_value(0, &(&1.app == a.app && &1.cents))
+            pa = Enum.find_value(prev_apps, 0, &(&1.app == a.app && &1.cents))
 
-            "<tr class=\"subrow\"><td>#{e(a.app)} · #{e(machines_txt(a.detail))}</td><td></td><td class=\"r\">#{Costs.eur(a.cents)}</td><td class=\"r\">#{Costs.eur(prev_app)}</td><td class=\"r #{chg_cls(a.cents - prev_app)}\">#{chg(a.cents - prev_app)}</td></tr>"
+            ~s(<div class="vsub"><span>#{e(a.app)} · #{e(machines_txt(a.detail))}</span><span class="amt">#{Costs.eur(a.cents)}</span><span class="dl #{chg_cls(a.cents - pa)}">#{chg(a.cents - pa)}</span></div>)
           end
 
-        "<tr><td><span class=\"sw\" style=\"background:#{color.(v.vendor)}\"></span>#{e(v.vendor)}</td><td>#{source_pill(v.source)}</td><td class=\"r\">#{Costs.eur(v.cents)}</td><td class=\"r\">#{Costs.eur(last)}</td><td class=\"r #{chg_cls(v.cents - last)}\">#{chg(v.cents - last)}</td></tr>" <>
+        ~s(<div class="vrow"><span class="nm"><i style="background:#{c}"></i><span>#{e(v.vendor)}</span> #{source_pill(v.source)}</span><span class="bar2"><i style="width:#{max(1, round(v.cents / top * 100))}%;background:#{c}"></i></span><span class="amt">#{Costs.eur(v.cents)}</span><span class="dl #{chg_cls(v.cents - last)}" title="vs #{Calendar.strftime(prev.month, "%B")}: #{Costs.eur(last)}">#{chg(v.cents - last)}</span></div>) <>
           Enum.join(apps)
       end)
 
     """
-    <div class="tbl"><table><tr><th>Vendor</th><th>Source</th><th class="r">#{Calendar.strftime(sum.month, "%B")}</th><th class="r">#{Calendar.strftime(prev.month, "%B")}</th><th class="r">Change</th></tr>
-    #{rows}<tr><td><b>Total</b></td><td></td><td class="r"><b>#{Costs.eur(sum.total)}</b></td><td class="r"><b>#{Costs.eur(prev.total)}</b></td><td class="r #{chg_cls(sum.total - prev.total)}"><b>#{chg(sum.total - prev.total)}</b></td></tr></table></div>
+    <div class="vend">#{rows}
+    <div class="vrow tot"><span class="nm">Total</span><span></span><span class="amt">#{Costs.eur(sum.total)}</span><span class="dl #{chg_cls(sum.total - prev.total)}">#{chg(sum.total - prev.total)}</span></div></div>
+    <div class="sm muted">Change vs #{Calendar.strftime(prev.month, "%B")} (#{Costs.eur(prev.total)}).</div>
     """
   end
 
@@ -288,6 +323,12 @@ defmodule ThirstrWeb.AdminCostsController do
 
   # Stacked bars per vendor (EUR) + cost per MAU line on its own right-hand scale.
   defp chart(hist, color) do
+    if Enum.all?(hist, &(&1.total == 0)),
+      do: AdminUI.empty("No history yet", "Bars appear once a month has costs."),
+      else: chart_svg(hist, color)
+  end
+
+  defp chart_svg(hist, color) do
     max_total = hist |> Enum.map(& &1.total) |> Enum.max(fn -> 0 end)
     step = nice_step(max_total / 3)
     top = max(step * 3, 1)
@@ -395,8 +436,8 @@ defmodule ThirstrWeb.AdminCostsController do
       end)
 
     """
-    #{if list == [], do: ~s|<p class="muted">No items yet. Typical: Tigris, Amazon SES (monthly), Apple Developer, domain (yearly), Google Play (once).</p>|, else: ~s|<div class="tbl"><table class="narrow"><tr><th>Vendor</th><th class="r">Amount</th><th>Every</th><th>Months</th><th></th></tr>#{rows}</table></div>|}
-    <form method="post" action="/admin/costs/items" class="add">#{csrf}#{item_fields(%{cadence: "monthly", start_month: Date.beginning_of_month(today)}, "n")}<button class="primary">Add item</button></form>
+    #{if list == [], do: AdminUI.empty("No cost items yet", "Typical: Tigris, Amazon SES (monthly), Apple Developer, domain (yearly), Google Play (once)."), else: ~s|<div class="tbl"><table class="narrow"><tr><th>Vendor</th><th class="r">Amount</th><th>Every</th><th>Months</th><th></th></tr>#{rows}</table></div>|}
+    <h3 id="add">Add a cost item</h3><form method="post" action="/admin/costs/items" class="add">#{csrf}#{item_fields(%{cadence: "monthly", start_month: Date.beginning_of_month(today)}, "n")}<button class="primary">Add item</button></form>
     <div class="sm muted">Amounts in EUR. Ending an item keeps past months right. Every change is in the audit log.</div>
     """
   end
@@ -441,13 +482,13 @@ defmodule ThirstrWeb.AdminCostsController do
     rows = Enum.map_join(List.wrap(f.now) ++ f.rows, "", &forecast_tr(&1, i))
 
     """
-    <section><div class="head"><h2>Capacity forecast</h2>#{badge}</div>#{runway}
+    <div class="card"><h2>Capacity forecast #{badge}</h2>#{runway}
     <div class="tbl"><table><tr><th>When</th><th class="r">MAU</th><th class="r">Peak online</th><th class="r">API machines</th><th class="r">DB size</th><th class="r">Monthly cost</th></tr>#{rows}</table></div>
     <div class="sm muted">Inputs: DAU = <abbr title="average DAU over 7 days ÷ MAU (0.4 until measured)">#{pct(i.dau_ratio)} of MAU</abbr> ·
     peak online = <abbr title="assumed, enterprise-readiness.md §4">#{pct(i.peak_ratio)} of DAU</abbr> ·
     <abbr title="#{if i.cap_measured_on, do: "SR-12 run #{e(i.cap_measured_on)}", else: "planning default, no SR-12 run yet"}">#{i.cap} users per API machine</abbr> × #{i.headroom} headroom ·
     <abbr title="pg_database_size ÷ MAU">#{bytes(i.bytes_per_mau && round(i.bytes_per_mau))} per MAU</abbr> ·
-    cost: Fly API machine price × machines, other Fly fixed, monthly items × MAU, yearly and one-off fixed. As of #{Date.to_iso8601(today)}.</div></section>
+    cost: Fly API machine price × machines, other Fly fixed, monthly items × MAU, yearly and one-off fixed. As of #{Date.to_iso8601(today)}.</div></div>
     """
   end
 
@@ -508,7 +549,7 @@ defmodule ThirstrWeb.AdminCostsController do
     g = s["growth_override"]
 
     """
-    <section><h2>Settings</h2>
+    <details class="card" id="settings"><summary><h2>Settings <span class="r">budget, alerts, exchange rate, capacity inputs, Fly prices</span></h2></summary>
     <form method="post" action="/admin/costs/settings" class="settings">#{csrf}
     <label for="sb">Monthly budget EUR (0 = no alerts)<input id="sb" name="budget_eur" inputmode="decimal" value="#{s["budget_eur"]}"></label>
     <label for="se">Alert email<input id="se" name="alert_email" type="email" value="#{e(s["alert_email"])}"></label>
@@ -523,7 +564,7 @@ defmodule ThirstrWeb.AdminCostsController do
     <label for="fv">Fly volume $/GB<input id="fv" name="fly_volume_gb" inputmode="decimal" value="#{p["volume_gb"]}"></label>
     <label for="sr">Reason<input id="sr" name="reason" required minlength="3" placeholder="required"></label>
     <button class="primary">Save settings</button></form>
-    <div class="sm muted">Fly prices are list prices per 30 days (estimate); stopped machines count €0.</div></section>
+    <div class="sm muted">Fly prices are list prices per 30 days (estimate); stopped machines count €0.</div></details>
     """
   end
 
@@ -550,39 +591,59 @@ defmodule ThirstrWeb.AdminCostsController do
 
   defp css do
     """
-    .sm{font-size:13px}.big{font-size:20px}h1{margin:0}h2{margin:20px 0 8px}
-    .head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
-    .budget{background:#1f1a3d;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px;margin:16px 0}
-    .brow{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
-    .bbar{position:relative;height:12px;border-radius:6px;background:#2c2650;overflow:hidden}
-    .bbar i{position:absolute;inset:0 auto 0 0;border-radius:6px}.bbar .mtd{background:var(--c)}
-    .bbar .proj{background:repeating-linear-gradient(135deg,var(--c) 0 4px,transparent 4px 8px);opacity:.6}
-    .bbar.good{--c:#58d68d}.bbar.warn{--c:#ffb547}.bbar.bad{--c:#ff5470}
-    .bbar .tick{position:absolute;top:0;bottom:0;width:2px;background:#ffb547}
-    .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-    @media(max-width:700px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    .kpi{background:#1f1a3d;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px;min-width:0}
-    .kpi b{font-size:24px;font-variant-numeric:tabular-nums}.kpi span{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#9a93c0}.kpi small{color:#9a93c0;font-size:12px}
-    .tbl{overflow-x:auto}.tbl table{min-width:560px}.tbl table.narrow{min-width:420px}
-    th{font-size:12px;color:#9a93c0;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
-    .r{text-align:right;font-variant-numeric:tabular-nums}
-    .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid #463e7a;color:#9a93c0;white-space:nowrap}
-    .pill.api{border-color:#3dd6c6;color:#3dd6c6}.pill.warn{border-color:#ffb547;color:#ffb547}.pill.bad{border-color:#ff5470;color:#ff5470}.pill.good{border-color:#58d68d;color:#58d68d}
-    .up{color:#ffb547}.down{color:#58d68d}
-    .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
-    tr.subrow td{color:#9a93c0;font-size:13px;padding-left:24px}tr.ended td{opacity:.5}
-    .grid2{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;margin-top:8px}
-    @media(max-width:820px){.grid2{grid-template-columns:minmax(0,1fr)}}
-    .card h2{margin-top:0}svg text{fill:#9a93c0;font:11px system-ui,sans-serif}svg text.hl{fill:#f3f0ff}
-    svg .gl{stroke:#2c2650}svg .pl{fill:none;stroke:#f3f0ff;stroke-width:2}svg .dot{fill:#f3f0ff}
-    .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#9a93c0}
-    form.add,form.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;margin:8px 0}
-    form label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:#9a93c0}
-    form label input,form label select{width:100%;box-sizing:border-box}
-    button.primary{background:#ff7a59;border-color:#ff7a59;color:#1a0f0b;font-weight:600}
-    .runway{border:1px solid #463e7a;border-radius:12px;padding:12px;margin-bottom:8px}.runway.bad{border-color:#ff5470;background:#2b1a22}
-    .runway b{color:#ffb547}abbr{text-decoration:underline dotted;cursor:help}
-    summary{cursor:pointer;color:#ff7a59}
+    .budget .btrack{position:relative;height:14px;border-radius:999px;background:var(--raised2);overflow:hidden}
+    .btrack i{position:absolute;inset:0 auto 0 0;border-radius:999px}
+    .btrack .spent{background:var(--c)}
+    .btrack .proj{background:repeating-linear-gradient(90deg,var(--c) 0 6px,transparent 6px 10px);opacity:.45}
+    .btrack .mark{position:absolute;top:0;bottom:0;width:2px;background:var(--sun)}
+    .btrack.good{--c:var(--teal)}.btrack.warn{--c:var(--sun)}.btrack.bad{--c:var(--danger)}
+    .blegend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--fg2)}
+    .blegend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+    .k-spent{background:var(--teal)}.k-proj{background:rgba(61,214,195,.4)}.k-mark{background:var(--sun)}
+    .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    @media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    .kpi{background:var(--ink);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+    .kpi span{font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+    .kpi b{font:700 26px/1 var(--mono);letter-spacing:-.5px}
+    .kpi small{font-size:12px;color:var(--muted)}
+    .up{color:var(--danger)}.down{color:var(--teal)}
+    .cols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px}
+    @media (max-width:1000px){.cols{grid-template-columns:1fr}}
+    .vend{display:flex;flex-direction:column;gap:10px}
+    .vrow{display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr) 84px 72px;gap:10px;align-items:center;font-size:13px}
+    .vrow .nm{display:flex;align-items:center;gap:8px;font-weight:600;min-width:0;white-space:nowrap;overflow:hidden}
+    .vrow .nm>span:not(.pill){overflow:hidden;text-overflow:ellipsis}
+    .vrow .nm>i{width:10px;height:10px;border-radius:3px;flex:none}
+    .vrow .bar2{height:8px;border-radius:4px;background:var(--raised2);overflow:hidden}
+    .vrow .bar2 i{display:block;height:100%;border-radius:4px}
+    .vrow .amt,.vsub .amt{text-align:right;font:600 13px/1 var(--mono)}
+    .vrow .dl,.vsub .dl{text-align:right;font:500 12px/1 var(--mono);color:var(--muted)}
+    .vrow .dl.up,.vsub .dl.up{color:var(--danger)}.vrow .dl.down,.vsub .dl.down{color:var(--teal)}
+    .vrow.tot{border-top:1px solid var(--line);padding-top:10px}.vrow.tot .amt{font-weight:800}
+    .vsub{display:grid;grid-template-columns:minmax(0,1fr) 84px 72px;gap:10px;font-size:12px;color:var(--muted);padding-left:18px;margin-top:-4px}
+    @media (max-width:560px){.vrow{grid-template-columns:minmax(0,1fr) 78px 62px}.vrow .bar2{display:none}.vsub{grid-template-columns:minmax(0,1fr) 78px 62px}}
+    .pill{display:inline-block;font:600 10.5px/1 var(--display);padding:4px 7px;border-radius:999px;background:var(--raised2);color:var(--fg2);white-space:nowrap}
+    .pill.api{background:rgba(155,123,255,.16);color:var(--violet)}.pill.warn{background:rgba(255,201,60,.14);color:var(--sun)}
+    .pill.bad{background:rgba(255,77,109,.14);color:var(--danger)}.pill.good{background:rgba(61,214,195,.12);color:var(--teal)}
+    .chart svg{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}
+    .chart svg text{fill:var(--muted);font:11px var(--mono)}.chart svg text.hl{fill:var(--fg)}
+    .chart svg .gl{stroke:var(--line)}.chart svg .pl{fill:none;stroke:var(--teal);stroke-width:2}.chart svg .dot{fill:var(--teal)}
+    .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted)}
+    .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+    tr.subrow td{color:var(--muted);font-size:12.5px;padding-left:24px}tr.ended td{opacity:.5}
+    .tbl table{min-width:560px}.tbl table.narrow{min-width:420px}
+    form.add,form.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end;margin:4px 0}
+    form.add label,form.settings label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);font-weight:600}
+    form.add input,form.add select,form.settings input{width:100%}
+    details.card>summary{color:var(--fg)}
+    details.card>summary h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0}
+    details.card>summary h2::before{content:"▸";color:var(--muted);font-size:12px}
+    details.card[open]>summary h2::before{content:"▾"}
+    td details>summary{font-size:12.5px}
+    .runway{background:var(--raised);border-radius:12px;padding:10px 12px;font-size:13px}.runway.bad{background:rgba(255,77,109,.12)}
+    .runway b{color:var(--sun)}abbr{text-decoration:underline dotted;cursor:help}
+    .note ol{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+    .note.warn ol{color:var(--fg2)}
     """
   end
 end

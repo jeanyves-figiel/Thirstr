@@ -38,6 +38,14 @@ defmodule Thirstr.Accounts do
     end
   end
 
+  @doc "R-01.16: remember which OIDC provider the account signs in with (shown in Settings)."
+  def note_oidc_provider(%Account{oidc_provider: p} = a, p), do: a
+
+  def note_oidc_provider(%Account{} = a, p) when p in ~w(apple google),
+    do: a |> Ecto.Changeset.change(oidc_provider: p) |> Repo.update!()
+
+  def note_oidc_provider(a, _), do: a
+
   @doc """
   RF-7: attach a confirmed sign-in email. If another account already uses it, nothing
   changes (no enumeration); the link still signs the owner back into their own account.
@@ -101,12 +109,15 @@ defmodule Thirstr.Accounts do
 
   # ---------------------------------------------------------------- passkeys
 
-  def add_passkey(%Account{} = a, credential_id, cose_key, sign_count) do
+  @max_passkeys 10
+
+  def add_passkey(%Account{} = a, credential_id, cose_key, sign_count, aaguid \\ nil) do
     %Passkey{
       account_id: a.id,
       credential_id: credential_id,
       cose_key: :erlang.term_to_binary(cose_key),
-      sign_count: sign_count
+      sign_count: sign_count,
+      aaguid: aaguid
     }
     |> Repo.insert(on_conflict: :nothing)
     |> case do
@@ -124,7 +135,61 @@ defmodule Thirstr.Accounts do
   def passkey_cose_key(%Passkey{cose_key: bin}), do: :erlang.binary_to_term(bin, [:safe])
 
   def touch_passkey(%Passkey{} = pk, sign_count) do
-    Repo.update_all(from(p in Passkey, where: p.id == ^pk.id), set: [sign_count: sign_count])
+    Repo.update_all(from(p in Passkey, where: p.id == ^pk.id),
+      set: [sign_count: sign_count, last_used_at: DateTime.utc_now()]
+    )
+  end
+
+  @doc "R-01.16: a signed-in account adds a passkey (max #{@max_passkeys}); security event."
+  def add_own_passkey(%Account{} = a, credential_id, cose_key, sign_count, aaguid) do
+    if passkey_count(a) >= @max_passkeys do
+      {:error, {:conflict_code, "passkey_limit", "You can have up to #{@max_passkeys} passkeys."}}
+    else
+      with {:ok, pk} <- add_passkey(a, credential_id, cose_key, sign_count, aaguid) do
+        security_event(a, "passkey_added")
+        {:ok, pk}
+      end
+    end
+  end
+
+  def passkey_count(%Account{id: id}),
+    do: Repo.aggregate(from(p in Passkey, where: p.account_id == ^id), :count)
+
+  @doc "R-01.16: the account's passkeys, newest first. Provider from the AAGUID; no device data."
+  def list_passkeys(%Account{id: id}) do
+    from(p in Passkey, where: p.account_id == ^id, order_by: [desc: p.inserted_at])
+    |> Repo.all()
+    |> Enum.map(fn p ->
+      %{
+        id: p.id,
+        provider: Thirstr.Auth.Aaguid.name(p.aaguid),
+        added_at: p.inserted_at,
+        last_used_at: p.last_used_at
+      }
+    end)
+  end
+
+  @doc "R-01.16: remove a passkey unless it is the account's last way back in."
+  def remove_passkey(%Account{} = a, id) do
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         %Passkey{} = pk <- Repo.get_by(Passkey, id: id, account_id: a.id) do
+      if passkey_count(a) <= 1 and not other_way_in?(a) do
+        {:error, {:conflict_code, "last_method", "Add an email or another passkey first."}}
+      else
+        Repo.delete!(pk)
+        security_event(a, "passkey_removed")
+        :ok
+      end
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  defp other_way_in?(%Account{} = a),
+    do: not is_nil(a.auth_oidc_hash) or not is_nil(a.email_hash) or Thirstr.Recovery.status(a).on
+
+  defp security_event(%Account{id: id}, kind) do
+    Repo.insert_all("security_events", [%{account_id: Ecto.UUID.dump!(id), kind: kind}])
   end
 
   # ---------------------------------------------------------------- sessions

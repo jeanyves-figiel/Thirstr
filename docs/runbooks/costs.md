@@ -4,11 +4,11 @@ Console page A-11 `/admin/costs` (admin-console.md › Costs & capacity). Daily 
 
 ## Fly read-only token (optional, R-AD.13)
 Without it the Fly row is empty; add Fly as a manual item instead.
-1. Create a read-only org token: `fly tokens create readonly personal` (or Dashboard › Tokens › Read-only org token). Never use the deploy token.
+1. Create a read-only org token: `fly tokens create readonly thirstr` (or Dashboard › Tokens › Read-only org token). Never use the deploy token.
 2. Set it on the API app only: `fly secrets set FLY_COST_TOKEN=<token> -a thirstr-api-prod` (staging: `-a thirstr-api-staging`).
 3. Check next day on `/admin/costs` ("Fly API, updated …"), or run now: `bin/thirstr rpc 'Thirstr.Jobs.CostSnapshot.perform(nil)'`.
 
-Env: `FLY_ORG` (default `personal`), `FLY_APP_NAME` (set by Fly; the DB app is the same name with `-db-`), `COST_ALERT_EMAIL` (default `hello@thirstr.fun`).
+Env: `FLY_ORG` (default `thirstr`, the org staging and prod run in since 2026-11-22), `FLY_APP_NAME` (set by Fly; the DB app is the same name with `-db-`), `COST_ALERT_EMAIL` (default `hello@thirstr.fun`).
 
 ## Manual cost items
 Type in what has no API: Tigris, Amazon SES, Apple Developer (yearly), Google Play (once), GoDaddy domain (yearly), ImprovMX. Amounts in EUR. Ending an item keeps past months right; never delete.

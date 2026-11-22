@@ -50,6 +50,23 @@ Internal web app (`/server/apps/admin`, Phoenix LiveView). Implements back offic
 - R-AD.11 Moderator wellbeing: queue rotation, max 4 h/day on severe queues, opt-out of categories. Details F-15 R-15.53 (break card at 2 h, lock at 4 h, 60 s pause after tier 0; beta owner: warnings only).
 - R-AD.13 Evidence (F-15 R-15.47) is readable only by `legal` and `senior_mod`, with a reason, one audit entry per read; `moderator` gets 403 (AC-15.16).
 
+### Owner passkey enrolment (R-AD.16, #179)
+Console sign-in is passkey only (R-AD.12). An owner who signed up with Apple, Google or email has no passkey for the console host, so the console enrols one through a one-time link that only someone with Fly SSH access can create.
+- R-AD.16 `bin/thirstr rpc 'Thirstr.AdminEnrol.link("<account id>")'` prints `https://<APP_URL host>/admin/enrol?t=<token>`. Refused (`{:error, :not_admin}`) unless the id is in `ADMIN_ACCOUNT_IDS`. Token: 32 random bytes; Valkey keeps only its HMAC (`ae:<hash>`) → account id, TTL 10 min, single use. Audit `enrol_link` (actor `console`, object = account hash).
+- R-AD.16a `GET /admin/enrol?t=` shows "Create console passkey" (no account data on the page) or "Link expired or used" (410). `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
+- R-AD.16b The browser creates a discoverable passkey for the console host's RP id (`WEBAUTHN_RP_ID`: `staging.thirstr.fun`, `api.thirstr.fun`, DEV `localhost`) with user verification **required**. `POST /admin/enrol` takes the token (GETDEL, single use), checks the id is still in `ADMIN_ACCOUNT_IDS`, verifies the attestation, stores the passkey on that account, audits `passkey_enrolled`, and starts the console session (8 h / idle 30 min).
+- R-AD.16c Failures (expired, reused, not admin, bad attestation) → 403/410, audit `enrol_failed`, no detail on the page. 10 attempts per IP per hour (rate limit `enrol`).
+- R-AD.16d The same passkey also signs in to the app on that host (it is an ordinary account passkey). iCloud Keychain or Google Password Manager syncs it to the owner's other devices; a hardware security key works too. Enrol staging and prod separately (different RP ids).
+- AC-AD.8 Given an admin id, when the owner opens a fresh link and creates a passkey, then they land on `/admin` signed in, and the link no longer works. Given an id not in `ADMIN_ACCOUNT_IDS`, `link/1` returns `{:error, :not_admin}`.
+
+### Console layout v3 (R-AD.17, mockup approved 2026-11-22)
+Mockup: `console-v3.html` (project files, moderation-console). One shell for every signed-in page; pages before sign-in (login, enrolment) are a centred card.
+- R-AD.17 **Left rail**, grouped: Moderation (Queue, Hash hits & cases, Photo review, Linked accounts, Quarantine, Appeals) · Members (Support inbox) · Platform (Costs & capacity, Message delivery, Places) · You (My day, Audit log). Live counts in one SQL round trip per page; Queue and Cases counts turn red when an item is past its target time (R-AD.8); a count query failure hides counts only. Environment badge from `DEPLOY_ENV`: STAGING amber, PROD red, otherwise DEV. Session corner: name, time left on the 8 h session, Sign out. Under 860 px the rail becomes a sticky, horizontally scrolling tab strip.
+- R-AD.17a **Queue** (A-01): header (open count, oldest, past target, "Take a break", "Start with the top item"); six tier tiles (count, next deadline or "N past target"; a tile filters by tier, `?tier=`); type filter (`?type=`); work list rows: tier stripe, type glyph (never a photo), "Type · name · tier", why, "N open on account", time left with a meter (red past target, amber in the last quarter). Keys J/K move, Enter opens, B takes a break. Empty: "All clear" with a link to My day.
+- R-AD.17b **Report detail** (A-02): title = reason, line with tier, context, time to target and opened time; evidence on the left (illegal-content banner, reporter note, attached franked messages as bubbles, public profile facts, photos with the R-15.52 tools); decision panel on the right (sticky; under 1100 px below): action buttons, reason code, days, facts, ground, law ref, unfounded tick, "Apply decision".
+- R-AD.17c **Costs** (A-11): header with month and data sources, previous/next month buttons (last 12 months, no script), "+ Cost item"; when anything is missing, numbered setup steps (Fly token with the exact commands, cost items, budget) in one note (amber when the page has no data); budget bar (spent, projected, alert mark at 80 %); four KPIs; vendors as bars with change vs last month and Fly apps underneath; 6-month chart (empty state when no month has costs); capacity forecast; cost items table + add form; Settings collapsed.
+- R-AD.17d Fonts (Bricolage Grotesque, OFL) are served by the API itself at `/admin/assets/:file` so the console CSP stays `'self'`; numbers use the system monospace. Reviewer-tool script loads only on pages with photo tiles, keyboard script only on pages with a work list.
+
 ## Acceptance
 - AC-AD.1 Login without FIDO2 key is impossible (automated).
 - AC-AD.2 Every action in A-02…A-09 creates exactly one audit entry (automated).
@@ -69,13 +86,13 @@ Owner view of what Thirstr costs, per vendor and per monthly active user, with a
 | `cost_alerts` | month, threshold (80/100), sent_at | Unique (month, threshold): each alert at most once a month. |
 
 ### Fly from the API (R-AD.13)
-- Daily job `Thirstr.Jobs.CostSnapshot` (Oban cron `10 2 * * *`, maintenance queue) lists the org's apps, their machines and volumes via `api.machines.dev` with `FLY_COST_TOKEN` (read-only org token, `fly tokens create readonly personal`; runbook `docs/runbooks/costs.md`). Without the token the Fly row says "token not set" and Fly can be typed in as a manual item instead.
+- Daily job `Thirstr.Jobs.CostSnapshot` (Oban cron `10 2 * * *`, maintenance queue) lists the org's apps, their machines and volumes via `api.machines.dev` with `FLY_COST_TOKEN` (read-only org token, `fly tokens create readonly thirstr`; runbook `docs/runbooks/costs.md`). Without the token the Fly row says "token not set" and Fly can be typed in as a manual item instead.
 - Rate per app = Σ started machines (shared: $1.94 per vCPU incl. 256 MB; performance: $31 per vCPU incl. 2 GB; extra RAM $5/GB) + Σ volumes ($0.15/GB) per 30-day month. Prices are list prices kept in `fly_prices`, editable, labelled "estimate". Stopped machines count 0.
 - Fly month to date = Σ days of (rate / days in month); month-end projection = month to date + today's rate × days left. USD → EUR with `usd_eur`.
 - Failure (network, 401) keeps yesterday's row, logs a warning, shows "last updated <date>".
 
 ### Page A-11 (`/admin/costs`)
-1. **Header**: month selector (last 12), total this month (projected month-end, month to date in smaller text), budget bar (green < 80 %, amber 80–100 %, red > 100 %).
+1. **Header**: previous/next month (last 12, R-AD.17c), total this month (projected month-end, month to date in smaller text), budget bar (green < 80 %, amber 80–100 %, red > 100 %).
 2. **KPI row**: Total (EUR), MAU, cost per MAU, DAU/MAU.
 3. **By vendor** table: vendor, source (Fly API / manual / yearly ÷ 12 / one-off), this month, last month, change. Fly row expands to per-app rates (thirstr-api-prod, thirstr-db-prod, …).
 4. **6-month history**: stacked bars per vendor + cost-per-MAU line.

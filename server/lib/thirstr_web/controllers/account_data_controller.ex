@@ -22,6 +22,13 @@ defmodule ThirstrWeb.AccountDataController do
   # devices
   def devices(conn, _), do: json(conn, DeviceLink.devices(me(conn), conn.assigns.device_id))
   def remove_device(conn, %{"id" => id}), do: DeviceLink.remove(me(conn), id) |> done(conn)
+
+  # F-01 R-01.16 passkeys in Account
+  def passkeys(conn, _), do: json(conn, %{passkeys: Thirstr.Accounts.list_passkeys(me(conn))})
+
+  def remove_passkey(conn, %{"id" => id}),
+    do: Thirstr.Accounts.remove_passkey(me(conn), id) |> done(conn)
+
   def link_start(conn, p), do: DeviceLink.start(me(conn), p) |> done(conn)
   def link_status(conn, %{"code" => c}), do: DeviceLink.status(me(conn), c) |> done(conn)
   def link_confirm(conn, %{"code" => c}), do: DeviceLink.confirm(me(conn), c) |> done(conn)

@@ -16,6 +16,32 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 11,
+    date: '2026-11-22',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'check',
+        to: { route: 'Passkeys' },
+        text: {
+          en: ['Sign in with a passkey', 'Face ID, no password. Settings › Account.'],
+          fr: ['Connexion par clé', 'Face ID, sans mot de passe. Voir Compte.'],
+          de: ['Anmelden mit Passkey', 'Face ID, kein Passwort. Unter Konto.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'shield',
+        to: { route: 'Passkeys' },
+        text: {
+          en: ['A new way back in', 'Lost your phone? Your passkey still works.'],
+          fr: ['Un autre accès', 'Téléphone perdu ? Ta clé marche encore.'],
+          de: ['Noch ein Weg zurück', 'Handy weg? Dein Passkey geht trotzdem.'],
+        },
+      },
+    ],
+  },
+  {
     id: 10,
     date: '2026-11-21',
     lines: [

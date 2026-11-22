@@ -92,6 +92,11 @@ defmodule ThirstrWeb.Router do
     plug :admin_enabled
   end
 
+  # admin-console.md R-AD.16c: enrolment attempts, 10 per hashed IP per hour
+  pipeline :enrol_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "enrol", limit: 10, window: 3600
+  end
+
   pipeline :admin_auth do
     plug :admin_required
   end
@@ -104,6 +109,15 @@ defmodule ThirstrWeb.Router do
     get "/login", AdminController, :login_page
     post "/login/options", AdminController, :login_options
     post "/login", AdminController, :login
+    # R-AD.17 console v3: fonts served same-origin (CSP 'self')
+    get "/assets/:file", AdminController, :font
+
+    scope "/enrol" do
+      pipe_through :enrol_limit
+      get "/", AdminController, :enrol_page
+      post "/options", AdminController, :enrol_options
+      post "/", AdminController, :enrol
+    end
 
     if Application.compile_env(:thirstr, :dev_routes) do
       get "/dev_login", AdminController, :dev_login
@@ -407,6 +421,8 @@ defmodule ThirstrWeb.Router do
       get "/account/export", AccountDataController, :export
       get "/me/devices", AccountDataController, :devices
       delete "/me/devices/:id", AccountDataController, :remove_device
+      get "/me/passkeys", AccountDataController, :passkeys
+      delete "/me/passkeys/:id", AccountDataController, :remove_passkey
       post "/devices/link", AccountDataController, :link_start
       # R-01.7 recovery phrase + sealed backup (#25)
       get "/me/recovery", AccountDataController, :recovery_status

@@ -14,6 +14,8 @@ defmodule Thirstr.Accounts.Account do
     field :status, :string, default: "active"
     field :safe_mode, :string, default: "auto"
     field :auth_oidc_hash, :binary
+    # R-01.16: "apple" | "google", saved at each OIDC sign-in (the hash can't tell them apart)
+    field :oidc_provider, :string
     field :email_hash, :binary
     field :age_confirmed_at, :utc_datetime_usec
     field :birthdate, :date

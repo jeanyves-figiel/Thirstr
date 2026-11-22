@@ -8,9 +8,10 @@ Principle: store the minimum; anything audience-restricted is E2EE or coarse-fla
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | internal; never shown |
-| created_at | timestamptz | |
+| inserted_at, updated_at | timestamptz | (Ecto timestamps; there is no `created_at`) |
 | auth_passkey_ids | bytea[] | WebAuthn credential IDs |
 | auth_oidc_hash | bytea null | SHA-256(provider‖sub‖pepper) for Apple/Google |
+| oidc_provider | text null | `apple` \| `google`, saved at each OIDC sign-in (R-01.16) |
 | email_hash | bytea null | magic link / recovery only |
 | verified_at | timestamptz null | set by F-03 |
 | verification_epoch | int | bumps on re-verify |
@@ -29,7 +30,7 @@ Principle: store the minimum; anything audience-restricted is E2EE or coarse-fla
 | safe_mode_active | bool | effective Safe Mode reported by the device (F-14) |
 
 ### passkeys
-| id · account_id · credential_id bytea (unique) · cose_key bytea (public key) · sign_count |
+| id · account_id · credential_id bytea (unique) · cose_key bytea (public key) · sign_count · aaguid bytea null (provider model id, R-01.16; never a device name) · last_used_at · inserted_at |
 
 ### refresh_tokens
 | id · account_id · device_id · token_hash bytea (HMAC) · expires_at · used_at (rotation) |

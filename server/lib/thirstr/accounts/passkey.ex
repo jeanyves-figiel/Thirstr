@@ -11,6 +11,9 @@ defmodule Thirstr.Accounts.Passkey do
     field :credential_id, :binary
     field :cose_key, :binary
     field :sign_count, :integer, default: 0
+    # R-01.16: authenticator model id (names the provider, e.g. iCloud Keychain); no device name
+    field :aaguid, :binary
+    field :last_used_at, :utc_datetime_usec
     timestamps()
   end
 end

@@ -4,8 +4,8 @@
 # Needs FLY_API_TOKEN (Fly Prometheus, read-only queries), curl, jq. Optional STATUS_JSON = path/URL of status.json (SLO-2).
 set -euo pipefail
 apps=("$@"); [[ ${#apps[@]} -gt 0 ]] || apps=(thirstr-api-prod thirstr-api-staging)
-prom="https://api.fly.io/prometheus/${FLY_ORG:-personal}/api/v1/query"
-q() { curl -fsS -H "Authorization: FlyV1 ${FLY_API_TOKEN}" "$prom" --data-urlencode "query=$1" | jq -r '.data.result[0].value[1] // empty' 2>/dev/null || true; }
+prom="https://api.fly.io/prometheus/${FLY_ORG:-thirstr}/api/v1/query"
+q() { curl -fsS -H "Authorization: FlyV1 ${FLY_METRICS_TOKEN:-$FLY_API_TOKEN}" "$prom" --data-urlencode "query=$1" | jq -r '.data.result[0].value[1] // empty' 2>/dev/null || true; }
 pct() { [[ -z "$1" || "$1" == "NaN" ]] && { echo "–"; return; }; awk -v x="$1" 'BEGIN{printf "%.3f %%", x*100}'; }
 # budget left = 1 - bad_ratio / allowed_bad
 left() { [[ -z "$1" || "$1" == "NaN" ]] && { echo "–"; return; }; awk -v b="$1" -v a="$2" 'BEGIN{l=1-b/a; if(l<-9.99)l=-9.99; printf "%.0f %%", l*100}'; }

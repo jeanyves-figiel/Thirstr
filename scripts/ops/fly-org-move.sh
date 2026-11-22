@@ -31,11 +31,22 @@ for app in $deps; do
   if ! exists "$app"; then echo "  skip $app (does not exist)"; continue; fi
   if [[ "$(org_of "$app")" == "$org" ]]; then echo "  $app already in $org"; continue; fi
   flyctl apps move "$app" --org "$org" --yes
+  # `apps move` only updates machines it manages (fly_process_group). Machines made through the
+  # Machines API (our DB) keep their old-org 6PN address until updated: force a no-op update.
+  for id in $(flyctl machines list -a "$app" --json | jq -r '.[] | select(.config.metadata.fly_process_group == null) | .id'); do
+    flyctl machine update "$id" -a "$app" --metadata "org_move=$(date +%s)" --yes
+  done
 done
 
 echo "3/5 classifier private address (flycast is per org)"
 cls="thirstr-classifier-$env"
-if exists "$cls" && ! flyctl ips list -a "$cls" --json | jq -e '.[] | select(.Type == "private_v6")' >/dev/null; then
+if exists "$cls"; then
+  # The old flycast address moves with the app but stays on the old org's network: release it,
+  # then allocate one in the new org (an app can hold only one). CLASSIFIER_URL uses the
+  # .flycast name, so nothing else changes. Never add a public IP here.
+  for ip in $(flyctl ips list -a "$cls" --json | jq -r '.[] | select(.Type == "private_v6") | .Address'); do
+    flyctl ips release "$ip" -a "$cls"
+  done
   flyctl ips allocate-v6 --private -a "$cls" --org "$org"
 fi
 

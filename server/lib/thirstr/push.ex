@@ -19,7 +19,10 @@ defmodule Thirstr.Push do
     "activity.join" => {"activity_join", false},
     "club.request" => {"club_event", false},
     "checkin.due" => {"checkin", true},
-    "checkin.alert" => {"checkin_alert", true}
+    "checkin.alert" => {"checkin_alert", true},
+    # F-22 (#178): support replies and account recovery claims (security: never muted)
+    "support.reply" => {"support", false},
+    "recovery.claim" => {"security", true}
   }
 
   def types, do: @types

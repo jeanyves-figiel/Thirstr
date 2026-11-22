@@ -4,6 +4,9 @@
 // last run; a sealed manifest lists the segments with their SHA-256 (order + integrity).
 // Compaction rewrites everything as fresh segments when > 200 segments or > 30 % tombstones.
 // Never backed up: view-once media, chats whose disappearing timer is under 24 h, franking raw.
+// #259 Photos and videos (opt-in, Wi-Fi only): each media file this phone holds is re-sealed in
+// ≤ 4 MiB parts (raw AES-256-GCM, AAD "thirstr-chats-v1|media"), listed in a sealed media index
+// segment the manifest points to; newest first within the 2 GiB quota, oldest left out.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { gcm } from '@noble/ciphers/aes.js';
 import { hkdf } from '@noble/hashes/hkdf.js';
@@ -15,6 +18,7 @@ import { keepVaultKey, vaultKey } from '../auth/recovery';
 import { concat, fromB64, fromUtf8, hex, rand, toB64, utf8 } from './bytes';
 import * as E from './engine';
 import { kv } from './kv';
+import * as MediaCache from './mediaCache';
 
 const AAD = utf8('thirstr-chats-v1');
 const PLAIN_MAX = 4 * 1024 * 1024; // before deflate; the server takes ≤ 4.5 MiB ciphertext
@@ -22,12 +26,20 @@ const DAY = 86_400_000;
 const STATE = 'backup.state';
 const PREFS = 'backup.prefs';
 
-export type Prefs = { on: boolean; cellular: boolean };
-type SegRef = { id: string; sha: string };
+export type Prefs = { on: boolean; cellular: boolean; media?: boolean };
+type SegRef = { id: string; sha: string; size?: number };
+type MediaEntry = { parts: SegRef[]; size: number; at: number; exp?: number };
 /** `ids`: per chat, the message ids already in the backup (to find new rows and deletions). */
-type State = { segs: SegRef[]; ids: Record<string, string[]>; tomb: number; rows: number; at: number; bytes: number };
+type State = { segs: SegRef[]; ids: Record<string, string[]>; tomb: number; rows: number; at: number; bytes: number; media?: Record<string, MediaEntry>; idx?: SegRef };
 type Segment = { v: 1; convs: E.Conv[]; rows: Record<string, E.Msg[]>; tomb: Record<string, string[]> };
-type Manifest = { v: 1; segs: SegRef[]; at: number };
+type Manifest = { v: 1; segs: SegRef[]; at: number; idx?: SegRef };
+type MediaIndex = { v: 1; media: Record<string, MediaEntry> };
+
+const MEDIA_AAD = utf8('thirstr-chats-v1|media');
+const PART = 4 * 1024 * 1024; // raw bytes per media part (+ 28 B seal, server max 4.5 MiB)
+/** Room kept for message segments and the index inside the 2 GiB quota. */
+export const QUOTA = 2 * 1024 * 1024 * 1024;
+const MEDIA_ROOM = 0.95;
 
 const empty = (): State => ({ segs: [], ids: {}, tomb: 0, rows: 0, at: 0, bytes: 0 });
 
@@ -76,8 +88,17 @@ export function pack(convs: E.Conv[], rows: Record<string, E.Msg[]>, tomb: Recor
   return out;
 }
 
-async function upload(key: Uint8Array, seg: Segment): Promise<SegRef & { size: number }> {
-  const box = sealBox(key, seg);
+export const sealMedia = (key: Uint8Array, b: Uint8Array) => {
+  const iv = rand(12);
+  return concat(iv, gcm(key, iv, MEDIA_AAD).encrypt(b));
+};
+export const openMedia = (key: Uint8Array, box: Uint8Array) => gcm(key, box.slice(0, 12), MEDIA_AAD).decrypt(box.slice(12));
+
+async function upload(key: Uint8Array, seg: Segment | MediaIndex): Promise<SegRef & { size: number }> {
+  return uploadBox(sealBox(key, seg));
+}
+
+async function uploadBox(box: Uint8Array): Promise<SegRef & { size: number }> {
   const sha = sha256(box);
   const r = await api<{ id: string; upload_url: string }>('POST', '/me/backup/segments', { size: box.length, sha256: toB64(sha) });
   const put = await fetch(r.upload_url, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: box as unknown as BodyInit });
@@ -85,9 +106,61 @@ async function upload(key: Uint8Array, seg: Segment): Promise<SegRef & { size: n
   return { id: r.id, sha: hex(sha), size: box.length };
 }
 
-async function commit(key: Uint8Array, segs: SegRef[]) {
-  const manifest: Manifest = { v: 1, segs, at: Date.now() };
-  return api<{ bytes: number; updated_at: string }>('PUT', '/me/backup/manifest', { manifest: toB64(sealBox(key, manifest)), segments: segs.map((s) => s.id) });
+async function commit(key: Uint8Array, segs: SegRef[], media: Record<string, MediaEntry> = {}, idx?: SegRef) {
+  const manifest: Manifest = { v: 1, segs: segs.map(({ id, sha }) => ({ id, sha })), at: Date.now(), ...(idx ? { idx } : {}) };
+  const all = [...segs.map((s) => s.id), ...(idx ? [idx.id] : []), ...Object.values(media).flatMap((m) => m.parts.map((x) => x.id))];
+  return api<{ bytes: number; updated_at: string }>('PUT', '/me/backup/manifest', { manifest: toB64(sealBox(key, manifest)), segments: all });
+}
+
+type Want = { blob: string; size: number; at: number; exp?: number };
+
+/**
+ * #259: which media files go in. Newest first while they fit `room` bytes; the rest (oldest)
+ * stay out. Already-uploaded files keep their parts.
+ */
+export function pickMedia(want: Want[], room: number): Want[] {
+  const out: Want[] = [];
+  let used = 0;
+  for (const w of [...want].sort((a, b) => b.at - a.at)) {
+    const cost = w.size + Math.ceil(w.size / PART) * 28;
+    if (used + cost > room) continue;
+    used += cost;
+    out.push(w);
+  }
+  return out;
+}
+
+/**
+ * Uploads missing media parts; calls `checkpoint` with the new list every ~64 MiB and at the end
+ * (only when something changed). Stops quietly at the quota or the daily segment limit.
+ */
+async function syncMedia(key: Uint8Array, have: Record<string, MediaEntry>, pick: Want[], checkpoint: (m: Record<string, MediaEntry>) => Promise<void>) {
+  const media: Record<string, MediaEntry> = {};
+  const keepIds = new Set(pick.map((w) => w.blob));
+  let changed = Object.keys(have).some((b) => !keepIds.has(b));
+  for (const w of pick) if (have[w.blob]) media[w.blob] = have[w.blob];
+  let pending = 0;
+  for (const w of pick) {
+    if (media[w.blob]) continue;
+    const ct = await MediaCache.get(w.blob).catch(() => null);
+    if (!ct) continue;
+    try {
+      const parts: SegRef[] = [];
+      for (let off = 0; off < ct.length; off += PART) parts.push(await uploadBox(sealMedia(key, ct.slice(off, off + PART))));
+      media[w.blob] = { parts, size: ct.length, at: w.at, exp: w.exp };
+      changed = true;
+      pending += parts.length;
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 422 || e.status === 429)) break; // quota / daily limit: next run
+      throw e;
+    }
+    if (pending >= 16) {
+      await checkpoint({ ...media });
+      pending = 0;
+      changed = false;
+    }
+  }
+  if (changed || pending) await checkpoint(media);
 }
 
 /** Runs one backup: new rows + tombstones, or a full rewrite when due. */
@@ -102,6 +175,9 @@ export async function backupNow(opts: { full?: boolean } = {}): Promise<{ rows: 
   const convs = E.getConvs().filter((c) => !c.gone);
   const full = opts.full || !st.segs.length || st.segs.length >= 200 || (st.rows > 0 && st.tomb / st.rows > 0.3);
 
+  const p = await prefs();
+  const withMedia = !!p.media && unmetered(); // #259: Wi-Fi only, whatever the mobile-data switch says
+  const want: Want[] = [];
   const rows: Record<string, E.Msg[]> = {};
   const tomb: Record<string, string[]> = {};
   const ids: Record<string, string[]> = {};
@@ -109,6 +185,12 @@ export async function backupNow(opts: { full?: boolean } = {}): Promise<{ rows: 
   for (const c of convs) {
     const have = new Set(full ? [] : (st.ids[c.id] ?? []));
     const list = (await E.messages(c.id)).map((m) => keep(c, m)).filter((m): m is E.Msg => !!m);
+    if (withMedia)
+      for (const m of list) {
+        if (m.p.t !== 'media') continue;
+        const size = await MediaCache.sizeOf(m.p.media.blob);
+        if (size) want.push({ blob: m.p.media.blob, size, at: m.at, exp: m.p.media.exp });
+      }
     ids[c.id] = list.map((m) => m.id);
     total += list.length;
     const fresh = list.filter((m) => !have.has(m.id));
@@ -123,20 +205,45 @@ export async function backupNow(opts: { full?: boolean } = {}): Promise<{ rows: 
 
   const nTomb = Object.values(tomb).reduce((n, l) => n + l.length, 0);
   const nRows = Object.values(rows).reduce((n, l) => n + l.length, 0);
-  if (!full && !nRows && !nTomb) {
-    await kv.set(STATE, { ...st, at: Date.now() });
-    return { rows: 0, bytes: st.bytes };
-  }
 
-  const added: SegRef[] = [];
-  for (const seg of pack(convs, rows, tomb)) {
-    const r = await upload(key, seg);
-    added.push({ id: r.id, sha: r.sha });
+  // Messages first (small, the part that matters most), committed on their own.
+  let segs = st.segs;
+  let media = st.media ?? {};
+  let idx = st.idx;
+  let bytes = st.bytes;
+  const save = async () => {
+    const res = await commit(key, segs, media, idx);
+    bytes = res.bytes;
+    await kv.set(STATE, { segs, ids, tomb: full ? 0 : st.tomb + nTomb, rows: total, at: Date.now(), bytes, media, idx } satisfies State);
+  };
+  const dropMedia = !p.media && Object.keys(media).length > 0;
+  if (full || nRows || nTomb || dropMedia) {
+    const added: SegRef[] = [];
+    if (full || nRows || nTomb)
+      for (const seg of pack(convs, rows, tomb)) {
+        const r = await upload(key, seg);
+        added.push({ id: r.id, sha: r.sha, size: r.size });
+      }
+    segs = full ? added : [...st.segs, ...added];
+    if (dropMedia) {
+      media = {}; // #259 switched off: no longer listed, the server deletes them
+      idx = undefined;
+    }
+    await save();
+  } else await kv.set(STATE, { ...st, at: Date.now() });
+
+  // #259: media keeps its parts across runs and compactions; Wi-Fi only; newest first in the room
+  // the quota leaves. Committed every few files, so an interrupted first run keeps its progress.
+  if (withMedia) {
+    const rowBytes = segs.reduce((n, x) => n + (x.size ?? 0), 0);
+    const pick = pickMedia(want, QUOTA * MEDIA_ROOM - rowBytes - PLAIN_MAX);
+    await syncMedia(key, media, pick, async (m) => {
+      media = m;
+      idx = Object.keys(m).length ? await upload(key, { v: 1, media: m } satisfies MediaIndex) : undefined;
+      await save();
+    });
   }
-  const segs = full ? added : [...st.segs, ...added];
-  const res = await commit(key, segs);
-  await kv.set(STATE, { segs, ids, tomb: full ? 0 : st.tomb + nTomb, rows: total, at: Date.now(), bytes: res.bytes } satisfies State);
-  return { rows: nRows, bytes: res.bytes };
+  return { rows: nRows, bytes };
 }
 
 let running: Promise<unknown> | null = null;
@@ -154,13 +261,18 @@ export function backupIfDue(now = Date.now()) {
 }
 
 export async function turnOn(cellular = false) {
-  await kv.set(PREFS, { on: true, cellular } satisfies Prefs);
+  await kv.set(PREFS, { ...(await prefs()), on: true, cellular } satisfies Prefs);
   await kv.set(STATE, null);
   return backupNow({ full: true });
 }
 
 export async function setCellular(cellular: boolean) {
   await kv.set(PREFS, { ...(await prefs()), cellular });
+}
+
+/** #259 Photos and videos in the backup (default off). Takes effect at the next run. */
+export async function setMedia(media: boolean) {
+  await kv.set(PREFS, { ...(await prefs()), media });
 }
 
 /** Off: the server deletes the backup and every segment at once. */
@@ -222,7 +334,34 @@ export async function restore(opts: { vault?: Uint8Array; onProgress?: (done: nu
     const got = await E.importHistory(seg.convs, seg.rows, seg.tomb);
     chats += got.chats;
     messages += got.messages;
-    opts.onProgress?.(i + 1, manifest.segs.length);
+    opts.onProgress?.(i + 1, manifest.segs.length + (manifest.idx ? 1 : 0));
   }
-  return { chats, messages, at: manifest.at };
+  // #259: media files, oldest first so the newest stay in the phone's media cache.
+  let media = 0;
+  const idxUrl = manifest.idx && urls.get(manifest.idx.id);
+  if (manifest.idx && idxUrl) {
+    const box = new Uint8Array(await (await fetch(idxUrl)).arrayBuffer());
+    if (hex(sha256(box)) !== manifest.idx.sha) throw new Error('segment changed');
+    const list = Object.entries(openBox<MediaIndex>(key, box).media).sort((a, b) => a[1].at - b[1].at);
+    for (const [blob, m] of list) {
+      if (m.exp && m.exp < Date.now()) continue;
+      if (await MediaCache.sizeOf(blob)) continue;
+      try {
+        const parts: Uint8Array[] = [];
+        for (const ref of m.parts) {
+          const u = urls.get(ref.id);
+          if (!u) throw new Error('missing');
+          const pb = new Uint8Array(await (await fetch(u)).arrayBuffer());
+          if (hex(sha256(pb)) !== ref.sha) throw new Error('segment changed');
+          parts.push(openMedia(key, pb));
+        }
+        await MediaCache.put(blob, concat(...parts), { exp: m.exp });
+        media++;
+      } catch {
+        // one file that can't come back doesn't stop the others
+      }
+    }
+    opts.onProgress?.(manifest.segs.length + 1, manifest.segs.length + 1);
+  }
+  return { chats, messages, media, at: manifest.at };
 }

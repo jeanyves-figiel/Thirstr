@@ -16,8 +16,8 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
-    id: 8,
-    date: '2026-11-21',
+    id: 9,
+    date: '2026-11-22',
     lines: [
       {
         tone: 'trust',
@@ -37,6 +37,32 @@ export const NOTES: Note[] = [
           en: ['Locked out? Get back in', 'Selfie check. Support can’t hand it over.'],
           fr: ['Bloqué ? Reviens', 'Selfie. Le support ne peut rien céder.'],
           de: ['Ausgesperrt? Zurück', 'Selfie-Check. Support gibt nichts weiter.'],
+        },
+      },
+    ],
+  },
+  {
+    id: 8,
+    date: '2026-11-21',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'spark',
+        to: tab('Chats'),
+        text: {
+          en: ['Share posts to chats', 'From X, Bluesky & more. Encrypted.'],
+          fr: ['Partage des posts', 'Depuis X, Bluesky et plus. Chiffré.'],
+          de: ['Posts in Chats teilen', 'Von X, Bluesky & mehr. Verschlüsselt.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'check',
+        to: { route: 'EditProfile' },
+        text: {
+          en: ['Linked accounts ✓', 'Prove your X, Bluesky or OnlyFans.'],
+          fr: ['Comptes liés ✓', 'Prouve ton X, Bluesky ou OnlyFans.'],
+          de: ['Verknüpfte Konten ✓', 'Bestätige X, Bluesky oder OnlyFans.'],
         },
       },
     ],

@@ -48,7 +48,7 @@ defmodule Thirstr.Export do
       "SELECT action, reason, created_at, ends_at, appeal_state, appeal_text FROM moderation_actions WHERE target_account = $1 AND action <> 'quarantine'",
     vouches_given: "SELECT to_profile, created_at FROM vouches WHERE from_account = $1",
     linked_accounts:
-      "SELECT profile_id, platform, handle, visibility, verified_at, created_at FROM linked_accounts WHERE profile_id IN #{@mine}",
+      "SELECT profile_id, platform, handle, visibility, proof, verified_at, created_at FROM linked_accounts WHERE profile_id IN #{@mine}",
     share_links:
       "SELECT profile_id, slug, created_at, show_photo FROM profile_shares WHERE profile_id IN #{@mine}",
     trusted_contacts:

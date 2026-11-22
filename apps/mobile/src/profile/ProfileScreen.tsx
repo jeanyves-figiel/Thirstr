@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Image, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { Dimensions, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, ApiError } from '../api/client';
 import type { Mode, MyProfile, ProfileView, Visibility } from '../api/types';
@@ -33,6 +33,7 @@ import { watchedAll } from '../moments/api';
 import { mx } from '../i18n/moments';
 import { PhotoViewer } from '../ui/PhotoViewer';
 import { saving } from '../app/dataSaver';
+import { Elsewhere } from '../links/LinkCard';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void; setParams?: (p: Partial<Params>) => void };
 type Params = { id: string; preview?: 'stranger' | 'verified' | 'chats'; mode?: Mode; /** F-19 G10: grid order around this profile. */ ids?: string[]; /** F-20: opened while looking around this trip city */ trip?: string };
@@ -474,15 +475,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
                 <Badge key={b.kind} label={tx.profile.hostRating(b.up_pct ?? 0, b.total ?? 0)} fill={color.hookup} />
               ))}
           </View>
-          {p.linked_accounts.length ? (
-            <View testID="profile-linked" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-              {p.linked_accounts.map((l) => (
-                <Pressable key={l.platform + l.handle} accessibilityRole="link" onPress={() => l.url && Linking.openURL(l.url)}>
-                  <Badge label={`${tx.linked.platforms[l.platform] ?? l.platform} @${l.handle}${l.verified ? ` · ${tx.profile.linkedVerified}` : ''}`} fill={color.fgSoft} />
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
+          <Elsewhere profileId={p.id} links={p.linked_accounts} self={!!p.self || !!preview} />
           {p.tapped && p.tapped_me ? <Banner tone="personal" text={tx.profile.mutual} /> : null}
           <FieldList fields={{ ...p.fields, ...(getConvs().find((c) => c.peer === p.id)?.peerFields ?? {}) }} accent={accent} />
           {!p.self && !preview ? <PrivateNote profileId={p.id} /> : null}

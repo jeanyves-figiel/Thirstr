@@ -13,7 +13,9 @@ const K = { access: 'thirstr.access', refresh: 'thirstr.refresh', install: 'thir
 const native = Platform.OS === 'ios' || Platform.OS === 'android';
 const secure = {
   get: (k: string) => (native ? SecureStore.getItemAsync(k) : AsyncStorage.getItem(k)),
-  set: (k: string, v: string) => (native ? SecureStore.setItemAsync(k, v) : AsyncStorage.setItem(k, v)),
+  // #260: readable after the first unlock (not while locked before it) so the overnight chat
+  // backup can call the API; this-device-only, never in iCloud / device backups.
+  set: (k: string, v: string) => (native ? SecureStore.setItemAsync(k, v, { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY }) : AsyncStorage.setItem(k, v)),
   del: (k: string) => (native ? SecureStore.deleteItemAsync(k) : AsyncStorage.removeItem(k)),
 };
 

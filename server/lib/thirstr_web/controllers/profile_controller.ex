@@ -93,8 +93,18 @@ defmodule ThirstrWeb.ProfileController do
       end
 
     with {:ok, p} <- point,
-         {:ok, view} <- Social.view(a(conn), id, params["mode"], p),
-         do: json(conn, view)
+         {:ok, view} <- Social.view(a(conn), id, params["mode"], p) do
+      # I-01 R-I01.30: the build under store review gets no OnlyFans / JustFor.Fans.
+      json(
+        conn,
+        Map.update(
+          view,
+          :linked_accounts,
+          [],
+          &Thirstr.Linked.for_client(&1, conn.assigns[:client])
+        )
+      )
+    end
   end
 
   def tap(conn, %{"id" => id}) do

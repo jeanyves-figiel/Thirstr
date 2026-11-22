@@ -61,6 +61,7 @@ defmodule Thirstr.Reports do
       )
 
       escalate(t.account_id, reason)
+      linked_report(t.id, reason, note)
       {:ok, %{attached: length(franked)}}
     end
   end
@@ -121,7 +122,24 @@ defmodule Thirstr.Reports do
       "text" => is_binary(w["text"]) && String.slice(w["text"], 0, 2000),
       "at" => w["at"]
     }
+    |> Map.merge(link_summary(w))
   end
+
+  # I-01 R-I01.24: "Not his account" on a linked chip is an impersonation report noted `linked:<platform>`.
+  defp linked_report(profile, "impersonation", "linked:" <> platform),
+    do: Thirstr.Linked.impersonation_reported(profile, platform)
+
+  defp linked_report(_, _, _), do: :ok
+
+  # I-01 R-I01.24: a reported link card keeps its URL and title (never the thumbnail).
+  defp link_summary(%{"t" => "link.preview"} = w) do
+    %{
+      "url" => is_binary(w["url"]) && String.slice(w["url"], 0, 2000),
+      "title" => is_binary(w["title"]) && String.slice(w["title"], 0, 300)
+    }
+  end
+
+  defp link_summary(_), do: %{}
 
   # R-15.7 community quarantine and R-15.13 beta auto-hide (decisions.md).
   defp escalate(target_account, reason) do

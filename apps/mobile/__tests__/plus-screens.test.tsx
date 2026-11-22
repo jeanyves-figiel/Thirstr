@@ -16,7 +16,9 @@ const { plxEn } = require('../src/i18n/plus') as typeof import('../src/i18n/plus
 const old = '2026-01-01T00:00:00Z';
 const nav = { goBack: jest.fn(), navigate: jest.fn() };
 
-beforeEach(() => mockNavigate.mockClear());
+beforeEach(() => {
+  mockNavigate.mockClear();
+});
 
 test('beta: everyone has Plus, no prices, pledge shown', async () => {
   mockMe = { plus: { active: true, source: 'beta' }, created_at: old };

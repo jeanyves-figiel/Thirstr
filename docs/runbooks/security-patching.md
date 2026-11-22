@@ -9,6 +9,8 @@ Applies to every security finding in our code, dependencies, images and infra. F
 | `mix deps.audit` | Hex advisories | CI `server` + Nightly | yes |
 | `cargo audit` | RustSec advisories | CI `core` + Nightly | yes |
 | `npm audit --omit=dev --audit-level=high` | npm runtime deps | Nightly | nightly red |
+| Dependabot alerts | GitHub Advisory DB on `apps/mobile`, `apps/testbot` (npm), `server/mix.lock`, `core/Cargo.lock` (incl. dev deps) | repo Security tab | SLA clock |
+| Dependabot version PRs | GitHub Actions SHA bumps, grouped, monthly (`.github/dependabot.yml`) | PR | — |
 | semgrep (OSS rules) | TS/React + workflows SAST | CI `semgrep`, every PR | yes (`--error`, #244) |
 | gitleaks | secrets in git | CI `secrets`, every PR | yes |
 | ZAP baseline (passive) | headers, cookies, error/PII disclosure, vulnerable JS on **staging** | `ZAP staging` workflow: after each staging deploy, weekly Mon 03:30 UTC, manual | FAIL rules in `.zap/rules.tsv` → red run + issue |
@@ -35,6 +37,9 @@ Severity = CVSS v3.1/v4 base score of the advisory, raised one level if the issu
 1. **Issue**: every finding gets a GitHub issue with label `security`, severity and due date in the title (e.g. `[High, due 2026-11-28] IDOR on /v1/albums/:id`). ZAP opens or comments `ZAP baseline: FAIL findings on staging` itself. Do not post exploit details for unfixed criticals in public issues (the repo is public): write "details in private notes" and keep them with the owner.
 2. **Triage** (same day for critical/high): confirm, set severity, link the advisory/CVE.
 3. **Fix** on a branch → PR (ChangeLog under `### Security`) → squash-merge on green → staging.
+   - Direct dep: bump it. Transitive dep with no fixed parent release: add a **version-scoped** npm `overrides` entry (e.g. `"glob@>=9 <14.0.2": "^14.0.2"`) so only the vulnerable range is replaced, then check `npm ls <pkg>` (no `invalid`), `npm audit` = 0, tests, and for build-time deps `npx expo prebuild` output unchanged. If npm keeps the old version with a scoped key, use an unscoped key when the package has a single dependent. Remove an override once the parent ships the fix.
+   - Grouped Dependabot Actions PR: apply its SHA map to current `main` (newer workflows too) when the PR branch is stale, and close the PR as superseded.
+   - App-only deps (`apps/*`) are fixed when the next TestFlight/store build ships; server deps need a prod promotion.
 4. **Prod**: ask the owner for the promotion OK right away, saying it is a security fix and its due time. No prod promotion without his explicit OK, even for criticals; if he can't be reached before the deadline, use a kill switch / config change instead and say so.
 5. **Close** the issue with the prod promotion run link.
 

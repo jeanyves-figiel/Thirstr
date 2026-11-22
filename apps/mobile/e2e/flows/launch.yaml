@@ -2,11 +2,9 @@
 appId: app.thirstr
 name: launch
 ---
+# Permissions are granted outside Maestro (adb install -g / simctl privacy); Maestro's names differ per OS.
 - launchApp:
     clearState: true
-    permissions:
-      location: allow
-      notifications: deny
 - extendedWaitUntil:
     visible:
       id: start

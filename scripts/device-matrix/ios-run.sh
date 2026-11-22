@@ -48,7 +48,8 @@ for f in launch signin-sheet; do
   rc=$?; t1=$(date +%s.%N)
   put "flow_${f}_s" "$(python3 -c "print(round($t1-$t0,1))")"
   put "flow_${f}" "$([ $rc = 0 ] && echo '"pass"' || echo '"fail"')"
-  [ $rc = 0 ] || { status=1; echo "::error::flow $f failed on ios-old"; tail -30 "$OUT/maestro/$f.log"; xcrun simctl io "$udid" screenshot "$OUT/shots/FAILED-$f.png" || true; break; }
+  [ $rc = 0 ] || { status=1; echo "::error::flow $f failed on ios-old"; tail -30 "$OUT/maestro/$f.log"; xcrun simctl io "$udid" screenshot "$OUT/shots/FAILED-$f.png" || true
+    echo "::group::Diagnostics ($f)"; xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'process == "Thirstr"' 2>/dev/null | grep -iE "error|exception|javascript|warn" | tail -60; echo "::endgroup::"; break; }
   [ "$f" = launch ] && put tti_ms "$(python3 "$(dirname "$0")/tti.py" "$OUT/maestro/launch")"
 done
 rss=$(ps -axo rss=,command= | awk '/Thirstr.app\/Thirstr/ && !/awk/ {print int($1/1024); exit}')

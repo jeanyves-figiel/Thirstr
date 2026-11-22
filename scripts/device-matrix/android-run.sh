@@ -29,7 +29,8 @@ adb shell settings put global window_animation_scale 0; adb shell settings put g
 
 # Cold start to first frame (am start -W), app installed + never started before = worst case
 adb shell am force-stop $PKG
-ff=$(adb shell am start -W -n $PKG/.MainActivity | awk -F': ' '/TotalTime/{print $2+0}')
+am=$(adb shell am start -W -n $PKG/.MainActivity 2>&1); echo "$am"
+ff=$(echo "$am" | awk -F': ' '/TotalTime/{print $2+0}')
 put first_frame_ms "${ff:-null}"
 sleep 5; adb shell am force-stop $PKG
 
@@ -42,7 +43,10 @@ for f in launch onboarding explore chat checkin; do
   rc=$?; t1=$(date +%s.%N)
   put "flow_${f}_s" "$(python3 -c "print(round($t1-$t0,1))")"
   put "flow_${f}" "$([ $rc = 0 ] && echo '"pass"' || echo '"fail"')"
-  [ $rc = 0 ] || { status=1; echo "::error::flow $f failed on $PROFILE"; tail -30 "$OUT/maestro/$f.log"; adb exec-out screencap -p >"$OUT/shots/FAILED-$f.png"; break; }
+  [ $rc = 0 ] || { status=1; echo "::error::flow $f failed on $PROFILE"; tail -30 "$OUT/maestro/$f.log"; adb exec-out screencap -p >"$OUT/shots/FAILED-$f.png"
+    echo "::group::Diagnostics ($f)"; adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -3
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && adb shell cat /sdcard/ui.xml | grep -oE '(text|resource-id|content-desc)="[^"]+"' | sort -u | head -60
+    adb logcat -d -s ReactNativeJS:V ReactNative:W AndroidRuntime:E expo:W | tail -80; echo "::endgroup::"; break; }
   if [ "$f" = launch ]; then put tti_ms "$(python3 "$(dirname "$0")/tti.py" "$OUT/maestro/launch")"; fi
   if [ "$f" = explore ]; then
     put pss_mb "$(adb shell dumpsys meminfo $PKG | awk '/TOTAL PSS:/{print int($3/1024); exit} /^ *TOTAL /{print int($2/1024); exit}')"

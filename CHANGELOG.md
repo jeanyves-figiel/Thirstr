@@ -6,6 +6,9 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Changed
+- **Admin console redesigned (v3)** (server, #179, admin-console.md R-AD.17): one shell for every page with a grouped left rail (Moderation, Members, Platform, You), live counts that turn red past target time, an environment badge (STAGING/PROD/DEV) and the session corner; a tab strip on phones. Queue is now a work list with tier tiles, filters and time-left meters; report detail keeps evidence left and the decision panel pinned right; Costs shows numbered setup steps when data is missing, a budget bar, KPIs, vendor bars and month buttons (no inline script). Fonts served by the API (CSP stays `'self'`). Same routes, actions and audit entries.
+
 ### Fixed
 - **iOS build compiles again after Moments part 2** (app, #221, CI): Xcode 27.2 timed out type-checking the chained expression in `thirstr-face` `faceBoxes` (TestFlight run 113 failed at Archive). It is now split into typed steps, with no change in behavior.
 - **Edit profile usable again with a main photo** (app, #305, S-74): the main photo tile grew to the full screen height on iPhone, pushing quick wins and every section row off screen. Cause: a `100%` photo height inside the scroll view resolved against the screen (reproduced with React Native's own layout engine: 768 pt instead of 175 pt). Photos now fill their tile absolutely; the grid takes its height from the right-hand tiles.

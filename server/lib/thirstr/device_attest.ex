@@ -1,17 +1,22 @@
 defmodule Thirstr.DeviceAttest do
   @moduledoc """
-  #25 device attestation (security.md › Device attestation). iOS only for now (App Attest);
-  Android Play Integrity follows with the Android build, web never attests.
+  #25 device attestation (security.md › Device attestation). iOS App Attest, Android Play
+  Integrity (#168, `Thirstr.PlayIntegrity`); web never attests.
 
   1. `challenge/1`: 32 random bytes as base64url (43 chars), single use, 5 min, bound to the device (Valkey).
   2. `attest/2` once per install: verifies the attestation (Thirstr.AppAttest), stores the public key,
      sets `attestation_ok` and `attested_at`.
   3. `assert/2` at most daily: assertion over a fresh challenge with that key, growing counter;
      refreshes `attested_at`. A device not re-asserted for 7 days counts as unattested.
-  Soft in beta: unattested clients keep working; `attested?/1` feeds anti-bot signals (F-15).
+  Android: `attest/2` with `platform: "android"` and a Play Integrity token whose request hash is
+  the challenge; repeated daily the same way (no key on our side).
+  4. `prove/3`: proof bound to one action (verification, #270): a fresh App Attest assertion or a
+     Play Integrity token over that action's client data.
+  Soft in beta for general use: unattested clients keep working; `attested?/1` feeds anti-bot
+  signals (F-15). Verification issuance requires `prove/3` (#270).
   """
   import Ecto.Query
-  alias Thirstr.{AppAttest, Repo, Valkey}
+  alias Thirstr.{AppAttest, PlayIntegrity, Repo, Valkey}
   alias Thirstr.Accounts.Device
 
   @ttl 300
@@ -21,6 +26,31 @@ defmodule Thirstr.DeviceAttest do
     c = :crypto.strong_rand_bytes(32)
     Valkey.put_term(key(c), device_id, @ttl)
     {:ok, %{challenge: b64(c), expires_in: @ttl}}
+  end
+
+  def attest(device_id, %{"platform" => "android", "token" => tok, "challenge" => ch}) do
+    with {:ok, ch} <- take(ch, device_id),
+         %Device{} = d <- Repo.get(Device, device_id) || {:error, :not_found},
+         :ok <- PlayIntegrity.verify(tok, ch) do
+      d
+      |> Ecto.Changeset.change(
+        attest_env: "play",
+        attestation_ok: true,
+        attested_at: DateTime.utc_now()
+      )
+      |> Repo.update!()
+
+      {:ok, %{attested: true}}
+    else
+      {:error, :not_found} = e ->
+        e
+
+      {:error, :challenge} ->
+        {:error, {:unprocessable, "challenge", "Challenge expired, ask for a new one"}}
+
+      {:error, reason} ->
+        {:error, {:unprocessable, "attestation_invalid", "Attestation failed (#{reason})"}}
+    end
   end
 
   def attest(device_id, %{"key_id" => kid, "attestation" => att, "challenge" => ch}) do
@@ -88,6 +118,48 @@ defmodule Thirstr.DeviceAttest do
   end
 
   def assert(_, _), do: {:error, {:validation, %{assertion: ["required"]}}}
+
+  @doc """
+  Proof that this device's genuine app made one specific request (#270). `client_data` is the
+  exact string the app signed. iOS: `"assertion"` (App Attest, stored key, growing counter).
+  Android: `"integrity_token"` with request hash = base64url(SHA-256(client_data)).
+  """
+  def prove(device_id, client_data, %{"assertion" => a}) when is_binary(a) do
+    with {:ok, a} <- unb64(a),
+         %Device{attest_public_key: pub, attest_counter: n} = d when is_binary(pub) <-
+           Repo.get(Device, device_id) || {:error, :not_attested},
+         {:ok, counter} <- AppAttest.verify_assertion(a, client_data, pub, n || 0, app_ids()) do
+      d
+      |> Ecto.Changeset.change(
+        attest_counter: counter,
+        attestation_ok: true,
+        attested_at: DateTime.utc_now()
+      )
+      |> Repo.update!()
+
+      :ok
+    else
+      %Device{} -> {:error, :not_attested}
+      {:error, _} = e -> e
+    end
+  end
+
+  def prove(device_id, client_data, %{"integrity_token" => tok}) when is_binary(tok) do
+    with %Device{} = d <- Repo.get(Device, device_id) || {:error, :not_attested},
+         :ok <- PlayIntegrity.verify(tok, b64(:crypto.hash(:sha256, client_data))) do
+      d
+      |> Ecto.Changeset.change(
+        attest_env: "play",
+        attestation_ok: true,
+        attested_at: DateTime.utc_now()
+      )
+      |> Repo.update!()
+
+      :ok
+    end
+  end
+
+  def prove(_, _, _), do: {:error, :missing}
 
   @doc "Attested within the last #{@fresh_days} days."
   def attested?(device_id) do

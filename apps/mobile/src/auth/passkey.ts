@@ -37,19 +37,11 @@ export function passkeysAvailable(): boolean {
 
 type Opts = { challenge_id: string; publicKey: Record<string, any> };
 
-export async function registerPasskey(ageConfirmed: boolean) {
-  const opts = await api<Opts>('POST', '/auth/passkey/register/options', {});
-  const pk = opts.publicKey;
+// Runs the OS "create passkey" ceremony; returns the attestation in the server's shape.
+async function createCredential(pk: Record<string, any>): Promise<{ attestation_object: string; client_data_json: string }> {
   if (isNative) {
     const r = await nativePasskey().create(pk as any);
-    const s = await api<Session>('POST', '/auth/passkey/register', {
-      challenge_id: opts.challenge_id,
-      attestation_object: r.response.attestationObject,
-      client_data_json: r.response.clientDataJSON,
-      age_confirmed: ageConfirmed,
-      platform,
-    });
-    return saveSession(s);
+    return { attestation_object: r.response.attestationObject, client_data_json: r.response.clientDataJSON };
   }
   const cred = (await navigator.credentials.create({
     publicKey: {
@@ -60,14 +52,26 @@ export async function registerPasskey(ageConfirmed: boolean) {
   })) as PublicKeyCredential | null;
   if (!cred) throw new Error('cancelled');
   const r = cred.response as AuthenticatorAttestationResponse;
+  return { attestation_object: b64u.enc(r.attestationObject), client_data_json: b64u.enc(r.clientDataJSON) };
+}
+
+export async function registerPasskey(ageConfirmed: boolean) {
+  const opts = await api<Opts>('POST', '/auth/passkey/register/options', {});
+  const att = await createCredential(opts.publicKey);
   const s = await api<Session>('POST', '/auth/passkey/register', {
     challenge_id: opts.challenge_id,
-    attestation_object: b64u.enc(r.attestationObject),
-    client_data_json: b64u.enc(r.clientDataJSON),
+    ...att,
     age_confirmed: ageConfirmed,
     platform,
   });
   return saveSession(s);
+}
+
+/** F-01 R-01.16: a signed-in account adds a passkey (Settings › Account › Passkeys). */
+export async function addPasskey(): Promise<void> {
+  const opts = await api<Opts>('POST', '/auth/passkey/register/options', {});
+  const att = await createCredential(opts.publicKey);
+  await api('POST', '/auth/passkey/register', { challenge_id: opts.challenge_id, ...att });
 }
 
 export async function loginPasskey() {

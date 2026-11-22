@@ -134,9 +134,9 @@ defmodule ThirstrWeb.AdminController do
   @doc "R-AD.16b–c: consume the token, store the passkey, start the console session."
   def enrol(conn, params) do
     with {:ok, id} <- Thirstr.AdminEnrol.take(params["t"]),
-         {:ok, cred_id, cose, count} <- Passkeys.verify_registration(params),
+         {:ok, cred_id, cose, count, aaguid} <- Passkeys.verify_registration(params),
          %Thirstr.Accounts.Account{} = a <- Repo.get(Thirstr.Accounts.Account, id),
-         {:ok, _} <- Thirstr.Accounts.add_passkey(a, cred_id, cose, count) do
+         {:ok, _} <- Thirstr.Accounts.add_passkey(a, cred_id, cose, count, aaguid) do
       audit(id, "passkey_enrolled", id, nil)
       conn |> start_session(id) |> json(%{ok: true})
     else

@@ -419,6 +419,8 @@ defmodule ThirstrWeb.Router do
       get "/account/export", AccountDataController, :export
       get "/me/devices", AccountDataController, :devices
       delete "/me/devices/:id", AccountDataController, :remove_device
+      get "/me/passkeys", AccountDataController, :passkeys
+      delete "/me/passkeys/:id", AccountDataController, :remove_passkey
       post "/devices/link", AccountDataController, :link_start
       # R-01.7 recovery phrase + sealed backup (#25)
       get "/me/recovery", AccountDataController, :recovery_status

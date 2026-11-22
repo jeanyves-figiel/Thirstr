@@ -17,6 +17,7 @@ import { ExploreScreen } from '../explore/ExploreScreen';
 import { tx } from '../i18n/app';
 import { DevicesScreen } from '../me/DevicesScreen';
 import { RecoveryScreen } from '../me/RecoveryScreen';
+import { PasskeysScreen } from '../me/PasskeysScreen';
 import { HelpArticleScreen, HelpCategoryScreen, HelpHomeScreen } from '../help/HelpScreens';
 import { HelpContactScreen, HelpFeedbackScreen, HelpRequestsScreen, HelpThreadScreen } from '../help/SupportScreens';
 import { ClaimBanner, RecoveryClaimScreen, RecoveryStopScreen, useClaim } from '../help/RecoveryClaim';
@@ -486,6 +487,7 @@ export function Main() {
           <Stack.Screen name="CheckinDue" component={CheckinDueScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="AppLock" component={AppLockScreen} options={sub} />
           <Stack.Screen name="Devices" component={DevicesScreen} options={sub} />
+          <Stack.Screen name="Passkeys" component={PasskeysScreen} options={sub} />
           <Stack.Screen name="Recovery" component={RecoveryScreen as React.ComponentType} options={{ headerShown: false }} />
           <Stack.Screen name="Help" component={HelpHomeScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="HelpCategory" component={HelpCategoryScreen as React.ComponentType} options={sub} />

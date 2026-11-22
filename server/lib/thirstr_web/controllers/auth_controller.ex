@@ -10,23 +10,28 @@ defmodule ThirstrWeb.AuthController do
 
   # --- passkey (R-01.1)
 
-  def passkey_register_options(conn, _), do: json(conn, Passkeys.registration_options())
+  # R-01.16: signed in = adding to an account → user verification required.
+  def passkey_register_options(conn, _) do
+    opts = if conn.assigns[:account], do: [uv: "required"], else: []
+    json(conn, Passkeys.registration_options(opts))
+  end
 
   def passkey_register(conn, params) do
     with :ok <- not_flagged(conn),
-         {:ok, cred_id, cose, count} <- Passkeys.verify_registration(params) do
-      register_passkey(conn, conn.assigns[:account], params, {cred_id, cose, count})
+         {:ok, cred_id, cose, count, aaguid} <- Passkeys.verify_registration(params) do
+      register_passkey(conn, conn.assigns[:account], params, {cred_id, cose, count, aaguid})
     end
   end
 
-  # Signed-in account adds a passkey (F-01 edge case: OIDC account later adds passkey).
-  defp register_passkey(conn, %Accounts.Account{} = a, _params, {cred_id, cose, count}) do
-    with {:ok, _} <- Accounts.add_passkey(a, cred_id, cose, count), do: send_resp(conn, 204, "")
+  # Signed-in account adds a passkey (F-01 R-01.16; OIDC/email account later adds passkey).
+  defp register_passkey(conn, %Accounts.Account{} = a, _params, {cred_id, cose, count, aaguid}) do
+    with {:ok, _} <- Accounts.add_own_passkey(a, cred_id, cose, count, aaguid),
+         do: send_resp(conn, 204, "")
   end
 
-  defp register_passkey(conn, nil, params, {cred_id, cose, count}) do
+  defp register_passkey(conn, nil, params, {cred_id, cose, count, aaguid}) do
     with {:ok, a} <- Accounts.create_account(%{}, age_confirmed: params["age_confirmed"] == true),
-         {:ok, _} <- Accounts.add_passkey(a, cred_id, cose, count),
+         {:ok, _} <- Accounts.add_passkey(a, cred_id, cose, count, aaguid),
          {:ok, session} <- Accounts.start_session(a, params["platform"] || "web", resume(conn)) do
       conn |> put_status(201) |> json(MeJSON.session(session))
     end
@@ -65,6 +70,7 @@ defmodule ThirstrWeb.AuthController do
              age_confirmed: params["age_confirmed"] == true
            ),
          :ok <- usable(a),
+         a = Accounts.note_oidc_provider(a, provider),
          {:ok, session} <- Accounts.start_session(a, params["platform"] || "web", resume(conn)) do
       conn
       |> put_status(if(kind == :created, do: 201, else: 200))

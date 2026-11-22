@@ -333,6 +333,44 @@ defmodule ThirstrWeb.AdminController do
     end
   end
 
+  # ------------------------------------------------------------------ A-03b linked accounts (I-01 R-I01.17)
+
+  def linked(conn, _) do
+    audit(conn.assigns.admin, "view_linked", nil, nil)
+
+    list =
+      Thirstr.Linked.manual_queue()
+      |> Enum.map_join("", fn l ->
+        """
+        <div class="card"><p><b>#{e(l.platform)}</b> @#{e(l.handle)}: code <code>#{e(l.code)}</code></p>
+          <p class="muted">Open <code>#{e(l.url)}</code> in a clean private window and look for the code in the bio.</p>
+          <form method="post" action="/admin/linked/#{l.id}">
+            <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
+            <button name="decision" value="approve">Code found: approve</button>
+            <button name="decision" value="reject">Not found: reject</button>
+          </form></div>
+        """
+      end)
+
+    page(conn, "Linked accounts", """
+    #{nav()}<h1>A-03b Linked accounts: check by hand</h1>
+    #{if list == "", do: ~s(<p class="muted">Nothing waiting.</p>), else: list}
+    """)
+  end
+
+  def linked_decision(conn, %{"id" => id, "decision" => d}) when d in ~w(approve reject) do
+    case Thirstr.Linked.manual_decision(id, d) do
+      {:error, :not_found} ->
+        send_resp(conn, 404, "")
+
+      _ ->
+        audit(conn.assigns.admin, "linked_" <> d, id, nil)
+        redirect(conn, to: "/admin/linked")
+    end
+  end
+
+  def linked_decision(conn, _), do: send_resp(conn, 422, "")
+
   # ------------------------------------------------------------------ A-04 quarantine
 
   def quarantine(conn, _) do
@@ -628,7 +666,7 @@ defmodule ThirstrWeb.AdminController do
   @doc false
   def nav do
     """
-    <nav><a href="/admin">Queue</a><a href="/admin/cases">Hash hits &amp; cases</a><a href="/admin/photos">Photos</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a><a href="/admin/costs">Costs</a>
+    <nav><a href="/admin">Queue</a><a href="/admin/cases">Hash hits &amp; cases</a><a href="/admin/photos">Photos</a><a href="/admin/linked">Linked</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a><a href="/admin/costs">Costs</a>
     <a href="/admin/appeals">Appeals</a><a href="/admin/me">My day</a><a href="/admin/audit">Audit</a>
     <form method="post" action="/admin/logout" style="display:inline"><input type="hidden" name="_csrf_token" value="#{get_csrf_token()}"><button>Sign out</button></form></nav>
     """

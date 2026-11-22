@@ -9,6 +9,7 @@ import { askPushPermission } from '../../chat/engine';
 import { customQuickReplies, setCustomQuickReplies } from '../../chat/quick';
 import * as Recent from '../../chat/recent';
 import { mx } from '../../i18n/media';
+import { lx } from '../../i18n/links';
 import { toast } from '../../ui/Toast';
 import { LocationSheet } from '../../explore/LocationSheet';
 import { langName, targetLang, translateAvailable } from '../../chat/translate';
@@ -144,6 +145,7 @@ export function ChatSettings({ navigation }: { navigation: Nav }) {
       </Group>
       <Group label={S.media}>
         <SegBlock testID="explicit" tone={tone} title={S.explicit} value={st.explicit_from_strangers} options={(['blur', 'allow', 'block'] as const).map((k) => [k, S.explicitOpts[k]])} onChange={(v) => put({ explicit_from_strangers: v })} />
+        <SegBlock testID="adult-links" tone={tone} title={lx.adultPreviews} caption={lx.adultPreviewsSub} value={pf.adultLinkPreviews ?? 'blur'} options={(['blur', 'show', 'none'] as const).map((k) => [k, lx.adultOpts[k]])} onChange={(v) => setPrefs({ adultLinkPreviews: v }).then(setPf)} />
         <SwitchRow tone={tone} title={tx.prefs.autoDelete} value={pf.autoDelete || !!me.safe_mode_active} disabled={!!me.safe_mode_active} onChange={(v) => setPrefs({ autoDelete: v }).then(setPf)} />
         <Row
           testID="clear-recent"

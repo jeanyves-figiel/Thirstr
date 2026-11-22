@@ -32,7 +32,7 @@ No SMS: Pushover emergency pushes repeat every 2 min until acknowledged and bypa
 4. GitHub › repo Settings › Secrets and variables › Actions › **Repository secrets** (not an environment):
    - `PUSHOVER_USER_KEY` = User Key
    - `PUSHOVER_APP_TOKEN` = API Token
-   - optional `FLY_METRICS_TOKEN` = read-only Fly token (`fly tokens create readonly -o personal`); without it the deploy `FLY_TOKEN` is used.
+   - `FLY_METRICS_TOKEN` (repo secret) = read-only Fly token (`fly tokens create readonly -o thirstr`). Required since the org move (#168): app deploy tokens cannot read org metrics, so on-call, the SLO report and the canary's metric gates need it.
 5. Actions › **On-call alerts** › Run workflow › tick *Send a test push*. Expect "Thirstr on-call test" and "Thirstr on-call connected" within a minute.
 
 Never paste the keys in issues, chats or commits. Rotate: Pushover › app › regenerate token, then update the secret.

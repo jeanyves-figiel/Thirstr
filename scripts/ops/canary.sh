@@ -18,12 +18,15 @@ max_5xx="${CANARY_MAX_5XX:-0.02}"          # canary 5xx share must stay ≤ max(
 max_p95_ms="${CANARY_MAX_P95_MS:-500}"     # canary p95 ≤ max(500 ms, 2 × old p95)
 min_requests="${CANARY_MIN_REQUESTS:-30}"  # below this, real-traffic gates are skipped (synthetic gates still run)
 max_probe_fail="${CANARY_MAX_PROBE_FAIL:-1}"
-prom="https://api.fly.io/prometheus/${FLY_ORG:-personal}/api/v1/query"
+prom="https://api.fly.io/prometheus/${FLY_ORG:-thirstr}/api/v1/query"
 machines_api="https://api.machines.dev/v1/apps/${app}"
 log() { echo "[canary $(date -u +%H:%M:%S)] $*" >&2; }
 m_api() { curl -fsS -H "Authorization: Bearer ${FLY_API_TOKEN}" -H 'content-type: application/json' "$@"; }
-promq() { # promq <query> → first value or empty
-  curl -fsS -H "Authorization: FlyV1 ${FLY_API_TOKEN}" "$prom" --data-urlencode "query=$1" | jq -r '.data.result[0].value[1] // empty'
+promq() { # promq <query> → first value or empty. Org metrics need an org read token (FLY_METRICS_TOKEN):
+  # app-scoped deploy tokens can't read them. A failed query yields empty (= low traffic: synthetic gates
+  # only) instead of aborting the script with the canary half-switched.
+  curl -fsS -H "Authorization: FlyV1 ${FLY_METRICS_TOKEN:-$FLY_API_TOKEN}" "$prom" --data-urlencode "query=$1" \
+    | jq -r '.data.result[0].value[1] // empty' 2>/dev/null || { log "WARN metrics query failed"; true; }
 }
 summary() { [[ -n "${GITHUB_STEP_SUMMARY:-}" ]] && echo "$*" >> "$GITHUB_STEP_SUMMARY" || true; }
 

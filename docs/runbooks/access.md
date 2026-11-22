@@ -26,6 +26,7 @@ Rule: no shared logins. A second person gets their own account with the smallest
 | `FLY_TOKEN` in GitHub env **staging** | GitHub › Environments › staging | Fly **deploy tokens** for `thirstr-{api,db,valkey,bot,classifier}-staging` only, joined in one value | 90 days | quarterly, `scripts/ops/fly-ci-tokens.sh staging` |
 | `FLY_TOKEN` in GitHub env **production** | GitHub › Environments › production | deploy tokens for `thirstr-{api,db,valkey,classifier}-prod` only | 90 days | quarterly, `scripts/ops/fly-ci-tokens.sh production` |
 | Repo-level `FLY_TOKEN` | GitHub › Secrets › Actions | **delete** once the two above exist (the script does it) | | |
+| Repo-level `FLY_METRICS_TOKEN` | GitHub › Secrets › Actions | Fly **read-only org token** for `thirstr` (`fly tokens create readonly -o thirstr -x 8760h`): Prometheus for on-call, SLO report, canary gates | 1 year | yearly |
 | `FLY_TOKEN_EXPIRES_STAGING` / `_PRODUCTION` | GitHub › Variables (not secret) | expiry date of the above, `YYYY-MM-DD` | | written by the script; `nightly.yml` fails 14 days before |
 | Claude cloud environment `FLY_TOKEN` | claude.ai › environment settings | today: the owner's org-wide token for `personal` (reaches non-Thirstr apps too). After the move: `fly tokens create org -o thirstr --expiry 720h` | 30 days | monthly |
 | `ASC_KEY_ID` / `ASC_KEY_P8` | GitHub secrets | App Store Connect API key "Thirstr CI Admin" (Admin is required for cloud signing) | none (Apple) | yearly, or at once if leaked: revoke in ASC › Users and Access › Integrations |

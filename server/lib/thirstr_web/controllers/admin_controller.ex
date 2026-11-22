@@ -90,6 +90,66 @@ defmodule ThirstrWeb.AdminController do
     end
   end
 
+  # ------------------------------------------------------------------ enrolment (R-AD.16)
+
+  @doc "R-AD.16a: one-time console passkey enrolment page."
+  def enrol_page(conn, params) do
+    if Thirstr.AdminEnrol.valid?(params["t"]) do
+      page(conn, "Create console passkey", """
+      <h1>Thirstr console</h1>
+      <p class="muted">One-time link. Create a passkey for this console on this device (iCloud Keychain, password manager or security key).</p>
+      <button id="go">Create console passkey</button>
+      <p id="err" class="danger"></p>
+      <script>
+      const b64 = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
+      const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
+      const csrf = #{Jason.encode!(get_csrf_token())};
+      const token = #{Jason.encode!(params["t"])};
+      const post = (u, body) => fetch(u, {method: 'POST', headers: {'content-type': 'application/json', 'x-csrf-token': csrf}, body: JSON.stringify(body)});
+      document.getElementById('go').onclick = async () => {
+        try {
+          const o = await (await post('/admin/enrol/options', {})).json();
+          const pk = o.publicKey;
+          const c = await navigator.credentials.create({publicKey: {...pk, challenge: unb64(pk.challenge), user: {...pk.user, id: unb64(pk.user.id)}}});
+          const r = await post('/admin/enrol', {t: token, challenge_id: o.challenge_id,
+            attestation_object: b64(c.response.attestationObject), client_data_json: b64(c.response.clientDataJSON)});
+          if (r.ok) location.href = '/admin'; else document.getElementById('err').textContent = 'Link expired or not allowed';
+        } catch (e) { document.getElementById('err').textContent = String(e); }
+      };
+      </script>
+      """)
+    else
+      conn
+      |> put_status(410)
+      |> page(
+        "Link expired",
+        ~s(<h1>Link expired or used</h1><p class="muted">Create a new one over fly ssh.</p>)
+      )
+    end
+  end
+
+  def enrol_options(conn, _),
+    do: json(conn, Passkeys.registration_options(origin: origin(conn), uv: "required"))
+
+  @doc "R-AD.16b–c: consume the token, store the passkey, start the console session."
+  def enrol(conn, params) do
+    with {:ok, id} <- Thirstr.AdminEnrol.take(params["t"]),
+         {:ok, cred_id, cose, count} <- Passkeys.verify_registration(params),
+         %Thirstr.Accounts.Account{} = a <- Repo.get(Thirstr.Accounts.Account, id),
+         {:ok, _} <- Thirstr.Accounts.add_passkey(a, cred_id, cose, count) do
+      audit(id, "passkey_enrolled", id, nil)
+      conn |> start_session(id) |> json(%{ok: true})
+    else
+      err ->
+        audit("console", "enrol_failed", nil, inspect(elem_or(err)))
+        status = if err == {:error, :gone}, do: 410, else: 403
+        conn |> put_status(status) |> json(%{error: %{code: "forbidden"}})
+    end
+  end
+
+  defp elem_or({:error, r}), do: r
+  defp elem_or(_), do: :invalid
+
   @doc "DEV/test only (dev_routes): sign in as an admin account without a passkey."
   def dev_login(conn, %{"account_id" => id}) do
     if id in admins(),
@@ -719,7 +779,7 @@ defmodule ThirstrWeb.AdminController do
     |> put_resp_header("cache-control", "no-store")
     |> put_resp_header("x-frame-options", "DENY")
     |> put_resp_header("referrer-policy", "no-referrer")
-    |> send_resp(200, """
+    |> send_resp(conn.status || 200, """
     <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="robots" content="noindex"><title>#{e(title)} · Thirstr console</title>
     <style>

@@ -84,3 +84,12 @@ Open a GitHub issue "Access review YYYY-Qn" with this list and tick it:
 - [ ] Break-glass: envelope intact, token still valid, last test date.
 - [ ] Admin console allow-list `ADMIN_ACCOUNT_IDS` = owner only.
 - [ ] Close the issue with a one-line summary (this is the evidence for EN-10).
+
+## 6. Admin console access (R-AD.12, R-AD.16)
+
+Per environment (`thirstr-api-staging`, `thirstr-api-prod`), once:
+1. Find your account id (Apple/Google sign-in; for email use `Thirstr.Ids.hash(~s(email), ~s(<email>))` against `email_hash`):
+   `fly ssh console -a <app> -C "sh -c '/app/bin/thirstr rpc \"Thirstr.Repo.query!(~s(select a.id::text, p.display_name, a.inserted_at::text from accounts a left join profiles p on p.account_id = a.id where a.auth_oidc_hash is not null order by a.inserted_at limit 10)).rows |> IO.inspect()\"'"`
+2. `fly secrets set ADMIN_ACCOUNT_IDS=<id> -a <app>` (empty = console 404).
+3. Enrolment link (10 min, single use): `fly ssh console -a <app> -C "sh -c '/app/bin/thirstr rpc \"Thirstr.AdminEnrol.link(~s(<id>)) |> IO.puts()\"'"`
+4. Open the link on the Mac, "Create console passkey" (iCloud Keychain or security key). You land on `/admin`. Afterwards sign in at `/admin/login`.

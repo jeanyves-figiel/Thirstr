@@ -7,15 +7,20 @@ defmodule Thirstr.Auth.Passkeys do
 
   @ttl 120
 
-  def registration_options do
+  @doc """
+  `origin` overrides the app origin (admin console, same RP id); `uv: "required"` for console
+  enrolment (admin-console.md R-AD.16b).
+  """
+  def registration_options(opts \\ []) do
     cfg = cfg()
+    uv = opts[:uv] || "preferred"
 
     challenge =
       Wax.new_registration_challenge(
-        origin: cfg[:origin],
+        origin: opts[:origin] || cfg[:origin],
         rp_id: cfg[:rp_id],
         attestation: "none",
-        user_verification: "preferred",
+        user_verification: uv,
         timeout: @ttl
       )
 
@@ -30,7 +35,7 @@ defmodule Thirstr.Auth.Passkeys do
         rp: %{id: cfg[:rp_id], name: cfg[:rp_name]},
         user: %{id: b64(user_handle), name: "Thirstr", displayName: "Thirstr"},
         pubKeyCredParams: [%{type: "public-key", alg: -7}, %{type: "public-key", alg: -257}],
-        authenticatorSelection: %{residentKey: "required", userVerification: "preferred"},
+        authenticatorSelection: %{residentKey: "required", userVerification: uv},
         attestation: "none",
         timeout: @ttl * 1000
       }

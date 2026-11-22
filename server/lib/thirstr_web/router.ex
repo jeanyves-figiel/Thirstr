@@ -92,6 +92,11 @@ defmodule ThirstrWeb.Router do
     plug :admin_enabled
   end
 
+  # admin-console.md R-AD.16c: enrolment attempts, 10 per hashed IP per hour
+  pipeline :enrol_limit do
+    plug ThirstrWeb.Plugs.RateLimit, bucket: "enrol", limit: 10, window: 3600
+  end
+
   pipeline :admin_auth do
     plug :admin_required
   end
@@ -104,6 +109,13 @@ defmodule ThirstrWeb.Router do
     get "/login", AdminController, :login_page
     post "/login/options", AdminController, :login_options
     post "/login", AdminController, :login
+
+    scope "/enrol" do
+      pipe_through :enrol_limit
+      get "/", AdminController, :enrol_page
+      post "/options", AdminController, :enrol_options
+      post "/", AdminController, :enrol
+    end
 
     if Application.compile_env(:thirstr, :dev_routes) do
       get "/dev_login", AdminController, :dev_login

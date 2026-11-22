@@ -86,7 +86,7 @@ Owner view of what Thirstr costs, per vendor and per monthly active user, with a
 | `cost_alerts` | month, threshold (80/100), sent_at | Unique (month, threshold): each alert at most once a month. |
 
 ### Fly from the API (R-AD.13)
-- Daily job `Thirstr.Jobs.CostSnapshot` (Oban cron `10 2 * * *`, maintenance queue) lists the org's apps, their machines and volumes via `api.machines.dev` with `FLY_COST_TOKEN` (read-only org token, `fly tokens create readonly personal`; runbook `docs/runbooks/costs.md`). Without the token the Fly row says "token not set" and Fly can be typed in as a manual item instead.
+- Daily job `Thirstr.Jobs.CostSnapshot` (Oban cron `10 2 * * *`, maintenance queue) lists the org's apps, their machines and volumes via `api.machines.dev` with `FLY_COST_TOKEN` (read-only org token, `fly tokens create readonly thirstr`; runbook `docs/runbooks/costs.md`). Without the token the Fly row says "token not set" and Fly can be typed in as a manual item instead.
 - Rate per app = Σ started machines (shared: $1.94 per vCPU incl. 256 MB; performance: $31 per vCPU incl. 2 GB; extra RAM $5/GB) + Σ volumes ($0.15/GB) per 30-day month. Prices are list prices kept in `fly_prices`, editable, labelled "estimate". Stopped machines count 0.
 - Fly month to date = Σ days of (rate / days in month); month-end projection = month to date + today's rate × days left. USD → EUR with `usd_eur`.
 - Failure (network, 401) keeps yesterday's row, logs a warning, shows "last updated <date>".

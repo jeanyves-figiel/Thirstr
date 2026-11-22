@@ -85,7 +85,7 @@ config :thirstr,
   # EN-21 (#180) admin Costs & capacity: read-only Fly org token (R-AD.13); unset = Fly typed in.
   # FLY_APP_NAME is set by Fly on every machine (thirstr-api-<env>); the DB app follows the naming.
   fly_cost_token: System.get_env("FLY_COST_TOKEN"),
-  fly_org: env.("FLY_ORG", "personal"),
+  fly_org: env.("FLY_ORG", "thirstr"),
   fly_api_app: env.("FLY_APP_NAME", "thirstr-api-prod"),
   fly_db_app: String.replace(env.("FLY_APP_NAME", "thirstr-api-prod"), "-api-", "-db-"),
   cost_alert_email: System.get_env("COST_ALERT_EMAIL"),

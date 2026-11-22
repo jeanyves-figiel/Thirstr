@@ -25,8 +25,19 @@ name: onboarding
     id: birthday-continue
 - tapOn:
     id: gender-man
-- tapOn:
-    id: identity-continue
+# Picking a gender auto-advances after ~380 ms (Basics.tsx); Continue only if still shown.
+- extendedWaitUntil:
+    visible:
+      id: here-hookup
+    timeout: 5000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: identity-continue
+    commands:
+      - tapOn:
+          id: identity-continue
 - tapOn:
     id: here-hookup
 - tapOn:

@@ -73,9 +73,9 @@ defmodule ThirstrWeb.SceneTest do
       assert %{"error" => %{"code" => "not_verified"}} = plan(u) |> json_response(403)
     end
 
-    test "max 2 active plans; no contact details", %{host: h} do
-      plan(h) |> json_response(201)
-      plan(h) |> json_response(201)
+    # F-23: beta = Plus, 3 active plans (Free 1, see plus_test.exs).
+    test "max 3 active plans with Plus; no contact details", %{host: h} do
+      for _ <- 1..3, do: plan(h) |> json_response(201)
       assert plan(h) |> json_response(422)
       assert plan(h, %{text: "text me +41 79 123 45 67"}) |> json_response(422)
     end

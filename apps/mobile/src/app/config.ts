@@ -30,7 +30,8 @@ export function buildNumber(): number | null {
 /** Headers every API call sends (EN-14): lets the server answer 426 to builds below the minimum. */
 export function clientHeaders(): Record<string, string> {
   const b = buildNumber();
-  return b === null ? {} : { 'x-thirstr-build': String(b) };
+  // F-23 R-23.16: this build shows Plus limit cards, so the server may answer 422 `plus_limit`.
+  return b === null ? { 'x-thirstr-plus': '1' } : { 'x-thirstr-build': String(b), 'x-thirstr-plus': '1' };
 }
 
 export const flag = (name: string) => cfg?.flags[name] ?? true;

@@ -1,3 +1,6 @@
+import { PlusLimit, PlusTag } from '../plus/PlusLimit';
+import { plx } from '../i18n/plus';
+import { limits as limits_, PLUS_FALLBACK, plusLimitOf, promptsAllowed, type PlusLimitHit } from '../plus/plus';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,6 +54,9 @@ export function PartyNewScreen({ navigation }: { navigation: Nav }) {
   const [aud, setAud] = useState<Aud>('verified');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // F-23 R-23.16: party limits (guests, 1 a week on Free) show the limit card.
+  const [hit, setHit] = useState<PlusLimitHit | null>(null);
+  const capMax = limits_(me).party_capacity;
   const safe = me.safe_mode === 'on' || me.safe_mode_active;
   const limits = partyLimits(now, day);
   const customRules = rules.filter((r) => !CHIPS.includes(r));
@@ -78,14 +84,16 @@ export function PartyNewScreen({ navigation }: { navigation: Nav }) {
         title: title.trim(),
         starts_at: new Date(win.s).toISOString(),
         ends_at: new Date(win.e).toISOString(),
-        capacity: cap,
+        capacity: Math.min(cap, capMax),
         rules,
         audience: aud,
       });
       haptic.success();
       navigation.replace('Party', { id: p.id });
     } catch (e) {
-      setErr(e instanceof ApiError ? (Object.values(e.fields ?? {})[0]?.[0] ?? e.message) : tx.common.error);
+      const h = plusLimitOf(e);
+      setHit(h);
+      if (!h) setErr(e instanceof ApiError ? (Object.values(e.fields ?? {})[0]?.[0] ?? e.message) : tx.common.error);
     } finally {
       setBusy(false);
     }
@@ -164,8 +172,16 @@ export function PartyNewScreen({ navigation }: { navigation: Nav }) {
         </View>
 
         <View>
-          <FormLabel label={tx.party.capacity} value="2–50" />
-          <Stepper testID="party-cap" value={cap} min={2} max={50} onChange={setCap} accent={accent} sub={tx.party.guestsSub} labels={{ less: tx.party.fewer, more: tx.party.more, name: tx.party.capacity }} />
+          <FormLabel label={tx.party.capacity} value={`2–${capMax}`} />
+          <Stepper testID="party-cap" value={Math.min(cap, capMax)} min={2} max={capMax} onChange={setCap} accent={accent} sub={tx.party.guestsSub} labels={{ less: tx.party.fewer, more: tx.party.more, name: tx.party.capacity }} />
+          {promptsAllowed(me) ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.s }}>
+              <PlusTag />
+              <Text testID="party-cap-plus" style={{ ...type.meta, fontSize: 12, color: color.fgSecondary }}>
+                {plx.capHint(PLUS_FALLBACK.party_capacity)}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <View>
@@ -219,6 +235,7 @@ export function PartyNewScreen({ navigation }: { navigation: Nav }) {
         </View>
 
         <Banner tone="trust" text={tx.party.area} />
+        {hit ? <PlusLimit hit={hit} /> : null}
         <ErrorText text={err} />
       </ScrollView>
       <StickyCta>

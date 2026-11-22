@@ -9,6 +9,8 @@ defmodule Thirstr.Application do
     Thirstr.Nearby.init_cache()
     Thirstr.Flags.init_cache()
     Thirstr.Explore.init_cache()
+    # R-AD.18 (#326): count SES recipients for the cost page
+    Thirstr.Costs.attach_mail_meter()
 
     children = [
       ThirstrWeb.Telemetry,

@@ -51,6 +51,35 @@ export type Me = {
   };
   now?: NowStatus | null;
   settings?: Settings;
+  /** F-23 (#7): Plus entitlement and the Free / Plus limits (old servers omit both). */
+  plus?: PlusState;
+  limits?: PlusLimits;
+};
+
+export type PlusSource = 'beta' | 'safe_mode' | 'store' | 'lifetime' | 'grant' | 'none';
+export type PlusState = { active: boolean; source: PlusSource; product?: string; renews_at?: string; grace_until?: string };
+/** null = no Plus limit (shared abuse caps still apply). */
+export type PlusLimits = {
+  nearby: number | null;
+  distance_km: number;
+  party_per_week: number | null;
+  party_capacity: number;
+  party_cohosts: number;
+  party_recurring: boolean;
+  trips: number;
+  look_around_any_city: boolean;
+  tonight_active: number;
+  moments_per_day: number;
+  moments_live: number;
+  moments_48h: boolean;
+  album_bytes: number;
+  video_seconds: number;
+  translate: boolean;
+  friend_alerts: number;
+  filter_presets: number;
+  chat_folders: number;
+  extras: boolean;
+  views_list: boolean;
 };
 
 export type Photo = { id: string; slot: number; status: string; reject_reason: string | null; url: string | null; thumb_url?: string | null; main_ok?: boolean };

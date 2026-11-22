@@ -1,3 +1,5 @@
+import { PlusLimit } from '../plus/PlusLimit';
+import { plusLimitOf, type PlusLimitHit } from '../plus/plus';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -54,6 +56,8 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
   const [busy, setBusy] = useState(false);
   const [rejected, setRejected] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // F-23 R-23.16: Free Moments limits show the limit card.
+  const [hit, setHit] = useState<PlusLimitHit | null>(null);
   // R-21.2 Blur tool (D-21c A): brush + Blur faces, burned in on the phone before upload.
   const [blurOn, setBlurOn] = useState(false);
   const [bs, setBs] = useState<B.BlurState>(B.empty);
@@ -137,7 +141,9 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
       toast(res.status === 'review' ? mx.review : narrowed ? mx.hookupOnly : mx.shared);
       navigation.goBack();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : tx.common.error);
+      const h = plusLimitOf(e);
+      setHit(h);
+      if (!h) setErr(e instanceof ApiError ? e.message : tx.common.error);
     } finally {
       setBusy(false);
     }
@@ -303,6 +309,7 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
           })}
         </View>
         <Text style={{ ...type.meta, fontSize: 12, color: color.fgSecondary }}>{mx.preview(mx.aud[audience], mx.ttl[ttl], lensLabel)}</Text>
+        {hit ? <PlusLimit hit={hit} tone={color.bgBase} /> : null}
         {err ? <Text style={{ ...type.meta, color: color.danger }}>{err}</Text> : null}
         <Pressable
           testID="moment-share"

@@ -70,6 +70,9 @@ Tab bar (4): **Explore** S-10 · **Tonight** S-13 · **Chats** S-40 · **Me** S-
 | S-50b | Report: illegal content [#170, built] | F-15 R-15.23–R-15.26 | country, type, what's illegal (20–1 000), context, optional name + email, good-faith tick | Send → receipt sheet with reference | 422 inline |
 | S-86 | Notice detail: statement of reasons [#170, spec] | F-15 R-15.28, R-15.33 | What · Why · Facts · How we decided · What you can do; timeline after a review | Ask for a review → S-82 | — |
 | S-87 | Ask for a review [#170, spec] | F-15 R-15.30–R-15.32 | text ≤ 1 000; open 6 months | Send → S-81 timeline | 409 already asked |
+| S-90 | Thirstr Plus [#318, built] | F-23 R-23.15 | — | Got it / ✕ → back; See Plus from limit cards and Settings › Plus | Free + billing on: "Plus opens with the public beta" until #321 |
+| S-90b | Settings › Plus [#318, built] | F-23 R-23.15, R-23.13 | — | Manage subscription → store page; See Plus → S-90 | grace: amber card |
+| S-91 | Views (who viewed me) [#319, spec] | F-23 R-23.20–23 | — | row → S-20; swipe → remove | Views Off / Hidden / Safe Mode |
 | S-51 | Check-in start sheet [v2, #112] | F-13 R-13.15 | bottom sheet: "Meeting ‹name›?", tiles 1 h / 2 h (default) / 3 h / Other with due times, contacts card + 2 toggles, Start · due HH:MM | start | no contacts → add contact first |
 | S-52 | Check-in due | F-13 | "All good?", I'm OK, +30 min | biometrics | duress path |
 | S-53 | Trusted contacts | F-13 | list, add, invite | add/remove | — |

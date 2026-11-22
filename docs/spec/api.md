@@ -67,7 +67,7 @@ Outside `/v1`: `GET /.well-known/apple-app-site-association` → `{webcredential
 ### Account & onboarding (F-01, F-02)
 | Method | Path | Body → Response |
 |---|---|---|
-| GET | /me | → Me `{status, verified, onboarding_step, safe_mode, profile, location}` (no ids of the account, no birthdate). `location` = `{level, pin, hide_from_hidden, cell_r5}`; `cell_r5` is the caller's own stored coarse cell (map centring fallback, R-04.13), never shown to others |
+| GET | /me | → Me `{status, verified, onboarding_step, safe_mode, profile, location}` (no ids of the account, no birthdate), plus `plus {active, source, …}` and `limits {…}` (F-23 R-23.5, API section). `location` = `{level, pin, hide_from_hidden, cell_r5}`; `cell_r5` is the caller's own stored coarse cell (map centring fallback, R-04.13), never shown to others |
 | POST | /account/pause · /account/resume | → Me |
 | PUT | /me/basics | {display_name, birthdate, gender, gender_other?, here_for[]} → Me; under 18 → 403 `underage`, account deleted, install flagged 30 d |
 | POST | /me/onboarding/verify_later | → Me (step `verify` → `done`, browse-only) |

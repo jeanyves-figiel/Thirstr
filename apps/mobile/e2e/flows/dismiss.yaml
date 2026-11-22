@@ -1,0 +1,16 @@
+# Closes first-run sheets/hints that may cover Explore (What's new, hold hint). Optional steps only.
+appId: app.thirstr
+name: dismiss
+---
+- runFlow:
+    when:
+      visible:
+        id: hold-hint
+    commands:
+      - tapOn:
+          id: hold-hint
+- runFlow:
+    when:
+      visible: "(Got it|OK|Close|Not now)"
+    commands:
+      - tapOn: "(Got it|OK|Close|Not now)"

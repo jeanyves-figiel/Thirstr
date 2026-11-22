@@ -54,8 +54,8 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 
 ### G. Testing & resilience
 - Load test + sizing (SR-12).
-- **EN-15** (#174) Chaos and game days (monthly on staging, quarterly in a load env): kill an API machine, fail over the DB, stop Valkey (SR-11), drop the network between regions, fill a disk, expire APNs creds. Each result → runbook or fix.
-- **EN-16** (#175) Device test matrix: real-device runs (low-end Android, old iPhone, 3G profile) in CI nightly; performance budgets enforced (EN-18).
+- **EN-15** (#174) Chaos and game days (monthly on staging, quarterly in a load env): kill an API machine, fail over the DB, stop Valkey (SR-11), drop the network between regions, fill a disk, expire APNs creds. Each result → runbook or fix. ◐ Staging tool + game-day runbook ✔ (`scripts/chaos/`, `docs/runbooks/game-day.md`, testing.md › Chaos); DB failover / region split wait for EN-01/EN-02, load env waits for spend.
+- **EN-16** (#175) Device test matrix: real-device runs (low-end Android, old iPhone, 3G profile) in CI nightly; performance budgets enforced (EN-18). ◐ Emulator/simulator matrix nightly ✔ (low-end Android + 3G, mid Android, old iPhone + 3G; testing.md › Device matrix, no spend). Real-device farm = owner decision (costs or non-EU); signed-in iOS flows #267.
 
 ### H. Retention, backup & DR
 - **EN-17** (#176) Quarterly full DR drill: restore prod into the second region from backups only, measure RTO/RPO, log in `docs/runbooks/db-backups.md`. Automated checks that retention rules (data-model.md) actually delete (row age metrics). Retention probes ✔ (`Thirstr.Retention`, alert in monitoring.md); DR drill ✔ automated (`dr-drill.yml`, quarterly into `ams` from backups only, `db-backups.md` › Automated drill).

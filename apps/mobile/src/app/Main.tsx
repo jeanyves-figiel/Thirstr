@@ -17,6 +17,10 @@ import { ExploreScreen } from '../explore/ExploreScreen';
 import { tx } from '../i18n/app';
 import { DevicesScreen } from '../me/DevicesScreen';
 import { RecoveryScreen } from '../me/RecoveryScreen';
+import { HelpArticleScreen, HelpCategoryScreen, HelpHomeScreen } from '../help/HelpScreens';
+import { HelpContactScreen, HelpFeedbackScreen, HelpRequestsScreen, HelpThreadScreen } from '../help/SupportScreens';
+import { ClaimBanner, RecoveryClaimScreen, RecoveryStopScreen, useClaim } from '../help/RecoveryClaim';
+import { takeClaimIntent } from '../help/kit';
 import { backupIfDue } from '../auth/recovery';
 import { ensureAttested } from '../auth/attest';
 import { EditProfileScreen } from '../me/EditProfileScreen';
@@ -347,6 +351,24 @@ function useShareLinks() {
   }, []);
 }
 
+/** F-22 (#178): thirstr://help/{id} (saved replies' {article:id}) opens a help article; a pending S-84 claim opens the check. */
+function useHelpLinks() {
+  React.useEffect(() => {
+    const ready = async () => {
+      for (let i = 0; i < 20 && !nav.isReady(); i++) await new Promise((res) => setTimeout(res, 250));
+      return nav.isReady();
+    };
+    const open = async (url: string | null | undefined) => {
+      const m = url?.match(/^thirstr:\/\/help\/([a-z0-9-]{2,40})$/);
+      if (m && (await ready())) nav.navigate('HelpArticle', { id: m[1] });
+    };
+    takeClaimIntent().then(async (on) => on && (await ready()) && nav.navigate('RecoveryClaim'));
+    Linking.getInitialURL().then(open);
+    const s = Linking.addEventListener('url', (e) => open(e.url));
+    return () => s.remove();
+  }, []);
+}
+
 // App v2 stack header (issue 63): round back button, no bar chrome; screens draw their own 34pt title.
 const sub = ({ navigation }: { navigation: { goBack: () => void } }) => ({
   headerShown: true,
@@ -368,7 +390,7 @@ const edgeOnly = { fullScreenGestureEnabled: false };
 const sheet = { presentation: 'transparentModal' as const, animation: 'none' as const, contentStyle: { backgroundColor: 'transparent' } };
 
 /** S-56 (R-13.16): live check-in bar above every screen; screens below get a top inset of 0 so nothing is covered. */
-function LiveFrame({ children }: { children: React.ReactNode }) {
+function LiveFrame({ children, banner }: { children: React.ReactNode; banner?: React.ReactNode }) {
   const a = useCheckin();
   const insets = useSafeAreaInsets();
   const frame = useSafeAreaFrame();
@@ -376,7 +398,9 @@ function LiveFrame({ children }: { children: React.ReactNode }) {
   return (
     <View style={{ flex: 1, backgroundColor: color.bgBase }}>
       {a ? <LiveBar a={a} onOpen={(late) => nav.isReady() && nav.navigate(late ? 'CheckinDue' : 'SafetyQuick')} /> : null}
-      <SafeAreaProvider key="live-frame" style={{ flex: 1 }} initialMetrics={{ frame, insets: { ...insets, top: a ? 0 : insets.top } }}>
+      {/* F-22 R-22.23 (#178): recovery-claim banner under the status bar (or the live bar). */}
+      {banner ? <View style={{ paddingTop: a ? 0 : insets.top }}>{banner}</View> : null}
+      <SafeAreaProvider key="live-frame" style={{ flex: 1 }} initialMetrics={{ frame, insets: { ...insets, top: a || banner ? 0 : insets.top } }}>
         {children}
       </SafeAreaProvider>
     </View>
@@ -398,6 +422,8 @@ export function Main() {
   useAttestation();
   useHiddenReturn();
   useShareLinks();
+  useHelpLinks();
+  const { claim } = useClaim();
   // #247: Show me to friends + friend-online alerts (foreground only).
   useFriendPerks();
   // #119 R-13.20: Live Activity + app-icon quick actions + thirstr://safety/* links.
@@ -415,7 +441,7 @@ export function Main() {
   return (
     <ModeContext.Provider value={mode}>
       <LockGate>
-      <LiveFrame>
+      <LiveFrame banner={claim && ['holding', 'ready'].includes(claim.state) ? <ClaimBanner claim={claim} onOpen={(mine) => nav.isReady() && (mine ? nav.navigate('RecoveryClaim') : nav.navigate('RecoveryStop', { id: claim.id }))} /> : null}>
       <NavigationContainer ref={nav} theme={navTheme} onReady={() => setNavState(nav.getRootState() as NavigationState)} onStateChange={(st) => setNavState(st as NavigationState | undefined)}>
         {/* F-19 G14 (#187): iOS swipe back from anywhere; off where the screen has its own sideways gestures (only the edge works there). */}
         <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bgBase }, fullScreenGestureEnabled: true }}>
@@ -461,6 +487,15 @@ export function Main() {
           <Stack.Screen name="AppLock" component={AppLockScreen} options={sub} />
           <Stack.Screen name="Devices" component={DevicesScreen} options={sub} />
           <Stack.Screen name="Recovery" component={RecoveryScreen as React.ComponentType} options={{ headerShown: false }} />
+          <Stack.Screen name="Help" component={HelpHomeScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="HelpCategory" component={HelpCategoryScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="HelpArticle" component={HelpArticleScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="HelpContact" component={HelpContactScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="HelpRequests" component={HelpRequestsScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="HelpThread" component={HelpThreadScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="HelpFeedback" component={HelpFeedbackScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="RecoveryClaim" component={RecoveryClaimScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="RecoveryStop" component={RecoveryStopScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="ShareSheet" component={ShareSheetScreen as React.ComponentType} options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="LinkedAccounts" component={LinkedAccountsScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="WhatsNew" component={WhatsNewScreen as React.ComponentType} options={sub} />

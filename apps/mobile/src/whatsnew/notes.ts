@@ -16,6 +16,31 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 9,
+    date: '2026-11-22',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'shield',
+        to: { route: 'Notices' },
+        text: {
+          en: ['Your reports', 'See what we did and ask for a review.'],
+          fr: ['Tes signalements', 'Vois la suite et demande un réexamen.'],
+          de: ['Deine Meldungen', 'Sieh das Ergebnis, bitte um Prüfung.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'hand',
+        text: {
+          en: ['Report illegal content', 'A clear path, with a reference number.'],
+          fr: ['Signale l’illégal', 'Un chemin clair, avec une référence.'],
+          de: ['Illegales melden', 'Klarer Weg, mit Referenznummer.'],
+        },
+      },
+    ],
+  },
+  {
     id: 8,
     date: '2026-11-21',
     lines: [

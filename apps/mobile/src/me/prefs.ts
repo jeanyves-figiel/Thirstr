@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type TranslateMode = 'auto' | 'tap' | 'off';
-export type Prefs = { units: 'km' | 'mi'; haptics: boolean; autoDelete: boolean; translate: TranslateMode; dataSaver?: 'auto' | 'always' | 'off'; emailNudgeDone?: boolean; lensNoticeDone?: boolean };
+export type Prefs = { units: 'km' | 'mi'; haptics: boolean; adultLinkPreviews?: 'blur' | 'show' | 'none'; autoDelete: boolean; translate: TranslateMode; dataSaver?: 'auto' | 'always' | 'off'; emailNudgeDone?: boolean; lensNoticeDone?: boolean };
 const KEY = 'thirstr.prefs';
 let cur: Prefs = { units: 'km', haptics: true, autoDelete: false, translate: 'auto' };
 

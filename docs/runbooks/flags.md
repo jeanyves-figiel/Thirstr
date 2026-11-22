@@ -15,6 +15,8 @@ Thirstr.Flags.set("new_thing", true, %{"platforms" => ["ios"], "min_build" => %{
 `percent` is stable per install (same phone, same answer). Raise it step by step; watch crash-free sessions and errors (monitoring.md).
 Known flags and their defaults: `Thirstr.Flags.defaults/0` (add a name there before app code reads it).
 
+Server-only: `verification_attest` (#270). Off = verification issues credentials without App Attest / Play Integrity proof. Use only if attestation fails for real users (Apple/Google outage, bad build); turn back on as soon as fixed.
+
 ## Force an update
 ```elixir
 Thirstr.Flags.set("min_build", true, %{"ios" => 140, "android" => 0})
@@ -24,3 +26,4 @@ Builds below get HTTP 426 on every call (except `/v1/config`, `/v1/health`) and 
 ## Rules
 - Every change: one line in the CHANGELOG or the incident log (who, why).
 - Never use a flag to hide personal data handling from users; flags switch features, not consent.
+- Store review builds: see `store-review.md` (`adult_links` `off_builds`).

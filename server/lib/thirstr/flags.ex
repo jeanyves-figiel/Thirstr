@@ -4,7 +4,7 @@ defmodule Thirstr.Flags do
 
   A flag without a row is on (its default below), so a kill switch is one row with
   `enabled = false`. Rules narrow an enabled flag: `platforms` (["ios", "android", "web"]),
-  `min_build` (per platform), `percent` (0–100, stable per install). No third-party service,
+  `min_build` (per platform), `off_builds` (per platform list of builds that get it off), `percent` (0–100, stable per install). No third-party service,
   no tracking: evaluation uses only what the request already carries.
 
       bin/thirstr rpc 'Thirstr.Flags.set("video_check", false, %{}, "kill: crash in 1.2")'
@@ -20,8 +20,14 @@ defmodule Thirstr.Flags do
     "parties" => true,
     "translate" => true,
     "web_push" => true,
+    # #270 server-side switch: off = verification issues without device proof (kill switch if
+    # attestation breaks for real users). Only matters where VERIFICATION_REQUIRE_ATTEST is on.
+    "verification_attest" => true,
     # F-15 R-15.43 (#179): server-side kill switch for the pre-publish hash match (owner outage decision only)
-    "hash_match" => true
+    "hash_match" => true,
+    # I-01 R-I01.30 (#17): OnlyFans / JustFor.Fans surfaces. Before a store submission ops lists the
+    # build under review in `off_builds` (%{"ios" => [512]}) so only that build hides them.
+    "adult_links" => true
   }
   @table :thirstr_flags
   @ttl_ms 30_000
@@ -131,7 +137,7 @@ defmodule Thirstr.Flags do
 
   defp rules_ok?(name, r, ctx) do
     platform_ok?(r["platforms"], ctx[:platform]) and build_ok?(r["min_build"], ctx) and
-      percent_ok?(r["percent"], name, ctx[:install])
+      not off_build?(r["off_builds"], ctx) and percent_ok?(r["percent"], name, ctx[:install])
   end
 
   defp platform_ok?(nil, _), do: true
@@ -142,6 +148,11 @@ defmodule Thirstr.Flags do
 
   defp build_ok?(%{}, _), do: false
   defp build_ok?(_, _), do: true
+
+  defp off_build?(%{} = m, %{platform: p, build: b}) when is_integer(b),
+    do: b in List.wrap(m[to_string(p)])
+
+  defp off_build?(_, _), do: false
 
   defp percent_ok?(nil, _, _), do: true
   defp percent_ok?(pct, _, nil) when is_integer(pct), do: pct >= 100

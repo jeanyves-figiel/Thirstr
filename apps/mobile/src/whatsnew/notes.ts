@@ -16,6 +16,32 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 8,
+    date: '2026-11-21',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'spark',
+        to: tab('Chats'),
+        text: {
+          en: ['Share posts to chats', 'From X, Bluesky & more. Encrypted.'],
+          fr: ['Partage des posts', 'Depuis X, Bluesky et plus. Chiffré.'],
+          de: ['Posts in Chats teilen', 'Von X, Bluesky & mehr. Verschlüsselt.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'check',
+        to: { route: 'EditProfile' },
+        text: {
+          en: ['Linked accounts ✓', 'Prove your X, Bluesky or OnlyFans.'],
+          fr: ['Comptes liés ✓', 'Prouve ton X, Bluesky ou OnlyFans.'],
+          de: ['Verknüpfte Konten ✓', 'Bestätige X, Bluesky oder OnlyFans.'],
+        },
+      },
+    ],
+  },
+  {
     id: 7,
     date: '2026-11-21',
     lines: [

@@ -30,6 +30,12 @@ export const color = {
   travel: '#7CC8FF',
   travelSoft: 'rgba(124,200,255,0.14)',
   warn: '#FFC93C',
+  // I-01 (#17): platform tiles on link cards and linked accounts (brand fills, text on them checked ≥ 4.5:1).
+  brandX: '#FFFFFF',
+  brandBluesky: '#1185FE',
+  brandOnlyFans: '#00AFF0',
+  brandJff: '#E3007B',
+  brandInstagram: '#5B2F6E',
   danger: '#FF4D6D',
   scrim: 'rgba(23,20,46,0.72)',
   // #113 floating header / chips over the map (ink 82 %), drop shadows, selected place halo.

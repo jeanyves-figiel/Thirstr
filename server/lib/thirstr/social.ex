@@ -131,7 +131,7 @@ defmodule Thirstr.Social do
          can_vouch: t.account_id != viewer.id and Thirstr.Trust.can_vouch?(viewer, t.id),
          badges: Thirstr.Trust.badges(t),
          linked_accounts:
-           Thirstr.Linked.visible(t.id, viewer, audience, t.account_id == viewer.id),
+           Thirstr.Linked.visible(t.id, viewer, audience, t.account_id == viewer.id, lens),
          updated_at: t.updated_at,
          # F-21 R-21.9: ring on the profile photo
          moments: Thirstr.Moments.summary(viewer, t.id, lens),

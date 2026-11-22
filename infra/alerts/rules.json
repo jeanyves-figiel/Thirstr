@@ -1,6 +1,6 @@
 {
   "_doc": "On-call alert rules (EN-06, #165). Evaluated every 5 min by .github/workflows/oncall.yml via scripts/ops/oncall.py. Each rule's runbook section is docs/runbooks/alerts.md#<id> (CI checks it exists). sev 1 = page any hour (Pushover emergency, repeats until acknowledged); sev 2 = normal push (respects Pushover quiet hours); sev 3 = job summary only, no push. PromQL rules fire when the query returns at least one sample.",
-  "prometheus": "https://api.fly.io/prometheus/personal",
+  "prometheus": "https://api.fly.io/prometheus/thirstr",
   "rules": [
     {
       "id": "api-down",

@@ -211,26 +211,37 @@ defmodule ThirstrWeb.ModController do
       q(
         """
         SELECT ph.id::text, ph.slot, ph.hash_state, ph.inserted_at, p.display_name,
-               (ph.classifier_score->>'explicit')
+               (ph.classifier_score->>'explicit'), ph.review_state, (ph.classifier_score->>'error')
         FROM photos ph JOIN profiles p ON p.id = ph.profile_id
-        WHERE ph.review_state = 'queued' LIMIT 500
+        WHERE ph.review_state IN ('queued', 'after') LIMIT 500
         """,
         []
       )
-      |> Enum.map(fn [_id, slot, hs, at, name, score] ->
-        retry = hs == "retry"
+      |> Enum.map(fn [_id, slot, hs, at, name, score, rs, err] ->
+        # R-15.56 (#325): "after" = borderline, already live, reviewed after publish.
+        {tier, why, hours} =
+          cond do
+            rs == "after" ->
+              {5, "live, AI unsure (#{e(score || "?")}) · slot #{slot} " <> chip("after publish"),
+               72}
+
+            hs == "retry" ->
+              {4, "hash check failed 30 min " <> chip("hidden"), 12}
+
+            err == "true" ->
+              {3, "AI gave no verdict for 6 h " <> chip("hidden"), 12}
+
+            true ->
+              {3, "classifier #{e(score || "?")} · slot #{slot} " <> chip("hidden"), 12}
+          end
 
         %{
-          tier: if(retry, do: 4, else: 3),
+          tier: tier,
           type: "photo",
           name: name,
-          why:
-            if(retry,
-              do: "hash check failed 30 min " <> chip("retry"),
-              else: "classifier #{e(score || "?")} · slot #{slot} · hash #{e(hs || "—")}"
-            ),
+          why: why,
           open: 1,
-          due: DateTime.add(at, 12 * 3600, :second),
+          due: DateTime.add(at, hours * 3600, :second),
           at: at,
           href: "/admin/photos"
         }

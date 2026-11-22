@@ -184,7 +184,21 @@ defmodule ThirstrWeb.AdminUI do
   # One round trip for every rail count; a failure only hides the counts.
   # sobelow_skip ["SQL.Query"]
   defp counts(admin) do
-    [[cases, cases_late, reports, reports_late, photos, linked, quar, appeals, support, name]] =
+    [
+      [
+        cases,
+        cases_late,
+        reports,
+        reports_late,
+        photos,
+        sample,
+        linked,
+        quar,
+        appeals,
+        support,
+        name
+      ]
+    ] =
       Thirstr.Repo.query!(
         """
         SELECT
@@ -193,7 +207,8 @@ defmodule ThirstrWeb.AdminUI do
           (SELECT count(*) FROM reports WHERE state = 'open'),
           (SELECT count(*) FROM reports WHERE state = 'open' AND created_at < now() -
              CASE WHEN severity <= 2 THEN interval '1 hour' WHEN severity = 3 THEN interval '12 hours' ELSE interval '48 hours' END),
-          (SELECT count(*) FROM photos WHERE review_state = 'queued'),
+          (SELECT count(*) FROM photos WHERE review_state IN ('queued', 'after')),
+          (SELECT count(*) FROM photos WHERE review_state = 'sample'),
           (SELECT count(*) FROM linked_accounts WHERE manual_pending_at IS NOT NULL),
           (SELECT count(*) FROM accounts WHERE status = 'quarantined'),
           (SELECT count(*) FROM moderation_actions WHERE appeal_state = 'open') +
@@ -208,7 +223,7 @@ defmodule ThirstrWeb.AdminUI do
       n: %{
         queue: cases + reports + photos + appeals + quar,
         cases: cases,
-        photos: photos,
+        photos: photos + sample,
         linked: linked,
         quarantine: quar,
         appeals: appeals,
@@ -441,6 +456,12 @@ defmodule ThirstrWeb.AdminUI do
     form.party{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;margin-top:8px}
     td details>summary.danger{color:var(--danger)}
     td form{display:inline}
+    .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+    .pcard{background:var(--raised);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+    .pcard .ph{width:100%}
+    .pcard form{display:flex;gap:6px;flex-wrap:wrap}.pcard form button{flex:1}
+    .pcard form.stack{flex-direction:column;margin-top:6px}
+    .pcard form button.link{flex:none;color:var(--danger)}
     /* A-02 report detail */
     .split{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
     @media (max-width:1100px){.split{grid-template-columns:1fr}}

@@ -378,11 +378,17 @@ defmodule ThirstrWeb.AdminController do
   # R-AD.7 / F-15 R-15.52 (#179): blurred + grayscale by default, the card-size copy when it
   # exists (≤ 480 px), hold to peek (3 s), Reveal (audited), Grayscale toggle. Script in page/3.
   @doc false
-  def photo_tile(ph) do
+  def photo_tile(ph, pick \\ true) do
     key = ph.thumb_key || ph.storage_key
     hash = if ph.hash_state, do: " · hash #{e(ph.hash_state)}", else: ""
 
-    ~s{<div class="ph"><label><input type="radio" name="photo_id" form="act" value="#{ph.id}"> pick</label><div class="img blur" data-id="#{ph.id}"><img alt="" src="#{e(Storage.presigned_get(key))}"></div><div class="tools"><button type="button" data-t="peek">Hold to peek</button><button type="button" data-t="reveal" aria-pressed="false">Reveal</button><button type="button" data-t="gray" aria-pressed="true">Grayscale</button></div><span class="muted">slot #{ph.slot} · #{e(ph.status)}#{hash}</span></div>}
+    pick =
+      if pick,
+        do:
+          ~s{<label><input type="radio" name="photo_id" form="act" value="#{ph.id}"> pick</label>},
+        else: ""
+
+    ~s{<div class="ph">#{pick}<div class="img blur" data-id="#{ph.id}"><img alt="" src="#{e(Storage.presigned_get(key))}"></div><div class="tools"><button type="button" data-t="peek">Hold to peek</button><button type="button" data-t="reveal" aria-pressed="false">Reveal</button><button type="button" data-t="gray" aria-pressed="true">Grayscale</button></div><span class="muted">slot #{ph.slot} · #{e(ph.status)}#{hash}</span></div>}
   end
 
   @action_labels %{
@@ -425,56 +431,111 @@ defmodule ThirstrWeb.AdminController do
 
   # ------------------------------------------------------------------ A-03 photo review
 
+  # F-15 R-15.56 (#325): photos go live when the AI passes them; the owner reviews after publish.
   def photos(conn, _) do
     audit(conn.assigns.admin, "view_photos", nil, nil)
+    csrf = ~s(<input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">)
 
-    list =
+    by_state =
       Repo.all(
         from(ph in Photo,
-          where: ph.review_state == "queued",
+          where: ph.review_state in ["queued", "after", "sample"],
           order_by: ph.inserted_at,
-          limit: 100
+          limit: 300
         )
       )
-      |> Enum.map_join("", fn ph ->
-        """
-        <div class="card">#{photo_tile(ph)}
-          <p class="muted">#{e(Jason.encode!(Map.take(ph.classifier_score || %{}, ["labels", "main_ok", "score"])))}</p>
-          <form method="post" action="/admin/photos/#{ph.id}">
-            <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
-            <button name="decision" value="approve">Approve</button>
-            <button name="decision" value="reject">Reject</button>
-          </form>
-          <form method="post" action="/admin/photos/#{ph.id}/escalate">
-            <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
-            <button class="danger">Escalate as CSAM</button>
-          </form></div>
-        """
-      end)
+      |> Enum.group_by(& &1.review_state)
 
-    moments =
-      Thirstr.Moments.review_queue()
-      |> Enum.map_join("", fn m ->
-        """
-        <div class="card"><label class="ph"><img src="#{e(m.url)}" onclick="this.classList.toggle('show')"><span>Moment · #{if m.main_ok, do: "main ok", else: "not main ok"} · expires #{e(Calendar.strftime(m.expires_at, "%H:%M"))} UTC</span></label>
-          #{if m.caption, do: ~s(<p class="muted">“#{e(m.caption)}”</p>), else: ""}
-          <form method="post" action="/admin/moments/#{m.id}">
-            <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
-            <button name="decision" value="approve">Approve</button>
-            <button name="decision" value="reject">Reject</button>
-          </form></div>
-        """
-      end)
+    moments = Thirstr.Moments.review_queue()
+    {m_live, m_hidden} = Enum.split_with(moments, & &1.live)
+
+    hidden =
+      Enum.map_join(Map.get(by_state, "queued", []), "", &hidden_card(&1, csrf)) <>
+        Enum.map_join(m_hidden, "", &moment_card(&1, csrf))
+
+    unsure =
+      Enum.map_join(Map.get(by_state, "after", []), "", &live_card(&1, csrf)) <>
+        Enum.map_join(m_live, "", &moment_card(&1, csrf))
+
+    sample = Enum.map_join(Map.get(by_state, "sample", []), "", &live_card(&1, csrf))
+
+    grid = fn html, none ->
+      if html == "",
+        do: ~s(<p class="muted">#{none}</p>),
+        else: ~s(<div class="pgrid">#{html}</div>)
+    end
 
     page(conn, "Photos", """
-    <h1>Photo review</h1>
-    #{if list == "", do: ~s(<p class="muted">Nothing queued.</p>), else: list}
-    <h2>Moments (borderline, hidden until decided or expired)</h2>
-    #{if moments == "", do: ~s(<p class="muted">Nothing queued.</p>), else: moments}
+    #{ThirstrWeb.AdminUI.head("Photo review", "Photos go live as soon as the AI passes them. Nothing here blocks anyone: unreviewed items stay live.")}
+    #{if hidden == "", do: "", else: ~s(<div class="card"><h2>Hidden, needs a decision <span class="r">no AI or hash verdict after retries</span></h2>#{grid.(hidden, "")}</div>)}
+    <div class="card"><h2>Live, AI unsure <span class="r">borderline score, already live · not shown in Friends or Sport</span></h2>
+    #{grid.(unsure, "Nothing flagged.")}</div>
+    <div class="card"><h2>Daily sample <span class="r">random live photos from the last 7 days</span></h2>
+    #{grid.(sample, "Nothing to sample today. The next sample is picked at 03:20 UTC.")}</div>
     """)
   end
 
-  def moment_decision(conn, %{"id" => id, "decision" => d}) when d in ~w(approve reject) do
+  defp score_line(ph) do
+    s = ph.classifier_score || %{}
+
+    cond do
+      s["error"] -> "AI gave no verdict"
+      ph.hash_state == "retry" -> "hash check failed"
+      true -> "AI explicit #{e(s["explicit"] || "?")} · slot #{ph.slot}"
+    end
+  end
+
+  defp hidden_card(ph, csrf) do
+    """
+    <div class="pcard">#{photo_tile(ph, false)}<span class="sm muted">#{score_line(ph)}</span>
+      <form method="post" action="/admin/photos/#{ph.id}">#{csrf}
+        <button name="decision" value="approve" class="ok">Approve</button>
+        <button name="decision" value="reject">Reject</button></form>
+      #{escalate(ph, csrf)}</div>
+    """
+  end
+
+  @remove_reasons ~w(other non_consensual underage impersonation spam_bot)
+
+  defp live_card(ph, csrf) do
+    reasons =
+      Enum.map_join(
+        @remove_reasons,
+        "",
+        &~s(<option value="#{&1}">#{String.replace(&1, "_", " ")}</option>)
+      )
+
+    """
+    <div class="pcard">#{photo_tile(ph, false)}<span class="sm muted">#{score_line(ph)}</span>
+      <form method="post" action="/admin/photos/#{ph.id}">#{csrf}<button name="decision" value="keep" class="ok">Keep</button></form>
+      <details><summary class="danger">Remove…</summary>
+      <form method="post" action="/admin/photos/#{ph.id}" class="stack">#{csrf}<input type="hidden" name="decision" value="remove">
+        <label class="f">Reason<select name="reason">#{reasons}</select></label>
+        <label class="f">Facts, sent to the member<textarea name="facts" maxlength="300" rows="2">This photo breaks the photo rules for its slot.</textarea></label>
+        <button class="dan">Remove photo</button></form></details>
+      #{escalate(ph, csrf)}</div>
+    """
+  end
+
+  defp escalate(ph, csrf),
+    do:
+      ~s(<form method="post" action="/admin/photos/#{ph.id}/escalate">#{csrf}<button class="link danger">Escalate as CSAM</button></form>)
+
+  defp moment_card(m, csrf) do
+    {a, b} =
+      if m.live,
+        do: {~s(<button name="decision" value="keep" class="ok">Keep</button>), "Remove"},
+        else: {~s(<button name="decision" value="approve" class="ok">Approve</button>), "Reject"}
+
+    """
+    <div class="pcard"><div class="ph"><div class="img blur" data-id="m-#{m.id}"><img alt="" src="#{e(m.url)}"></div><div class="tools"><button type="button" data-t="peek">Hold to peek</button><button type="button" data-t="reveal" aria-pressed="false">Reveal</button><button type="button" data-t="gray" aria-pressed="true">Grayscale</button></div></div>
+      <span class="sm muted">Moment · #{if m.live, do: "live", else: "hidden"} · ends #{e(Calendar.strftime(m.expires_at, "%H:%M"))} UTC</span>
+      #{if m.caption, do: ~s(<span class="sm">“#{e(m.caption)}”</span>), else: ""}
+      <form method="post" action="/admin/moments/#{m.id}">#{csrf}#{a}<button name="decision" value="reject">#{b}</button></form></div>
+    """
+  end
+
+  def moment_decision(conn, %{"id" => id, "decision" => d}) when d in ~w(approve keep reject) do
     case Thirstr.Moments.review(id, d) do
       :ok ->
         audit(conn.assigns.admin, "moment_" <> d, id, nil)
@@ -482,6 +543,41 @@ defmodule ThirstrWeb.AdminController do
 
       _ ->
         send_resp(conn, 404, "")
+    end
+  end
+
+  # R-15.56: a live photo is kept (off the list) or removed with a statement of reasons.
+  def photo_decision(conn, %{"id" => id, "decision" => "keep"}) do
+    case Repo.get(Photo, id) do
+      %Photo{review_state: rs} = ph when rs in ["after", "sample"] ->
+        ph |> Ecto.Changeset.change(review_state: "done") |> Repo.update!()
+        audit(conn.assigns.admin, "photo_keep", id, rs)
+        redirect(conn, to: "/admin/photos")
+
+      _ ->
+        send_resp(conn, 404, "")
+    end
+  end
+
+  def photo_decision(conn, %{"id" => id, "decision" => "remove", "reason" => r} = p)
+      when r in @reason_codes do
+    facts = String.trim(p["facts"] || "")
+
+    with %Photo{review_state: rs} = ph when rs in ["after", "sample"] <- Repo.get(Photo, id),
+         true <- facts != "",
+         [[aid]] <-
+           q("SELECT account_id::text FROM profiles WHERE id = $1", [Nearby.dump(ph.profile_id)]),
+         {:ok, _} <-
+           Moderation.enforce(aid, "remove_photo", r, "admin",
+             photo_id: ph.id,
+             facts: String.slice(facts, 0, 300),
+             ground: "tos"
+           ) do
+      Thirstr.Notify.event(aid, "moderation.notice", %{})
+      audit(conn.assigns.admin, "photo_remove", id, r)
+      redirect(conn, to: "/admin/photos")
+    else
+      _ -> send_resp(conn, 422, "Pick a reason and write the facts")
     end
   end
 

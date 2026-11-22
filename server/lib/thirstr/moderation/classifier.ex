@@ -72,33 +72,36 @@ end
 
 defmodule Thirstr.Moderation.DevClassifier do
   @moduledoc """
-  DEV/test stand-in. Accepts any uploaded image; keys ending in `-explicit`, `-noperson` or
-  `-borderline` exercise rejection and review states.
+  DEV/test stand-in. Accepts any uploaded image; keys ending in `-explicit`, `-noperson`,
+  `-borderline` or `-noverdict` (service down) exercise rejection and review states.
   """
   @behaviour Thirstr.Moderation.Classifier
   alias Thirstr.Moderation.Classifier
 
   @impl true
   def classify(key, slot, kind) do
-    det =
-      cond do
-        String.ends_with?(key, "-explicit") ->
-          [%{"class" => "MALE_GENITALIA_EXPOSED", "score" => 0.9}]
+    if String.ends_with?(key, "-noverdict"),
+      do: {:review, %{"error" => true, "main_ok" => false}},
+      else: Classifier.decide(detections(key), slot, kind)
+  end
 
-        String.ends_with?(key, "-borderline") ->
-          [
-            %{"class" => "BUTTOCKS_EXPOSED", "score" => 0.5},
-            %{"class" => "FACE_MALE", "score" => 0.9}
-          ]
+  defp detections(key) do
+    cond do
+      String.ends_with?(key, "-explicit") ->
+        [%{"class" => "MALE_GENITALIA_EXPOSED", "score" => 0.9}]
 
-        String.ends_with?(key, "-noperson") ->
-          []
+      String.ends_with?(key, "-borderline") ->
+        [
+          %{"class" => "BUTTOCKS_EXPOSED", "score" => 0.5},
+          %{"class" => "FACE_MALE", "score" => 0.9}
+        ]
 
-        true ->
-          [%{"class" => "FACE_MALE", "score" => 0.95}]
-      end
+      String.ends_with?(key, "-noperson") ->
+        []
 
-    Classifier.decide(det, slot, kind)
+      true ->
+        [%{"class" => "FACE_MALE", "score" => 0.95}]
+    end
   end
 end
 

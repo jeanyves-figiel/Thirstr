@@ -250,6 +250,32 @@ defmodule ThirstrWeb.MomentsTest do
              moments_of(v.c, p.pid) |> json_response(200) |> Map.get("moments")
   end
 
+  # F-15 R-15.56 (#325): borderline Moments are live at once and reviewed after publish.
+  test "live borderline Moment: listed as live, keep clears it, reject deletes", %{
+    poster: p,
+    viewer: v
+  } do
+    flag = fn ->
+      id = share!(p.c)["id"]
+
+      Thirstr.Repo.query!("UPDATE moments SET after_review = true WHERE id = $1", [
+        Ecto.UUID.dump!(id)
+      ])
+
+      id
+    end
+
+    a = flag.()
+    b = flag.()
+    assert [true, true] = Enum.map(Thirstr.Moments.review_queue(), & &1.live)
+    assert moments_of(v.c, p.pid) |> json_response(200) |> Map.get("moments") |> length() == 2
+
+    assert :ok = Thirstr.Moments.review(a, "keep")
+    assert :ok = Thirstr.Moments.review(b, "reject")
+    assert Thirstr.Moments.review_queue() == []
+    assert [%{"id" => ^a}] = moments_of(v.c, p.pid) |> json_response(200) |> Map.get("moments")
+  end
+
   # #221 R-21.9: live rings over the socket, only for watched profiles the viewer may see.
   test "socket: moments.watch pushes ring changes, never for hidden Moments", %{
     poster: p,

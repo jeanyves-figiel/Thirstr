@@ -25,8 +25,10 @@ config :thirstr, Oban,
      crontab: [
        {"*/15 * * * *", Thirstr.Jobs.ExpirySweep},
        {"* * * * *", Thirstr.Jobs.Minutely},
-       # F-15 R-15.43 (#179): photos whose hash check failed
+       # F-15 R-15.43 (#179) / R-15.56 (#325): photos whose hash check or classifier failed
        {"*/2 * * * *", Thirstr.Jobs.HashRetry},
+       # F-15 R-15.56 (#325): daily sample of live photos for the after-publish review
+       {"20 3 * * *", Thirstr.Jobs.PhotoSample},
        # F-12 R-12.9: weekly OSM venue import (no-op unless :places osm_import is on)
        {"30 3 * * 1", Thirstr.Jobs.PlaceImport},
        # EN-21 (#180): usage + Fly cost snapshot, budget alert

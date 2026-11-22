@@ -66,7 +66,7 @@ defmodule ThirstrWeb.AdminCostsController do
         !Costs.fly_configured?() &&
           "Set the read-only Fly token on the API app: <code>fly tokens create readonly thirstr</code>, then <code>fly secrets set FLY_COST_TOKEN=…</code> (runbook <code>costs.md</code>, #301).",
         Costs.items() == [] &&
-          ~s(Add what has no API as <a href="#add">cost items</a>: Tigris, Amazon SES, Apple Developer, domain, Google Play.),
+          ~s(Apple Developer, Google Play and the domain are preset by the nightly job; add anything else as <a href="#add">cost items</a>. Amazon SES and Tigris fill in by themselves.),
         !(is_number(s["budget_eur"]) and s["budget_eur"] > 0) &&
           ~s(Set a monthly <a href="#settings">budget</a> to get email alerts at 80 % and 100 %.)
       ]
@@ -212,7 +212,7 @@ defmodule ThirstrWeb.AdminCostsController do
           "Fly from API, no data yet this month"
       end
 
-    "#{fly} · other vendors typed in · EUR, USD at #{s["usd_eur"]}"
+    "#{fly} · SES counted, Tigris measured daily · others typed in · EUR, USD at #{s["usd_eur"]}"
   end
 
   defp budget(sum, s) do
@@ -277,7 +277,7 @@ defmodule ThirstrWeb.AdminCostsController do
             ~s(<div class="vsub"><span>#{e(a.app)} · #{e(machines_txt(a.detail))}</span><span class="amt">#{Costs.eur(a.cents)}</span><span class="dl #{chg_cls(a.cents - pa)}">#{chg(a.cents - pa)}</span></div>)
           end
 
-        ~s(<div class="vrow"><span class="nm"><i style="background:#{c}"></i><span>#{e(v.vendor)}</span> #{source_pill(v.source)}</span><span class="bar2"><i style="width:#{max(1, round(v.cents / top * 100))}%;background:#{c}"></i></span><span class="amt">#{Costs.eur(v.cents)}</span><span class="dl #{chg_cls(v.cents - last)}" title="vs #{Calendar.strftime(prev.month, "%B")}: #{Costs.eur(last)}">#{chg(v.cents - last)}</span></div>) <>
+        ~s(<div class="vrow"><span class="nm"><i style="background:#{c}"></i><span>#{e(v.vendor)}</span> #{source_pill(v.source)}#{if v[:units], do: ~s( <span class="sm muted">#{e(v.units)}</span>), else: ""}</span><span class="bar2"><i style="width:#{max(1, round(v.cents / top * 100))}%;background:#{c}"></i></span><span class="amt">#{Costs.eur(v.cents)}</span><span class="dl #{chg_cls(v.cents - last)}" title="vs #{Calendar.strftime(prev.month, "%B")}: #{Costs.eur(last)}">#{chg(v.cents - last)}</span></div>) <>
           Enum.join(apps)
       end)
 
@@ -303,6 +303,7 @@ defmodule ThirstrWeb.AdminCostsController do
   defp machines_txt(_), do: ""
 
   defp source_pill("fly_api"), do: ~s|<span class="pill api">Fly API</span>|
+  defp source_pill("metered"), do: ~s|<span class="pill api">auto</span>|
 
   defp source_pill(s) do
     s

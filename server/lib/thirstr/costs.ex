@@ -2,7 +2,9 @@ defmodule Thirstr.Costs do
   @moduledoc """
   EN-21 (#180), admin-console.md A-11: monthly cost per vendor, cost per MAU, budget alert
   email, capacity forecast. No vendor, no spend: Fly from the Machines API with a read-only
-  token (`FLY_COST_TOKEN`, R-AD.13), everything else typed in as cost items.
+  token (`FLY_COST_TOKEN`, R-AD.13); Amazon SES counted from the emails we send and Tigris from
+  the bucket size (R-AD.18, #326); Apple, Google Play and the domain preset as fixed items;
+  anything else typed in as cost items.
 
   Money is integer cents. Manual items are EUR; Fly rates are USD and converted with `usd_eur`.
   Only aggregates are stored or shown (AC-AD.7).
@@ -24,6 +26,11 @@ defmodule Thirstr.Costs do
       "ram_gb" => 5.0,
       "volume_gb" => 0.15
     },
+    # USD list prices for metered vendors (R-AD.18, estimate)
+    "metered_prices" => %{
+      "ses_per_1000" => 0.10,
+      "tigris_storage_gb" => 0.02
+    },
     # Capacity inputs (R-AD.15, SR-12 #152)
     "cap_per_machine" => 500,
     "cap_measured_on" => nil,
@@ -43,7 +50,7 @@ defmodule Thirstr.Costs do
       |> Map.new(fn [k, v] -> {k, v["v"]} end)
 
     Map.merge(@defaults, stored, fn
-      "fly_prices", d, s when is_map(s) -> Map.merge(d, s)
+      k, d, s when k in ["fly_prices", "metered_prices"] and is_map(s) -> Map.merge(d, s)
       _, d, nil -> d
       _, _, s -> s
     end)
@@ -225,6 +232,176 @@ defmodule Thirstr.Costs do
     end
   end
 
+  # ------------------------------------------------------------------ metered vendors (R-AD.18)
+
+  @ses "Amazon SES"
+  @tigris "Tigris"
+
+  @doc """
+  Telemetry handler for Swoosh deliveries: counts recipients of each email accepted by the
+  mail provider (SES bills per recipient). Only on when the SES adapter is configured
+  (`:meter_ses`). Never raises into the sender.
+  """
+  def attach_mail_meter do
+    :telemetry.attach_many(
+      "thirstr-cost-ses",
+      [[:swoosh, :deliver, :stop], [:swoosh, :deliver_many, :stop]],
+      &__MODULE__.handle_mail_event/4,
+      nil
+    )
+  end
+
+  def handle_mail_event(_event, _m, meta, _) do
+    if Application.get_env(:thirstr, :meter_ses, false) and not Map.has_key?(meta, :error) do
+      n =
+        meta
+        |> Map.get(:emails, List.wrap(meta[:email]))
+        |> Enum.map(&recipients/1)
+        |> Enum.sum()
+
+      if n > 0, do: count_sent(n)
+    end
+
+    :ok
+  rescue
+    e -> Logger.warning("cost SES meter failed: #{inspect(e)}")
+  end
+
+  defp recipients(%{to: to, cc: cc, bcc: bcc}),
+    do: length(List.wrap(to)) + length(List.wrap(cc)) + length(List.wrap(bcc))
+
+  defp recipients(_), do: 0
+
+  @doc "Adds `n` SES recipients to today's count."
+  def count_sent(n, day \\ Date.utc_today()) when is_integer(n) and n > 0 do
+    q(
+      "INSERT INTO cost_metered_daily (day, vendor, units) VALUES ($1, $2, $3) ON CONFLICT (day, vendor) DO UPDATE SET units = cost_metered_daily.units + EXCLUDED.units",
+      [day, @ses, n]
+    )
+
+    :ok
+  end
+
+  @doc "Daily: Tigris bucket bytes → USD run-rate (storage list price; requests and egress are not billed by size and stay out)."
+  def snapshot_storage(day \\ Date.utc_today()) do
+    case Thirstr.Storage.bucket_bytes() do
+      {:ok, bytes} ->
+        price = settings()["metered_prices"]["tigris_storage_gb"]
+
+        q(
+          "INSERT INTO cost_metered_daily (day, vendor, units, rate_cents_month) VALUES ($1, $2, $3, $4) ON CONFLICT (day, vendor) DO UPDATE SET units = EXCLUDED.units, rate_cents_month = EXCLUDED.rate_cents_month",
+          [day, @tigris, bytes, round(bytes / 1.0e9 * price * 100)]
+        )
+
+        :ok
+
+      {:error, r} ->
+        Logger.warning("cost snapshot: bucket size failed (#{inspect(r)})")
+        {:error, r}
+    end
+  end
+
+  # Vendors with no billing API, preset once so the page is complete from day one (R-AD.18).
+  # List prices in EUR; the owner edits them to the invoice. Never re-added once removed/ended.
+  @presets [
+    %{
+      vendor: "Apple Developer",
+      amount_cents: 9_900,
+      cadence: "yearly",
+      note: "Preset: list price, edit to your invoice"
+    },
+    %{
+      vendor: "Google Play",
+      amount_cents: 2_300,
+      cadence: "once",
+      note: "Preset: $25 registration, edit or end if not paid yet"
+    },
+    %{
+      vendor: "Domain thirstr.fun",
+      amount_cents: 3_000,
+      cadence: "yearly",
+      note: "Preset: GoDaddy estimate, edit to your invoice"
+    }
+  ]
+
+  def presets, do: @presets
+
+  @doc "Adds the preset fixed items once per database (setting `presets_seeded`)."
+  def seed_presets(today \\ Date.utc_today()) do
+    case q(
+           "INSERT INTO cost_settings (key, value) VALUES ('presets_seeded', $1) ON CONFLICT DO NOTHING RETURNING key",
+           [%{"v" => Date.to_iso8601(today)}]
+         ) do
+      [[_]] ->
+        have = MapSet.new(items(), & &1.vendor)
+
+        for p <- @presets, p.vendor not in have do
+          {:ok, _} = add_item(Map.put(p, :start_month, today))
+        end
+
+        :ok
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp metered_vendors(m, dim, elapsed, current?, s) do
+    fx = s["usd_eur"]
+    prices = s["metered_prices"]
+    to = Date.add(m, dim)
+
+    ses =
+      case q(
+             "SELECT sum(units) FROM cost_metered_daily WHERE vendor = $1 AND day >= $2 AND day < $3",
+             [@ses, m, to]
+           ) do
+        [[n]] when not is_nil(n) ->
+          n = to_int(n)
+          mtd = n / 1000 * prices["ses_per_1000"] * 100 * fx
+          proj = if current?, do: mtd * dim / max(elapsed, 1), else: mtd
+
+          [
+            %{
+              vendor: @ses,
+              source: "metered",
+              cents: round(proj),
+              mtd: round(mtd),
+              units: "#{n} emails"
+            }
+          ]
+
+        _ ->
+          []
+      end
+
+    tigris =
+      case q(
+             "SELECT sum(rate_cents_month), count(*), (array_agg(rate_cents_month ORDER BY day DESC))[1], (array_agg(units ORDER BY day DESC))[1], min(day) FROM cost_metered_daily WHERE vendor = $1 AND day >= $2 AND day < $3 AND rate_cents_month IS NOT NULL",
+             [@tigris, m, to]
+           ) do
+        [[sum, n, latest, bytes, first]] when n > 0 ->
+          missed = max(0, elapsed - first.day + 1 - n)
+          mtd = (to_int(sum) + missed * latest) / dim
+          proj = mtd + (dim - elapsed) * latest / dim
+
+          [
+            %{
+              vendor: @tigris,
+              source: "metered",
+              cents: round(proj * fx),
+              mtd: round(mtd * fx),
+              units: "#{Float.round(to_int(bytes) / 1.0e9, 2)} GB stored"
+            }
+          ]
+
+        _ ->
+          []
+      end
+
+    ses ++ tigris
+  end
+
   # ------------------------------------------------------------------ usage (MAU)
 
   @doc "Daily: DAU, MAU (devices seen in 30 days) and DB size. Counts only."
@@ -314,7 +491,13 @@ defmodule Thirstr.Costs do
           }
         ]
 
-    vendors = Enum.sort_by(fly ++ manual, & &1.cents, :desc)
+    # A typed-in item for SES or Tigris (the real invoice) replaces the automatic estimate.
+    typed = MapSet.new(manual, & &1.vendor)
+
+    metered =
+      metered_vendors(m, dim, elapsed, current?, s) |> Enum.reject(&(&1.vendor in typed))
+
+    vendors = Enum.sort_by(fly ++ metered ++ manual, & &1.cents, :desc)
     usage = usage_at(Date.add(m, dim - 1))
     total = sum(vendors, :cents)
 

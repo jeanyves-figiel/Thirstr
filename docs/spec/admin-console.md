@@ -74,7 +74,7 @@ Mockup: `console-v3.html` (project files, moderation-console). One shell for eve
 - AC-AD.4 Config change without second approver is rejected (automated).
 
 ## Costs & capacity (A-11, #180, EN-21)
-Owner view of what Thirstr costs, per vendor and per monthly active user, with a budget alert and a capacity forecast. No new vendor, no spend: Fly numbers come from the Fly Machines API with a read-only token, everything else is typed in. Only aggregates: no account id, email, IP or location anywhere on the page or in the email (AC-AD.3).
+Owner view of what Thirstr costs, per vendor and per monthly active user, with a budget alert and a capacity forecast. No new vendor, no spend: Fly numbers come from the Fly Machines API with a read-only token; Amazon SES and Tigris are measured by the server itself; Apple Developer, Google Play and the domain are preset fixed items (R-AD.18); anything else is typed in. Only aggregates: no account id, email, IP or location anywhere on the page or in the email (AC-AD.3).
 
 ### Data
 | Table | Columns | Notes |
@@ -84,6 +84,7 @@ Owner view of what Thirstr costs, per vendor and per monthly active user, with a
 | `usage_daily` | day, dau, mau, db_bytes | DAU = accounts with a device seen that day; MAU = seen in the last 30 days (`devices.last_seen_day`). Counts only. |
 | `cost_settings` | key, value jsonb | `budget_eur` (0 = alerts off), `alert_email`, `usd_eur` (default 0.92), `fly_prices`, capacity inputs below. |
 | `cost_alerts` | month, threshold (80/100), sent_at | Unique (month, threshold): each alert at most once a month. |
+| `cost_metered_daily` | day, vendor, units, rate_cents_month (USD) | R-AD.18. `Amazon SES`: units = recipients sent that day. `Tigris`: units = bucket bytes, rate = storage run-rate per 30 days. |
 
 ### Fly from the API (R-AD.13)
 - Daily job `Thirstr.Jobs.CostSnapshot` (Oban cron `10 2 * * *`, maintenance queue) lists the org's apps, their machines and volumes via `api.machines.dev` with `FLY_COST_TOKEN` (read-only org token, `fly tokens create readonly thirstr`; runbook `docs/runbooks/costs.md`). Without the token the Fly row says "token not set" and Fly can be typed in as a manual item instead.
@@ -91,10 +92,18 @@ Owner view of what Thirstr costs, per vendor and per monthly active user, with a
 - Fly month to date = Σ days of (rate / days in month); month-end projection = month to date + today's rate × days left. USD → EUR with `usd_eur`.
 - Failure (network, 401) keeps yesterday's row, logs a warning, shows "last updated <date>".
 
+### Vendors without a Fly-style API (R-AD.18, #326)
+- R-AD.18a **Amazon SES**: every email the mail provider accepts is counted per recipient (to + cc + bcc) from Swoosh telemetry (`[:swoosh, :deliver | :deliver_many, :stop]`, errors not counted), only when the SES adapter is configured (`:meter_ses`). Month = Σ recipients × `metered_prices.ses_per_1000` ($0.10) / 1000; current month projected linearly (month to date × days / elapsed). No AWS billing key: Cost Explorer costs $0.01 per call and needs IAM access, and the count is exact for SES's per-message price. Free-tier credits and attachments data are ignored (estimate).
+- R-AD.18b **Tigris**: the daily job sums object sizes in the env's bucket (S3 ListObjectsV2, keys and sizes only, never object bodies) and stores bytes × `metered_prices.tigris_storage_gb` ($0.02/GB per 30 days). Same month-to-date + projection rule as Fly. Requests and egress are not included (Tigris has no billing API; egress is free). Failure keeps yesterday's row and logs a warning.
+- R-AD.18c **Presets**: Apple Developer (€99 yearly), Google Play (€23 once, $25), Domain thirstr.fun (€30 yearly, GoDaddy estimate) are added once per database by the daily job (setting `presets_seeded`), start month = the day they are added, note "Preset … edit to your invoice". Editing, ending or deleting them is never undone by the job.
+- R-AD.18d A typed-in item whose vendor equals an automatic vendor (`Amazon SES`, `Tigris`) replaces the automatic estimate for that month (the invoice wins; no double counting).
+- R-AD.18e Automatic vendors show an "auto" source pill and their measure ("1 234 emails", "3.2 GB stored") next to the name.
+- AC-AD.9 Given metering on and 21 000 SES recipients by day 21 of 30 (FX 1.0), SES shows $2.10 so far and $3.00 projected; a typed-in "Tigris" item hides the measured Tigris row; presets appear once and a deleted preset is not re-added.
+
 ### Page A-11 (`/admin/costs`)
 1. **Header**: previous/next month (last 12, R-AD.17c), total this month (projected month-end, month to date in smaller text), budget bar (green < 80 %, amber 80–100 %, red > 100 %).
 2. **KPI row**: Total (EUR), MAU, cost per MAU, DAU/MAU.
-3. **By vendor** table: vendor, source (Fly API / manual / yearly ÷ 12 / one-off), this month, last month, change. Fly row expands to per-app rates (thirstr-api-prod, thirstr-db-prod, …).
+3. **By vendor** table: vendor, source (Fly API / auto / manual / yearly ÷ 12 / one-off), this month, last month, change. Fly row expands to per-app rates (thirstr-api-prod, thirstr-db-prod, …).
 4. **6-month history**: stacked bars per vendor + cost-per-MAU line.
 5. **Cost items**: list of manual items (vendor, amount, cadence, from–to) with Edit / End; form to add (vendor, label, amount EUR, cadence, start month, note).
 6. **Capacity forecast** (below).

@@ -202,6 +202,9 @@ if config_env() == :prod do
         access_key: System.fetch_env!("SES_ACCESS_KEY_ID"),
         secret: System.fetch_env!("SES_SECRET_ACCESS_KEY")
 
+      # R-AD.18 (#326): cost page counts SES recipients as they are sent
+      config :thirstr, :meter_ses, true
+
     smtp = System.get_env("SMTP_HOST") ->
       config :thirstr, Thirstr.Mailer,
         adapter: Swoosh.Adapters.SMTP,

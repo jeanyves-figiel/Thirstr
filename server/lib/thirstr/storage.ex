@@ -82,6 +82,24 @@ defmodule Thirstr.Storage do
     end
   end
 
+  @doc "Total bytes in the bucket (cost page, R-AD.18). Lists keys only, never reads objects."
+  def bucket_bytes, do: adapter().bucket_bytes()
+
+  def s3_bucket_bytes do
+    bytes =
+      ExAws.S3.list_objects_v2(bucket(), max_keys: 1000)
+      |> ExAws.stream!()
+      |> Enum.reduce(0, fn o, acc -> acc + to_int(o[:size]) end)
+
+    {:ok, bytes}
+  rescue
+    e -> {:error, e}
+  end
+
+  defp to_int(n) when is_integer(n), do: n
+  defp to_int(s) when is_binary(s), do: String.to_integer(s)
+  defp to_int(_), do: 0
+
   def delete_many([]), do: :ok
   def delete_many(keys), do: adapter().delete_many(keys)
 
@@ -113,6 +131,7 @@ defmodule Thirstr.Storage.S3 do
   def get(key), do: Thirstr.Storage.s3_get(key)
   def put(key, body, ct), do: Thirstr.Storage.s3_put(key, body, ct)
   def delete_many(keys), do: Thirstr.Storage.s3_delete_many(keys)
+  def bucket_bytes, do: Thirstr.Storage.s3_bucket_bytes()
 end
 
 defmodule Thirstr.Storage.Fake do
@@ -136,4 +155,5 @@ defmodule Thirstr.Storage.Fake do
   end
 
   def delete_many(_keys), do: :ok
+  def bucket_bytes, do: {:ok, Application.get_env(:thirstr, :fake_bucket_bytes, 2_500_000_000)}
 end

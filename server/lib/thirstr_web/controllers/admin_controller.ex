@@ -196,6 +196,11 @@ defmodule ThirstrWeb.AdminController do
       else: "#{div(left, 60)} min left"
   end
 
+  defp sla_left(sev, at) do
+    limit = if(sev <= 2, do: 3600, else: if(sev == 3, do: 12 * 3600, else: 48 * 3600))
+    limit - DateTime.diff(DateTime.utc_now(), at)
+  end
+
   # ------------------------------------------------------------------ A-02 report detail
 
   def report(conn, %{"id" => id}) do
@@ -231,21 +236,32 @@ defmodule ThirstrWeb.AdminController do
       audit(conn.assigns.admin, "view_report", rid, nil)
       conn = ThirstrWeb.ModController.track(conn, ThirstrWeb.ModController.report_tier(sev))
 
+      tier = ThirstrWeb.ModController.report_tier(sev)
+      left = sla_left(sev, at)
+
       msgs =
         Enum.map_join((franked || %{})["messages"] || [], "", fn m ->
-          ~s(<li><span class="muted">#{e(m["t"])} · #{fmt_ms(m["at"])}</span> #{e(m["text"] || "(media)")}</li>)
+          ~s(<div class="bub"><span>#{e(m["text"] || "(media)")}</span><small>#{e(m["t"])} · #{fmt_ms(m["at"])}</small></div>)
         end)
 
+      sla_txt =
+        cond do
+          state != "open" -> e(state)
+          left < 0 -> ~s(<span class="danger"><b>#{div(-left, 60)} min past target</b></span>)
+          true -> "#{div(left, 60)} min left"
+        end
+
       page(conn, "Report", """
-      #{nav()}
-      <h1>A-02 Report</h1>
-      <p><b>#{e(reason)}</b> · #{e(ctx)} · #{e(state)} · #{DateTime.to_iso8601(at)}</p>
-      #{if note, do: "<p>Reporter note: #{e(note)}</p>", else: ""}
+      #{ThirstrWeb.AdminUI.head(e(String.capitalize(String.replace(reason || "report", "_", " "))), "Report · tier #{tier} · #{e(ctx)} · #{sla_txt} · #{Calendar.strftime(at, "%d %b %H:%M")} UTC", ~s(<a class="btn ghost" href="/admin">‹ Queue</a>))}
+      <div class="split"><div class="col">
       #{if illegal, do: ~s{<div class="banner"><b>Illegal content notice</b> (DSA Art. 16) · #{e(ltype)} · #{e(cc || "—")} · via #{e(chan)}<br>#{e(expl || "")}</div>}, else: ""}
-      <h2>Attached messages (franking verified)</h2>
-      #{if msgs == "", do: ~s(<p class="muted">None.</p>), else: "<ul>#{msgs}</ul>"}
+      #{if note, do: ~s(<div class="card"><h2>Reporter note</h2><p>#{e(note)}</p></div>), else: ""}
+      <div class="card"><h2>Messages the reporter attached <span class="r">franking verified</span></h2>
+      #{if msgs == "", do: ~s(<p class="muted">None attached.</p>), else: ~s(<div class="msgs">#{msgs}</div>)}</div>
       #{profile_snapshot(pid, aid)}
+      </div>
       #{action_form("/admin/reports/#{rid}/action", pid)}
+      </div>
       """)
     else
       _ -> send_resp(conn, 404, "")
@@ -316,7 +332,7 @@ defmodule ThirstrWeb.AdminController do
         redirect(conn, to: "/admin")
 
       _ ->
-        page(conn, "Error", "#{nav()}<p class=\"danger\">Action failed (photo missing?).</p>")
+        page(conn, "Error", "<p class=\"danger\">Action failed (photo missing?).</p>")
     end
   end
 
@@ -348,13 +364,14 @@ defmodule ThirstrWeb.AdminController do
       |> Enum.map_join(", ", fn [a, n] -> "#{a} × #{n}" end)
 
     """
-    <h2>Public profile</h2>
-    <p><b>#{e(name)}</b>, #{age} · #{e(kind)} · #{if vat, do: "verified", else: "unverified"} ·
-      account #{DateTime.diff(DateTime.utc_now(), ins, :day)} d · status #{e(status)} ·
-      vouches #{Thirstr.Trust.vouch_count(pid)}</p>
-    #{if bio, do: "<p>#{e(bio)}</p>", else: ""}
-    <div class="photos">#{Enum.map_join(photos, "", &photo_tile/1)}</div>
-    <p class="muted">Prior actions: #{if prior == "", do: "none", else: e(prior)}</p>
+    <div class="card"><h2>Public profile <span class="r">as members see it</span></h2>
+    <dl class="kv"><dt>Name</dt><dd>#{e(name)}, #{age} · #{e(kind)}</dd>
+    <dt>Account</dt><dd>#{DateTime.diff(DateTime.utc_now(), ins, :day)} d · #{if vat, do: "verified", else: "unverified"} · #{e(status)}</dd>
+    <dt>Trust</dt><dd>#{Thirstr.Trust.vouch_count(pid)} vouches</dd>
+    <dt>Earlier</dt><dd>#{if prior == "", do: "no actions", else: e(prior)}</dd></dl>
+    #{if bio, do: ~s(<p class="muted">#{e(bio)}</p>), else: ""}</div>
+    <div class="card"><h2>Photos <span class="r">blurred and grey by default · reveal is logged</span></h2>
+    <div class="photos">#{Enum.map_join(photos, "", &photo_tile/1)}</div></div>
     """
   end
 
@@ -368,21 +385,40 @@ defmodule ThirstrWeb.AdminController do
     ~s{<div class="ph"><label><input type="radio" name="photo_id" form="act" value="#{ph.id}"> pick</label><div class="img blur" data-id="#{ph.id}"><img alt="" src="#{e(Storage.presigned_get(key))}"></div><div class="tools"><button type="button" data-t="peek">Hold to peek</button><button type="button" data-t="reveal" aria-pressed="false">Reveal</button><button type="button" data-t="gray" aria-pressed="true">Grayscale</button></div><span class="muted">slot #{ph.slot} · #{e(ph.status)}#{hash}</span></div>}
   end
 
+  @action_labels %{
+    "dismiss" => "Dismiss",
+    "warn" => "Warn",
+    "remove_photo" => "Remove photo",
+    "suspend" => "Suspend",
+    "ban" => "Ban",
+    "release" => "Release"
+  }
+
   defp action_form(path, _pid) do
+    acts =
+      Enum.map_join(@actions, "", fn a ->
+        ~s(<label class="opt#{if a == "ban", do: " dan", else: ""}"><input type="radio" name="action" value="#{a}"#{if a == "dismiss", do: " checked", else: ""}>#{@action_labels[a]}</label>)
+      end)
+
+    reasons =
+      Enum.map_join(
+        @reason_codes,
+        "",
+        &~s(<option value="#{&1}">#{String.replace(&1, "_", " ")}</option>)
+      )
+
     """
-    <h2>Decision</h2>
-    <form id="act" method="post" action="#{path}">
+    <form id="act" class="card decide" method="post" action="#{path}"><h2>Decision</h2>
       <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
-      <select name="action">#{Enum.map_join(@actions, "", &"<option>#{&1}</option>")}</select>
-      <select name="reason">#{Enum.map_join(@reason_codes, "", &"<option>#{&1}</option>")}</select>
-      <label>days <input name="days" type="number" min="1" max="30" value="3" style="width:4em"></label>
-      <p><label>Facts, shown to them (required for any action, 300 max)<br>
-        <textarea name="facts" maxlength="300" rows="2" style="width:100%;font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px"></textarea></label></p>
-      <p><select name="ground"><option value="tos">Breaks our rules</option><option value="law">Illegal</option></select>
-        <input name="law_ref" placeholder="Law and country, if illegal" maxlength="200"></p>
-      <p><label><input type="checkbox" name="unfounded" value="yes"> Dismiss: manifestly unfounded (counts toward report misuse, R-15.34)</label></p>
-      <button>Apply</button>
-      <p class="muted">remove_photo: pick a photo above. Every action sends the user a notice with appeal (R-AD.9).</p>
+      <div class="acts">#{acts}</div>
+      <label class="f">Reason code<select name="reason">#{reasons}</select></label>
+      <label class="f">Suspension days<input name="days" type="number" min="1" max="30" value="3"></label>
+      <label class="f">Facts, sent to the member (required for any action, 300 max)<textarea name="facts" maxlength="300" rows="3"></textarea></label>
+      <label class="f">Ground<select name="ground"><option value="tos">Breaks our rules</option><option value="law">Illegal</option></select></label>
+      <input name="law_ref" placeholder="Law and country, if illegal" maxlength="200">
+      <label class="chk"><input type="checkbox" name="unfounded" value="yes"> Dismiss as manifestly unfounded (counts toward report misuse, R-15.34)</label>
+      <button class="pri">Apply decision</button>
+      <span class="muted sm">Remove photo: pick a photo on the left. Every action sends the member a statement of reasons with appeal (R-AD.9); the reporter gets the outcome.</span>
     </form>
     """
   end
@@ -431,7 +467,7 @@ defmodule ThirstrWeb.AdminController do
       end)
 
     page(conn, "Photos", """
-    #{nav()}<h1>A-03 Photo review</h1>
+    <h1>Photo review</h1>
     #{if list == "", do: ~s(<p class="muted">Nothing queued.</p>), else: list}
     <h2>Moments (borderline, hidden until decided or expired)</h2>
     #{if moments == "", do: ~s(<p class="muted">Nothing queued.</p>), else: moments}
@@ -491,7 +527,7 @@ defmodule ThirstrWeb.AdminController do
       end)
 
     page(conn, "Linked accounts", """
-    #{nav()}<h1>A-03b Linked accounts: check by hand</h1>
+    <h1>Linked accounts: check by hand</h1>
     #{if list == "", do: ~s(<p class="muted">Nothing waiting.</p>), else: list}
     """)
   end
@@ -538,7 +574,7 @@ defmodule ThirstrWeb.AdminController do
       end)
 
     page(conn, "Quarantine", """
-    #{nav()}<h1>A-04 Quarantine &amp; suspensions</h1>
+    <h1>Quarantine &amp; suspensions</h1>
     <table><tr><th>Profile</th><th>Status</th><th>Signals</th><th></th></tr>#{list}</table>
     """)
   end
@@ -572,7 +608,7 @@ defmodule ThirstrWeb.AdminController do
       end)
 
     page(conn, "Audit", """
-    #{nav()}<h1>A-10 Audit log</h1>
+    <h1>Audit log</h1>
     <table><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Reason</th></tr>#{list}</table>
     """)
   end
@@ -631,7 +667,7 @@ defmodule ThirstrWeb.AdminController do
       end)
 
     page(conn, "Places", """
-    #{nav()}<h1>A-07b Places</h1>
+    <h1>Places</h1>
     <h2>Catalogue</h2><table><tr><th>Source</th><th>Kind</th><th>Venues</th><th>Hidden</th></tr>#{count_rows}</table>
     <h2>Added by members</h2>
     <p class="muted">Live as soon as they are added, no review before (F-12 R-12.11). Hide it if it is wrong, delete it if it is a home or private address. The creator is never shown in the app.</p>
@@ -674,7 +710,7 @@ defmodule ThirstrWeb.AdminController do
         page(
           conn,
           "Places",
-          "#{nav()}<p class=\"danger\">Check title (1–60), times (end after start, max 24 h) and link (https).</p><a href=\"/admin/places\">Back</a>"
+          "<p class=\"danger\">Check title (1–60), times (end after start, max 24 h) and link (https).</p><a href=\"/admin/places\">Back</a>"
         )
     end
   end
@@ -708,7 +744,7 @@ defmodule ThirstrWeb.AdminController do
     head = Enum.map_join(labels, "", &"<th>#{e(&1)}</th>")
 
     page(conn, "Delivery", """
-    #{nav()}<h1>Chat delivery latency</h1>
+    <h1>Chat delivery latency</h1>
     <p>Server stored → recipient device acked, per message, aggregated per day (R-07.24). Target p95 ≤ 500 ms online (AC-07.2); offline recipients land in the slow buckets by design.</p>
     <table><tr><th>Day</th><th>Messages</th>#{head}<th>p95 ≤</th></tr>#{rows}</table>
     """)
@@ -761,74 +797,9 @@ defmodule ThirstrWeb.AdminController do
 
   defp fmt_ms(_), do: ""
 
-  @doc false
-  def nav do
-    """
-    <nav><a href="/admin">Queue</a><a href="/admin/cases">Hash hits &amp; cases</a><a href="/admin/photos">Photos</a><a href="/admin/linked">Linked</a><a href="/admin/quarantine">Quarantine</a><a href="/admin/delivery">Delivery</a><a href="/admin/places">Places</a><a href="/admin/costs">Costs</a>
-    <a href="/admin/appeals">Appeals</a><a href="/admin/support">Support</a><a href="/admin/me">My day</a><a href="/admin/audit">Audit</a>
-    <form method="post" action="/admin/logout" style="display:inline"><input type="hidden" name="_csrf_token" value="#{get_csrf_token()}"><button>Sign out</button></form></nav>
-    """
-  end
+  @doc "Console v3 shell (R-AD.17): see `ThirstrWeb.AdminUI`."
+  def page(conn, title, body), do: ThirstrWeb.AdminUI.page(conn, title, body)
 
-  # All dynamic values are escaped with e/1 before they reach `body`.
-  # sobelow_skip ["XSS.SendResp"]
-  @doc false
-  def page(conn, title, body) do
-    conn
-    |> put_resp_content_type("text/html")
-    |> put_resp_header("cache-control", "no-store")
-    |> put_resp_header("x-frame-options", "DENY")
-    |> put_resp_header("referrer-policy", "no-referrer")
-    |> send_resp(conn.status || 200, """
-    <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="robots" content="noindex"><title>#{e(title)} · Thirstr console</title>
-    <style>
-    body{font:15px/1.5 system-ui,sans-serif;background:#151229;color:#f3f0ff;margin:0;padding:16px;max-width:1100px}
-    a{color:#ff7a59}h1{font-size:24px}h2{font-size:17px;margin-top:24px}.muted{color:#9a93c0}.danger{color:#ff5470}
-    nav{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-    table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #2c2650;padding:6px;text-align:left;vertical-align:top}
-    button,select,input{font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px;padding:4px 10px}
-    .photos{display:flex;gap:8px;flex-wrap:wrap}.ph{display:inline-flex;flex-direction:column;gap:4px}
-    .img{width:180px;height:240px;border-radius:10px;overflow:hidden;background:#0c0a1c}
-    .img img{width:100%;height:100%;object-fit:cover;filter:grayscale(1)}
-    .img.blur img{filter:blur(24px) grayscale(1)}.img.color img{filter:none}.img.blur.color img{filter:blur(24px)}
-    .tools{display:flex;gap:4px;flex-wrap:wrap}.tools button{font-size:12px;padding:3px 8px}
-    button[aria-pressed="true"]{border-color:#2ee6c5;color:#2ee6c5}
-    .card{background:#1f1a3d;border-radius:12px;padding:12px;margin:8px 0}
-    .sev{display:inline-block;width:4px;height:18px;border-radius:2px;vertical-align:middle;margin-right:6px}
-    .chip{font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid #463e7a;color:#9a93c0;white-space:nowrap}
-    tr.sel td{background:#2a2350}.banner{background:#3a1022;border:1px solid #ff2e63;border-radius:12px;padding:10px 14px}
-    .warn{background:#3a2a10;border:1px solid #ffb547;border-radius:12px;padding:10px 14px}
-    </style></head><body>#{body}
-    <script>
-    // F-15 R-15.52: reviewer tools. Reveal is written to the audit log.
-    const toolsCsrf = #{Jason.encode!(get_csrf_token())};
-    document.querySelectorAll('.ph').forEach(ph => {
-      const im = ph.querySelector('.img'); if (!im) return;
-      const rev = ph.querySelector('[data-t=reveal]');
-      let to;
-      const off = () => { if (rev.getAttribute('aria-pressed') !== 'true') im.classList.add('blur'); };
-      const peek = ph.querySelector('[data-t=peek]');
-      peek.addEventListener('pointerdown', () => { im.classList.remove('blur'); clearTimeout(to); to = setTimeout(off, 3000); });
-      ['pointerup', 'pointerleave'].forEach(ev => peek.addEventListener(ev, off));
-      rev.addEventListener('click', () => {
-        const on = rev.getAttribute('aria-pressed') !== 'true';
-        rev.setAttribute('aria-pressed', on); im.classList.toggle('blur', !on);
-        if (on) fetch('/admin/reveal', {method: 'POST', headers: {'content-type': 'application/json', 'x-csrf-token': toolsCsrf}, body: JSON.stringify({id: im.dataset.id})});
-      });
-      const g = ph.querySelector('[data-t=gray]');
-      g.addEventListener('click', () => { const on = g.getAttribute('aria-pressed') !== 'true'; g.setAttribute('aria-pressed', on); im.classList.toggle('color', !on); });
-    });
-    // A-01 keyboard: j/k move, Enter opens.
-    const rows = [...document.querySelectorAll('tr[data-href]')]; let i = 0;
-    const sel = () => rows.forEach((r, n) => r.classList.toggle('sel', n === i));
-    if (rows.length) { sel(); document.addEventListener('keydown', ev => {
-      if (ev.target.matches('input,textarea,select')) return;
-      if (ev.key === 'j') { i = Math.min(i + 1, rows.length - 1); sel(); }
-      if (ev.key === 'k') { i = Math.max(i - 1, 0); sel(); }
-      if (ev.key === 'Enter') location.href = rows[i].dataset.href;
-    }); }
-    </script></body></html>
-    """)
-  end
+  @doc "Console fonts, same-origin (R-AD.17)."
+  def font(conn, params), do: ThirstrWeb.AdminUI.font(conn, params)
 end

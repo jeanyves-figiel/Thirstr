@@ -6,8 +6,9 @@ defmodule ThirstrWeb.ModController do
   email, device ids or IPs (R-AD.6).
   """
   use ThirstrWeb, :controller
-  import ThirstrWeb.AdminController, only: [audit: 4, e: 1, nav: 0, page: 3, q: 2]
+  import ThirstrWeb.AdminController, only: [audit: 4, e: 1, page: 3, q: 2]
   alias Thirstr.{Moderation, Nearby, Repo, Storage}
+  alias ThirstrWeb.AdminUI
   alias Thirstr.Profiles.Photo
 
   # R-15.51 tiers: 0 CSAM · 1 minor/violence/non-consensual · 2 scam · 3 harassment/hate ·
@@ -22,6 +23,20 @@ defmodule ThirstrWeb.ModController do
     5 => "Other"
   }
   @types ~w(report photo case appeal quarantine)
+  @type_names %{
+    "report" => "Reports",
+    "photo" => "Photos",
+    "case" => "Cases",
+    "appeal" => "Appeals",
+    "quarantine" => "Quarantine"
+  }
+  @type_glyph %{
+    "report" => "R",
+    "photo" => "P",
+    "case" => "0",
+    "appeal" => "A",
+    "quarantine" => "Q"
+  }
   @authorities ~w(ncmec fedpol hotline art18_police europol)
   @break_s 2 * 3600
   @limit_s 4 * 3600
@@ -32,43 +47,108 @@ defmodule ThirstrWeb.ModController do
     conn = track(conn, nil)
     audit(conn.assigns.admin, "view_queue", nil, nil)
     type = if params["type"] in @types, do: params["type"]
+
+    tier =
+      with t when is_binary(t) <- params["tier"],
+           {n, ""} when n in 0..5 <- Integer.parse(t),
+           do: n,
+           else: (_ -> nil)
+
     items = items() |> Enum.sort_by(&{&1.tier, &1.due})
-    shown = if type, do: Enum.filter(items, &(&1.type == type)), else: items
 
-    tiers =
-      Enum.map_join(0..5, "", fn t ->
-        n = Enum.count(items, &(&1.tier == t))
+    shown =
+      Enum.filter(items, &((type == nil or &1.type == type) and (tier == nil or &1.tier == tier)))
 
-        ~s(<span class="chip"><i class="sev" style="background:#{tier_color(t)}"></i>#{t} #{@tier_names[t]} <b>#{n}</b></span> )
-      end)
+    now = DateTime.utc_now()
 
-    filters =
-      Enum.map_join([nil | @types], " ", fn t ->
-        n = if t, do: Enum.count(items, &(&1.type == t)), else: length(items)
-        label = if t, do: t, else: "all"
-        href = if t, do: "/admin?type=#{t}", else: "/admin"
-        style = if t == type, do: ~s( style="color:#f3f0ff;border-color:#f3f0ff"), else: ""
-        ~s(<a class="chip" href="#{href}"#{style}>#{label} #{n}</a>)
-      end)
+    tiles = Enum.map_join(0..5, "", &tier_tile(&1, items, tier, now))
+    seg = Enum.map_join([nil | @types], "", &type_link(&1, items, type))
 
-    rows =
-      Enum.map_join(shown, "", fn i ->
-        """
-        <tr data-href="#{i.href}"><td><i class="sev" style="background:#{tier_color(i.tier)}"></i>#{i.tier}</td>
-        <td>#{e(i.type)}</td><td><a href="#{i.href}">#{e(i.name || "—")}</a></td><td>#{i.why}</td>
-        <td>#{i.open}</td><td>#{due(i.due)}</td></tr>
-        """
-      end)
+    list =
+      if shown == [],
+        do: queue_empty(items),
+        else: Enum.map_join(shown, "", &item_row(&1, now))
+
+    sub = queue_sub(items, now)
+
+    top = List.first(shown)
+
+    actions =
+      ~s(<a class="btn" href="/admin/pause">Take a break</a>) <>
+        if(top,
+          do: ~s(<a class="btn pri" href="#{top.href}">Start with the top item</a>),
+          else: ""
+        )
 
     page(conn, "Queue", """
-    #{nav()}
-    <h1>A-01 Queue</h1>
+    #{AdminUI.head("Queue", sub, actions)}
     #{wellbeing_banner(conn.assigns.admin)}
-    <p>#{tiers}</p>
-    <p>#{filters} <span class="muted">j / k move · Enter opens</span></p>
-    <table><tr><th>Tier</th><th>Type</th><th>Profile</th><th>Why</th><th>Open on account</th><th>SLA</th></tr>#{rows}</table>
-    #{if shown == [], do: ~s(<p class="muted">Queue empty.</p>), else: ""}
+    <div class="tiers">#{tiles}</div>
+    <div class="bar"><div class="seg">#{seg}</div><span class="hint"><span class="kbd">J</span><span class="kbd">K</span> move <span class="kbd">↵</span> open <span class="kbd">B</span> break</span></div>
+    <div class="list" role="list">#{list}</div>
     """)
+  end
+
+  defp tier_tile(t, items, tier, now) do
+    in_t = Enum.filter(items, &(&1.tier == t))
+    n = length(in_t)
+    over = Enum.count(in_t, &(DateTime.compare(&1.due, now) == :lt))
+
+    s =
+      cond do
+        over > 0 -> ~s(<span class="s over">#{over} past target</span>)
+        n > 0 -> ~s(<span class="s">next in #{fmt_s(DateTime.diff(hd(in_t).due, now))}</span>)
+        true -> ~s(<span class="s">target #{fmt_s(sla_s(t))}</span>)
+      end
+
+    cls = Enum.join(Enum.reject(["tier", n == 0 && "zero", t == tier && "on"], &(!&1)), " ")
+    href = if t == tier, do: "/admin", else: "/admin?tier=#{t}"
+
+    ~s|<a class="#{cls}" style="--c:var(--t#{t})" href="#{href}"><span class="k">#{t} · #{@tier_names[t]}</span><span class="v">#{n}</span>#{s}</a>|
+  end
+
+  defp type_link(t, items, type) do
+    n = if t, do: Enum.count(items, &(&1.type == t)), else: length(items)
+    label = if t, do: @type_names[t], else: "All"
+    href = if t, do: "/admin?type=#{t}", else: "/admin"
+    ~s(<a#{if t == type, do: ~s( class="on"), else: ""} href="#{href}">#{label}<i>#{n}</i></a>)
+  end
+
+  defp queue_empty([]),
+    do: AdminUI.empty("All clear", ~s(Nothing waiting. <a href="/admin/me">My day</a>))
+
+  defp queue_empty(_),
+    do: AdminUI.empty("Nothing in this filter", ~s(<a href="/admin">Show everything</a>))
+
+  defp queue_sub([], _), do: "Nothing open"
+
+  defp queue_sub(items, now) do
+    late = Enum.count(items, &(DateTime.compare(&1.due, now) == :lt))
+    oldest = items |> Enum.map(& &1.at) |> Enum.min(DateTime)
+
+    "#{length(items)} open · oldest #{fmt_s(DateTime.diff(now, oldest))}" <>
+      if late > 0, do: ~s( · <span class="danger"><b>#{late} past target</b></span>), else: ""
+  end
+
+  defp item_row(i, now) do
+    left = DateTime.diff(i.due, now)
+    total = max(DateTime.diff(i.due, i.at), 1)
+    used = min(100, max(0, round((total - left) / total * 100)))
+
+    {cls, txt, c} =
+      cond do
+        left < 0 -> {"over", "−" <> fmt_s(-left), "var(--danger)"}
+        left < total / 4 -> {"soon", fmt_s(left), "var(--sun)"}
+        true -> {"", fmt_s(left), "var(--teal)"}
+      end
+
+    more = if i.open > 1, do: ~s(<span class="chip y">#{i.open} open on account</span>), else: ""
+
+    """
+    <a class="item" role="listitem" style="--c:var(--t#{i.tier})" href="#{i.href}" data-href="#{i.href}"><span class="stripe"></span><span class="thumb t-#{i.type}" aria-hidden="true">#{@type_glyph[i.type]}</span>
+    <span class="what"><span class="t">#{@type_names[i.type] |> String.trim_trailing("s")} · #{e(i.name || "—")} <span class="chip#{if i.tier <= 1, do: " r", else: ""}">tier #{i.tier}</span></span><span class="d">#{i.why}</span>#{if more != "", do: ~s(<span class="m">#{more}</span>), else: ""}</span>
+    <span class="sla"><b class="#{cls}">#{txt}</b><span class="meter" style="--c:#{c}"><i style="width:#{used}%"></i></span></span></a>
+    """
   end
 
   @doc "Every open item, one shape: tier, type, name, why (HTML, escaped), open count, due, href."
@@ -97,6 +177,7 @@ defmodule ThirstrWeb.ModController do
           why: "#{e(src)} · #{e(prov || "")} " <> chip("auto-hidden"),
           open: Map.get(open_by_account, aid, 0) + 1,
           due: DateTime.add(at, 3600, :second),
+          at: at,
           href: "/admin/cases/#{id}"
         }
       end)
@@ -121,6 +202,7 @@ defmodule ThirstrWeb.ModController do
           why: "#{e(reason)} · #{e(ctx)}#{if fr, do: " · 🔏", else: ""}",
           open: Map.get(open_by_account, aid, 1),
           due: DateTime.add(at, sla_s(tier), :second),
+          at: at,
           href: "/admin/reports/#{id}"
         }
       end)
@@ -149,6 +231,7 @@ defmodule ThirstrWeb.ModController do
             ),
           open: 1,
           due: DateTime.add(at, 12 * 3600, :second),
+          at: at,
           href: "/admin/photos"
         }
       end)
@@ -175,6 +258,7 @@ defmodule ThirstrWeb.ModController do
           why: "#{e(act)} (#{e(reason)}) " <> chip("appeal"),
           open: 1,
           due: DateTime.add(at, 72 * 3600, :second),
+          at: at,
           href: "/admin/appeals"
         }
       end)
@@ -197,6 +281,7 @@ defmodule ThirstrWeb.ModController do
           why: "shadow quarantine · #{e(why || "")}",
           open: 1,
           due: DateTime.add(at, 24 * 3600, :second),
+          at: at,
           href: "/admin/quarantine"
         }
       end)
@@ -218,6 +303,7 @@ defmodule ThirstrWeb.ModController do
           why: "notifier review (#{e(reason)}) " <> chip("appeal"),
           open: 1,
           due: DateTime.add(at || DateTime.utc_now(), 72 * 3600, :second),
+          at: at || DateTime.utc_now(),
           href: "/admin/appeals"
         }
       end)
@@ -244,13 +330,6 @@ defmodule ThirstrWeb.ModController do
 
   defp chip(t), do: ~s(<span class="chip">#{e(t)}</span>)
 
-  defp tier_color(0), do: "#ff2e63"
-  defp tier_color(1), do: "#ff5470"
-  defp tier_color(2), do: "#ffb547"
-  defp tier_color(3), do: "#a78bfa"
-  defp tier_color(4), do: "#6e8bff"
-  defp tier_color(_), do: "#7a7399"
-
   # ------------------------------------------------------------------ A-12 cases
 
   def cases(conn, _) do
@@ -275,7 +354,7 @@ defmodule ThirstrWeb.ModController do
       end)
 
     page(conn, "Cases", """
-    #{nav()}<h1>A-12 Hash hits &amp; CSAM cases</h1>
+    <h1>Hash hits &amp; CSAM cases</h1>
     <p class="muted">Provider: #{e(Thirstr.Moderation.HashMatch.provider_name())}. PhotoDNA calls this month: #{month_calls()}.</p>
     <table><tr><th>Case</th><th>State</th><th>Source</th><th>Profile</th><th>Opened</th><th>Filings</th></tr>#{rows}</table>
     """)
@@ -365,7 +444,7 @@ defmodule ThirstrWeb.ModController do
           ~s(<p>Decided <b>#{e(c.state)}</b> by #{e(short_ref(c.by))} · #{c.decided_at && DateTime.to_iso8601(c.decided_at)}</p>)
 
     """
-    #{nav()}<h1>A-12 Case #{short_ref(c.id)}</h1>
+    <h1>Case #{short_ref(c.id)}</h1>
     #{if c.state == "open", do: ~s(<p class="banner"><b>Known-image match.</b> Never published. Account quarantined; the uploader only saw "This photo can't be used".</p>), else: ""}
     <div style="display:flex;gap:16px;flex-wrap:wrap">
       <div class="card" style="flex:0 0 auto;max-width:280px">#{image}</div>
@@ -687,7 +766,7 @@ defmodule ThirstrWeb.ModController do
       end)
 
     page(conn, "Appeals", """
-    #{nav()}<h1>A-05 Appeals</h1>
+    <h1>Appeals</h1>
     <p class="muted">Reverse restores the account at once. Their notice shows your reason and "Reviewed again by a person".</p>
     #{if list == "", do: ~s(<p class="muted">No open appeals.</p>), else: list}
     <h2>Reviews asked by people who reported (R-15.32)</h2>
@@ -812,7 +891,7 @@ defmodule ThirstrWeb.ModController do
       )
 
     page(conn, "My day", """
-    #{nav()}<h1>A-14 My moderation day</h1>
+    <h1>My moderation day</h1>
     #{wellbeing_banner(me)}
     <table><tr><th>Decisions today</th><td>#{items}</td></tr>
     <tr><th>Time on tiers 0–1</th><td>#{fmt_s(severe)} of #{div(@limit_s, 3600)} h</td></tr>

@@ -59,6 +59,14 @@ Console sign-in is passkey only (R-AD.12). An owner who signed up with Apple, Go
 - R-AD.16d The same passkey also signs in to the app on that host (it is an ordinary account passkey). iCloud Keychain or Google Password Manager syncs it to the owner's other devices; a hardware security key works too. Enrol staging and prod separately (different RP ids).
 - AC-AD.8 Given an admin id, when the owner opens a fresh link and creates a passkey, then they land on `/admin` signed in, and the link no longer works. Given an id not in `ADMIN_ACCOUNT_IDS`, `link/1` returns `{:error, :not_admin}`.
 
+### Console layout v3 (R-AD.17, mockup approved 2026-11-22)
+Mockup: `console-v3.html` (project files, moderation-console). One shell for every signed-in page; pages before sign-in (login, enrolment) are a centred card.
+- R-AD.17 **Left rail**, grouped: Moderation (Queue, Hash hits & cases, Photo review, Linked accounts, Quarantine, Appeals) · Members (Support inbox) · Platform (Costs & capacity, Message delivery, Places) · You (My day, Audit log). Live counts in one SQL round trip per page; Queue and Cases counts turn red when an item is past its target time (R-AD.8); a count query failure hides counts only. Environment badge from `DEPLOY_ENV`: STAGING amber, PROD red, otherwise DEV. Session corner: name, time left on the 8 h session, Sign out. Under 860 px the rail becomes a sticky, horizontally scrolling tab strip.
+- R-AD.17a **Queue** (A-01): header (open count, oldest, past target, "Take a break", "Start with the top item"); six tier tiles (count, next deadline or "N past target"; a tile filters by tier, `?tier=`); type filter (`?type=`); work list rows: tier stripe, type glyph (never a photo), "Type · name · tier", why, "N open on account", time left with a meter (red past target, amber in the last quarter). Keys J/K move, Enter opens, B takes a break. Empty: "All clear" with a link to My day.
+- R-AD.17b **Report detail** (A-02): title = reason, line with tier, context, time to target and opened time; evidence on the left (illegal-content banner, reporter note, attached franked messages as bubbles, public profile facts, photos with the R-15.52 tools); decision panel on the right (sticky; under 1100 px below): action buttons, reason code, days, facts, ground, law ref, unfounded tick, "Apply decision".
+- R-AD.17c **Costs** (A-11): header with month and data sources, previous/next month buttons (last 12 months, no script), "+ Cost item"; when anything is missing, numbered setup steps (Fly token with the exact commands, cost items, budget) in one note (amber when the page has no data); budget bar (spent, projected, alert mark at 80 %); four KPIs; vendors as bars with change vs last month and Fly apps underneath; 6-month chart (empty state when no month has costs); capacity forecast; cost items table + add form; Settings collapsed.
+- R-AD.17d Fonts (Bricolage Grotesque, OFL) are served by the API itself at `/admin/assets/:file` so the console CSP stays `'self'`; numbers use the system monospace. Reviewer-tool script loads only on pages with photo tiles, keyboard script only on pages with a work list.
+
 ## Acceptance
 - AC-AD.1 Login without FIDO2 key is impossible (automated).
 - AC-AD.2 Every action in A-02…A-09 creates exactly one audit entry (automated).
@@ -84,7 +92,7 @@ Owner view of what Thirstr costs, per vendor and per monthly active user, with a
 - Failure (network, 401) keeps yesterday's row, logs a warning, shows "last updated <date>".
 
 ### Page A-11 (`/admin/costs`)
-1. **Header**: month selector (last 12), total this month (projected month-end, month to date in smaller text), budget bar (green < 80 %, amber 80–100 %, red > 100 %).
+1. **Header**: previous/next month (last 12, R-AD.17c), total this month (projected month-end, month to date in smaller text), budget bar (green < 80 %, amber 80–100 %, red > 100 %).
 2. **KPI row**: Total (EUR), MAU, cost per MAU, DAU/MAU.
 3. **By vendor** table: vendor, source (Fly API / manual / yearly ÷ 12 / one-off), this month, last month, change. Fly row expands to per-app rates (thirstr-api-prod, thirstr-db-prod, …).
 4. **6-month history**: stacked bars per vendor + cost-per-MAU line.

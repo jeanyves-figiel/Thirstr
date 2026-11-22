@@ -8,7 +8,7 @@ defmodule ThirstrWeb.AdminSupportController do
   account ownership (R-22.20, AC-22.4).
   """
   use ThirstrWeb, :controller
-  import ThirstrWeb.AdminController, only: [page: 3, nav: 0, e: 1, audit: 4]
+  import ThirstrWeb.AdminController, only: [page: 3, e: 1, audit: 4]
   alias Thirstr.{Feedback, Help, Storage, Support}
 
   # R-22.13 targets in hours
@@ -44,7 +44,7 @@ defmodule ThirstrWeb.AdminSupportController do
       end)
 
     page(conn, "Support", """
-    #{nav()}<h1>A-12 Support inbox</h1>
+    <h1>Support inbox</h1>
     <p>#{tabs} · <a href="/admin/support/macros">Saved replies</a> · <a href="/admin/support/feedback">Feedback &amp; help votes</a></p>
     <table><tr><th>Ref</th><th>Topic</th><th>Lang</th><th>Target</th><th>Last</th><th></th></tr>#{rows}</table>
     #{if rows == "", do: ~s(<p class="muted">Nothing here.</p>), else: ""}
@@ -86,7 +86,7 @@ defmodule ThirstrWeb.AdminSupportController do
           end)
 
         page(conn, r.ref, """
-        #{nav()}<h1>#{e(r.ref)} · #{e(r.topic)} · #{e(r.lang)} · #{e(r.status)}</h1>
+        <h1>#{e(r.ref)} · #{e(r.topic)} · #{e(r.lang)} · #{e(r.status)}</h1>
         <p class="muted">#{if r.account_id, do: "Member account", else: "Signed out"}#{if r.reply_email, do: " · email copy on", else: ""} · opened #{e(r.created_at)}</p>
         #{thread}
         <form method="post" action="/admin/support/#{id}/reply" class="card">
@@ -121,7 +121,7 @@ defmodule ThirstrWeb.AdminSupportController do
         redirect(conn, to: "/admin/support/#{id}")
 
       _ ->
-        page(conn, "Error", "#{nav()}<p class=\"danger\">Reply failed (1–4000 characters).</p>")
+        page(conn, "Error", "<p class=\"danger\">Reply failed (1–4000 characters).</p>")
     end
   end
 
@@ -151,7 +151,7 @@ defmodule ThirstrWeb.AdminSupportController do
     langs = Enum.map_join(@langs, "", &~s(<option>#{&1}</option>))
 
     page(conn, "Saved replies", """
-    #{nav()}<h1>Saved replies</h1>
+    <h1>Saved replies</h1>
     <p class="muted">Placeholders: <code>{ref}</code>, <code>{article:lost-phone}</code> (opens the article in the app). Same title in en/fr/de.</p>
     <form method="post" action="/admin/support/macros" class="card">
       <input type="hidden" name="_csrf_token" value="#{get_csrf_token()}">
@@ -211,7 +211,7 @@ defmodule ThirstrWeb.AdminSupportController do
       end)
 
     page(conn, "Feedback", """
-    #{nav()}<h1>Feedback &amp; help</h1>
+    <h1>Feedback &amp; help</h1>
     <h2>Held feedback (not sent to GitHub)</h2>#{if held == "", do: ~s(<p class="muted">None.</p>), else: held}
     <h2>Help votes, last 30 days</h2><table><tr><th>Article</th><th>👍</th><th>👎</th></tr>#{votes}</table>
     <h2>👎 notes (scrubbed, 90 days)</h2><table>#{notes}</table>

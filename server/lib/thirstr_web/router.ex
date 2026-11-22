@@ -109,6 +109,8 @@ defmodule ThirstrWeb.Router do
     get "/login", AdminController, :login_page
     post "/login/options", AdminController, :login_options
     post "/login", AdminController, :login
+    # R-AD.17 console v3: fonts served same-origin (CSP 'self')
+    get "/assets/:file", AdminController, :font
 
     scope "/enrol" do
       pipe_through :enrol_limit

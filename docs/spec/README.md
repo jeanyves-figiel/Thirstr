@@ -52,9 +52,10 @@ Status: draft v0.1 · 2026-11-17 · Source of truth before any code. Product rat
 | F-20 | [Travel plans](features/F20-travel.md) (#188) |
 | F-21 | [Moments: temporary photos](features/F21-moments.md) (#212) |
 | F-22 | [Help & support: help center, contact, account recovery, feedback](features/F22-support.md) (#178) |
+| F-23 | [Thirstr Plus: Free / Plus limits, Plus screen, Views, billing](features/F23-plus.md) (#7) |
 | I-01 | [Social post sharing (X, Bluesky, OnlyFans, JustFor.Fans)](integrations/I01-social-share.md) |
 | I-02 | [GDPR export import & profile share link](integrations/I02-import-share-link.md) |
 | I-03 | [Platform services: push, maps, passkeys, attestation, stores](integrations/I03-platform.md) |
 
 ## Beta scope (v1)
-All F-01…F-20 and I-01…I-03 are beta scope unless a section says **Later**. Later (v2+): video calls, health module beyond fields, Plus billing, open federation protocol, web client.
+All F-01…F-20 and I-01…I-03 are beta scope unless a section says **Later**. F-23 Plus: entitlements and limits in closed beta (everyone is Plus), billing at open beta. Later (v2+): video calls, health module beyond fields, open federation protocol, web client.

@@ -1,3 +1,4 @@
+import { PlusLimit } from '../plus/PlusLimit';
 import { privateStore as AsyncStorage } from '../app/privateStore';
 import { cellToLatLng } from 'h3-js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -91,6 +92,8 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   const peopleTick = People.usePeople();
   const [items, setItems] = useState<Card[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
+  // F-23 R-23.16: the Free list stops at the 200 nearest people; the map is never capped.
+  const [capped, setCapped] = useState(false);
   const [furtherFrom, setFurtherFrom] = useState<number | null>(null);
   const [tray, setTray] = useState<Card[]>([]);
   const [mapData, setMapData] = useState<MapData | null>(null);
@@ -239,6 +242,7 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
           Moments.clearBadges(g.items.map((c) => c.id));
           setItems(g.items);
           setNext(g.next);
+          setCapped(!!g.capped);
           setFurtherFrom(g.further_from);
           setFitM(g.fit_m ?? null);
           setTray(t.items);
@@ -295,6 +299,7 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
     const g = await loadGrid(intents, filters, next, x);
     setItems((cur) => [...(cur ?? []), ...g.items]);
     setNext(g.next);
+    setCapped(!!g.capped);
   }
 
   // R-04.18: open in the card's lens = his first intent among the chips.
@@ -781,7 +786,14 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
                 </View>
               ) : undefined
             }
-            ListFooterComponent={awayList ?? undefined}
+            ListFooterComponent={
+              awayList ??
+              (capped && !next ? (
+                <View style={{ paddingTop: space.s }}>
+                  <PlusLimit testID="plus-limit-nearby" hit={{ limit: 'nearby', free: me.limits?.nearby ?? 200, plus: null, next_at: null }} hideKey="nearby" />
+                </View>
+              ) : undefined)
+            }
             onEndReached={more}
             onEndReachedThreshold={0.5}
             onScrollToIndexFailed={(e) =>

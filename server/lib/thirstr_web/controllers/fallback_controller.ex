@@ -64,6 +64,27 @@ defmodule ThirstrWeb.FallbackController do
   def error(conn, :underage_blocked), do: send_error(conn, 403, "underage", "You need to be 18+")
   def error(conn, :basics_required), do: send_error(conn, 409, "conflict", "Finish Basics first")
 
+  # F-23 R-23.16: a Free limit. Apps that know Plus (X-Thirstr-Plus: 1) get the limit card data;
+  # older builds get the validation shape they already show.
+  def error(conn, {:plus_limit, key, free, plus, next_at, message}) do
+    if get_req_header(conn, "x-thirstr-plus") == ["1"] do
+      conn
+      |> put_status(422)
+      |> json(%{
+        error: %{
+          code: "plus_limit",
+          message: message,
+          limit: key,
+          free: free,
+          plus: plus,
+          next_at: next_at
+        }
+      })
+    else
+      send_error(conn, 422, "validation", "Check the highlighted fields", %{key => [message]})
+    end
+  end
+
   def error(conn, {:validation, fields}),
     do: send_error(conn, 422, "validation", "Check the highlighted fields", fields)
 

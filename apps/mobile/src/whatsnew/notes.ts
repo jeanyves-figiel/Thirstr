@@ -16,6 +16,32 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 12,
+    date: '2026-11-22',
+    lines: [
+      {
+        tone: 'hookup',
+        glyph: 'spark',
+        to: { route: 'PlusSettings' },
+        text: {
+          en: ['Plus is on for you', 'Free for the whole beta. See what’s in it.'],
+          fr: ['Plus est activé', 'Gratuit toute la bêta. Vois ce qu’il y a.'],
+          de: ['Plus ist für dich an', 'Gratis in der ganzen Beta. Sieh rein.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'shield',
+        to: { route: 'PlusSettings' },
+        text: {
+          en: ['Free stays free', 'Messages, filters and safety, for good.'],
+          fr: ['Le gratuit reste gratuit', 'Messages, filtres et sécurité, pour de bon.'],
+          de: ['Gratis bleibt gratis', 'Nachrichten, Filter, Sicherheit: für immer.'],
+        },
+      },
+    ],
+  },
+  {
     id: 11,
     date: '2026-11-22',
     lines: [

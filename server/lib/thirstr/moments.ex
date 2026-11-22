@@ -61,7 +61,7 @@ defmodule Thirstr.Moments do
 
   @doc """
   POST /moments/:id/publish: validates options, classifies (permissive public rules, R-21.24),
-  and goes live with `expires_at = now + ttl`. Limits: 10 live, 20 per 24 h, 3 per 24 h for
+  and goes live with `expires_at = now + ttl`. Limits (Plus; Free 3 live, 3 a day, F-23): 10 live, 20 per 24 h, 3 per 24 h for
   accounts younger than a day (R-21.5, R-21.26).
   """
   def publish(%Account{} = a, id, params) do
@@ -239,18 +239,40 @@ defmodule Thirstr.Moments do
       |> hd()
       |> hd()
 
-    if n >= @max_live,
-      do: {:error, {:conflict, "You have 10 live Moments. Delete one to share another."}},
-      else: :ok
+    max = min(@max_live, Thirstr.Plus.limit(a, :moments_live))
+
+    cond do
+      n < max ->
+        :ok
+
+      max < @max_live ->
+        Thirstr.Plus.limit_error(:moments_live, "You have #{max} live Moments on Free.")
+
+      true ->
+        {:error, {:conflict, "You have #{max} live Moments. Delete one to share another."}}
+    end
   end
 
   defp day_limit(a) do
+    plus_n = Thirstr.Plus.limit(a, :moments_per_day)
+
     n =
       if DateTime.diff(DateTime.utc_now(), a.inserted_at, :hour) < 24,
-        do: @new_per_day,
-        else: @per_day
+        do: min(@new_per_day, plus_n),
+        else: min(@per_day, plus_n)
 
-    Social.limit(a, "moments", n, 86_400)
+    # F-23 R-23.5: Free 3 a day; Plus fair use 20 (same counter, so a plan change applies at once).
+    case Social.limit(a, "moments", n, 86_400) do
+      {:error, {:rate_limited, retry}} when plus_n < @per_day ->
+        Thirstr.Plus.limit_error(
+          :moments_per_day,
+          "#{n} Moments a day on Free",
+          DateTime.add(DateTime.utc_now(), retry, :second)
+        )
+
+      other ->
+        other
+    end
   end
 
   defp checked_thumb(key) do

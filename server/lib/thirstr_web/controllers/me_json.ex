@@ -32,7 +32,10 @@ defmodule ThirstrWeb.MeJSON do
       profiles: Enum.map(profiles, &profile/1),
       location: main && location(a, main.id),
       now: main && Social.now_of(main.id),
-      settings: Settings.get(a)
+      settings: Settings.get(a),
+      # F-23 (#7): Plus entitlement and every Free / Plus limit the app enforces in its UI.
+      plus: Thirstr.Plus.entitlement(a),
+      limits: Thirstr.Plus.limits(a)
     }
   end
 

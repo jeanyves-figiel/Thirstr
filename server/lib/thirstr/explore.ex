@@ -115,7 +115,7 @@ defmodule Thirstr.Explore do
 
   defp grid_fresh(v, filters, offset) do
     locals = candidates(v, filters, "show_in_grid") |> sorted()
-    all = interleave(locals, visitors(v, filters))
+    {all, capped} = interleave(locals, visitors(v, filters)) |> cap(v)
     page = Enum.slice(all, offset, @page)
     next = if length(all) > offset + @page, do: Integer.to_string(offset + @page)
     further_from = Enum.find_index(all, & &1.further)
@@ -127,8 +127,17 @@ defmodule Thirstr.Explore do
       next: next,
       further_from: further_from && further_from - offset,
       reason: nil,
-      fit_m: fit
+      fit_m: fit,
+      capped: capped and is_nil(next)
     }
+  end
+
+  # F-23 R-23.5 / AC-23.2: Free lists the 200 nearest people (the map is never capped).
+  defp cap(all, v) do
+    case Thirstr.Plus.limit(v.account, :nearby) do
+      n when is_integer(n) and length(all) > n -> {Enum.take(all, n), true}
+      _ -> {all, false}
+    end
   end
 
   # SR-09 (#149): later pages re-read only their own 60 profiles (primary-key lookups, all
@@ -160,7 +169,11 @@ defmodule Thirstr.Explore do
       next: if(length(order) > offset + @page, do: Integer.to_string(offset + @page)),
       further_from: further_from && further_from - offset,
       reason: nil,
-      fit_m: fit
+      fit_m: fit,
+      # F-23: the cached order is already capped for Free; Plus is never capped.
+      capped:
+        length(order) <= offset + @page and
+          length(order) == Thirstr.Plus.limit(v.account, :nearby)
     }
   end
 

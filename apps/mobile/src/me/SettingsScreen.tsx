@@ -17,6 +17,9 @@ import { sv } from '../i18n/saver';
 import { hx } from '../i18n/help';
 import { article, search as helpSearch } from '../help/kit';
 import { Group, IconTile, Row, Seg, SwitchRow, useSettings } from './settings/parts';
+import { plx } from '../i18n/plus';
+import { PlusMark } from '../plus/PlusLimit';
+import { plusRowValue } from '../plus/PlusScreen';
 
 type Nav = { navigate: (s: string, p?: object) => void };
 
@@ -31,6 +34,7 @@ const INDEX: [string, string][] = [
   ...[S.safeMode, S.appLock, tx.prefs.verification, S.blocked, mod.list.row, S.notices].map((l) => [l, 'SafetySettings'] as [string, string]),
   ...[tx.signInEmail.row, tx.devices.title, tx.exportData.title, S.pause, S.logoutAll, S.delete].map((l) => [l, 'AccountSettings'] as [string, string]),
   [wn.title, 'WhatsNew'],
+  [plx.row, 'PlusSettings'],
   [sv.title, 'DataSaverSettings'],
   [hx.row, 'Help'],
   [hx.contact, 'HelpContact'],
@@ -113,6 +117,11 @@ export function SettingsScreen({ navigation }: { navigation: Nav }) {
             {cats.map((c) => (
               <Row key={c.key} testID={`settings-${c.key}`} title={c.title} sub={summary[c.key]} onPress={() => navigation.navigate(c.route)} left={<IconTile tone={c.tone}>{c.icon}</IconTile>} />
             ))}
+          </Group>
+
+          {/* F-23 R-23.15 (#318): Settings › Plus. */}
+          <Group>
+            <Row testID="settings-plus" title={plx.row} sub={plusRowValue(me.plus?.source)} onPress={() => navigation.navigate('PlusSettings')} left={<PlusMark size={36} r={11} />} />
           </Group>
 
           <Group label={S.app}>

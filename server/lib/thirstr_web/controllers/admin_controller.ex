@@ -624,7 +624,7 @@ defmodule ThirstrWeb.AdminController do
 
     count_rows =
       Enum.map_join(counts, "", fn [src, kind, n, hidden] ->
-        "<tr><td>#{e(src)}</td><td>#{e(kind)}</td><td>#{n}</td><td>#{hidden}</td></tr>"
+        ~s(<tr><td>#{e(src)}</td><td>#{e(kind)}</td><td class="n">#{n}</td><td class="n">#{hidden}</td></tr>)
       end)
 
     last_txt =
@@ -633,13 +633,14 @@ defmodule ThirstrWeb.AdminController do
           "Never imported."
 
         [st, fin, a, u, r, err] ->
-          "Started #{e(st && DateTime.to_iso8601(st))}, finished #{e((fin && DateTime.to_iso8601(fin)) || "running")}: +#{a} added, #{u} updated, #{r} removed. #{e(err || "")}"
+          "Started #{ts(st)}, #{if fin, do: "finished #{ts(fin)}", else: "still running"}: +#{a} added, #{u} updated, #{r} removed." <>
+            if(err, do: ~s( <span class="danger">#{e(err)}</span>), else: "")
       end
 
     event_rows =
       Enum.map_join(events, "", fn [id, title, st, en, venue] ->
         """
-        <tr><td>#{e(title)}</td><td>#{e(venue)}</td><td>#{e(DateTime.to_iso8601(st))} → #{e(DateTime.to_iso8601(en))}</td>
+        <tr><td>#{e(title)}</td><td>#{e(venue)}</td><td class="mono">#{ts(st)} → #{ts(en)}</td>
         <td><form method="post" action="/admin/places/events/#{e(id)}/remove">#{csrf}<button>Remove</button></form></td></tr>
         """
       end)
@@ -647,40 +648,55 @@ defmodule ThirstrWeb.AdminController do
     found_rows =
       Enum.map_join(found, "", fn [id, name, kind, hidden, city] ->
         """
-        <tr><td>#{e(name)}</td><td>#{e(kind)}</td><td>#{e(city)}</td>
+        <tr><td><b>#{e(name)}</b></td><td>#{e(kind)}</td><td>#{e(city)}</td>
         <td><form method="post" action="/admin/places/venues/#{e(id)}/#{if hidden, do: "unhide", else: "hide"}">#{csrf}<button>#{if hidden, do: "Unhide", else: "Hide"}</button></form></td>
-        <td><form method="post" action="/admin/places/events">#{csrf}<input type="hidden" name="venue_id" value="#{e(id)}">
-          <input name="title" maxlength="60" placeholder="Party title" required>
-          <input type="datetime-local" name="starts_at" required> <input type="datetime-local" name="ends_at" required>
-          <input name="url" placeholder="https://… (optional)"> <button>Add official party</button></form></td></tr>
+        <td><details><summary>Add official party</summary><form method="post" action="/admin/places/events" class="party">#{csrf}<input type="hidden" name="venue_id" value="#{e(id)}">
+          <label class="f">Title<input name="title" maxlength="60" required></label>
+          <label class="f">Starts (UTC)<input type="datetime-local" name="starts_at" required></label>
+          <label class="f">Ends (UTC)<input type="datetime-local" name="ends_at" required></label>
+          <label class="f">Link (optional)<input name="url" placeholder="https://…"></label>
+          <button class="pri">Add party</button></form></details></td></tr>
         """
       end)
 
     member_rows =
       Enum.map_join(members, "", fn [id, name, kind, hidden, at, lat, lng, city, here] ->
         """
-        <tr><td>#{e(name)}</td><td>#{e(kind)}</td><td>#{e(city)}</td><td>#{e(DateTime.to_iso8601(Thirstr.Explore.utc_any(at)))}</td><td>#{here}</td>
+        <tr><td><b>#{e(name)}</b>#{if hidden, do: ~s( <span class="chip y">hidden</span>), else: ""}</td><td>#{e(kind)}</td><td>#{e(city)}</td><td class="mono">#{ts(at)}</td><td class="n">#{here}</td>
         <td><a href="https://www.openstreetmap.org/?mlat=#{lat}&amp;mlon=#{lng}#map=19/#{lat}/#{lng}" target="_blank" rel="noopener noreferrer">Map</a></td>
         <td><form method="post" action="/admin/places/venues/#{e(id)}/#{if hidden, do: "unhide", else: "hide"}">#{csrf}<button>#{if hidden, do: "Unhide", else: "Hide"}</button></form></td>
-        <td><form method="post" action="/admin/places/venues/#{e(id)}/delete" onsubmit="return confirm('Delete this place for everyone?')">#{csrf}<button class="danger">Delete</button></form></td></tr>
+        <td><details><summary class="danger">Delete…</summary><form method="post" action="/admin/places/venues/#{e(id)}/delete">#{csrf}<button class="danger">Delete for everyone</button></form></details></td></tr>
         """
       end)
 
+    table = fn head, rows, none ->
+      if rows == "",
+        do: ~s(<p class="muted">#{none}</p>),
+        else: ~s(<div class="scroll"><table><tr>#{head}</tr>#{rows}</table></div>)
+    end
+
     page(conn, "Places", """
-    <h1>Places</h1>
-    <h2>Catalogue</h2><table><tr><th>Source</th><th>Kind</th><th>Venues</th><th>Hidden</th></tr>#{count_rows}</table>
-    <h2>Added by members</h2>
-    <p class="muted">Live as soon as they are added, no review before (F-12 R-12.11). Hide it if it is wrong, delete it if it is a home or private address. The creator is never shown in the app.</p>
-    <table><tr><th>Name</th><th>Kind</th><th>Near</th><th>Added (UTC)</th><th>Here</th><th></th><th></th><th></th></tr>#{member_rows}</table>
-    <h2>OpenStreetMap import</h2><p>#{last_txt}</p>
-    <p class="muted">Gay venues worldwide by tag, gyms for the configured countries. Only tags and countries are sent, never anything about users (F-12 R-12.9).</p>
-    <form method="post" action="/admin/places/import">#{csrf}<button>Import now</button></form>
-    <h2>Upcoming official parties</h2><table><tr><th>Title</th><th>Venue</th><th>When (UTC)</th><th></th></tr>#{event_rows}</table>
-    <h2>Find a venue</h2><form method="get" action="/admin/places"><input name="q" value="#{e(params["q"])}" placeholder="Venue name"> <button>Search</button></form>
-    <p class="muted">Times are UTC. A party shows on the map from 12 h before it starts until it ends.</p>
-    <table>#{found_rows}</table>
+    #{ThirstrWeb.AdminUI.head("Places", "Venues on the map, member-added places, official parties. Times in UTC.")}
+    <div class="card"><h2>Added by members <span class="r">live at once, reviewed after (F-12 R-12.11)</span></h2>
+    <p class="muted sm">Hide it if it is wrong, delete it if it is a home or private address. The creator is never shown in the app.</p>
+    #{table.("<th>Name</th><th>Kind</th><th>Near</th><th>Added</th><th>Here</th><th></th><th></th><th></th>", member_rows, "No member places yet.")}</div>
+    <div class="card"><h2>Upcoming official parties <span class="r">on the map from 12 h before start until end</span></h2>
+    #{table.("<th>Title</th><th>Venue</th><th>When</th><th></th>", event_rows, "No parties planned. Find a venue below to add one.")}</div>
+    <div class="card"><h2>Find a venue</h2>
+    <form method="get" action="/admin/places"><input name="q" value="#{e(params["q"])}" placeholder="Venue name"> <button>Search</button></form>
+    #{if params["q"] in [nil, ""], do: "", else: table.("<th>Name</th><th>Kind</th><th>Near</th><th></th><th></th>", found_rows, "No venue matches.")}</div>
+    <div class="cols2"><div class="card"><h2>Catalogue</h2>
+    #{table.("<th>Source</th><th>Kind</th><th>Venues</th><th>Hidden</th>", count_rows, "Empty.")}</div>
+    <div class="card"><h2>OpenStreetMap import <span class="r">weekly</span></h2><p>#{last_txt}</p>
+    <p class="muted sm">Gay venues worldwide by tag, gyms for the configured countries. Only tags and countries are sent, never anything about users (F-12 R-12.9).</p>
+    <form method="post" action="/admin/places/import">#{csrf}<button>Import now</button></form></div></div>
     """)
   end
+
+  # Raw `timestamp` columns come back as NaiveDateTime (UTC); both shapes print the same.
+  defp ts(nil), do: "–"
+  defp ts(%NaiveDateTime{} = n), do: Calendar.strftime(n, "%d %b %Y %H:%M")
+  defp ts(%DateTime{} = d), do: Calendar.strftime(d, "%d %b %Y %H:%M")
 
   def places_import(conn, _) do
     audit(conn.assigns.admin, "places_import", nil, nil)

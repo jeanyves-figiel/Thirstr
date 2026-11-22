@@ -207,7 +207,7 @@ defmodule Thirstr.Costs do
     do: c * p["shared_cpu"] + max(0, mb - c * 256) / 1024 * p["ram_gb"]
 
   defp fly_token, do: Application.get_env(:thirstr, :fly_cost_token)
-  defp fly_org, do: Application.get_env(:thirstr, :fly_org, "personal")
+  defp fly_org, do: Application.get_env(:thirstr, :fly_org, "thirstr")
   def fly_configured?, do: fly_token() not in [nil, ""]
 
   defp fly_get(path, token) do

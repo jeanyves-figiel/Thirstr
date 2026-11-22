@@ -6,6 +6,9 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Fixed
+- **Console Places page works again** (server, #323, A-07b): `/admin/places` returned an error once an OpenStreetMap import or an upcoming party existed. Raw `timestamp` columns come back as `NaiveDateTime`, and the page used `DateTime.to_iso8601`. Times are now formatted from both shapes. The page uses the v3 cards, and Delete asks inline instead of showing a browser dialog.
+
 ### Changed
 - **Admin console redesigned (v3)** (server, #179, admin-console.md R-AD.17): one shell for every page with a grouped left rail (Moderation, Members, Platform, You), live counts that turn red past target time, an environment badge (STAGING/PROD/DEV) and the session corner; a tab strip on phones. Queue is now a work list with tier tiles, filters and time-left meters; report detail keeps evidence left and the decision panel pinned right; Costs shows numbered setup steps when data is missing, a budget bar, KPIs, vendor bars and month buttons (no inline script). Fonts served by the API (CSP stays `'self'`). Same routes, actions and audit entries.
 

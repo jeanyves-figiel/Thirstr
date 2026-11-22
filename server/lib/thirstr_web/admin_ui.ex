@@ -436,6 +436,11 @@ defmodule ThirstrWeb.AdminUI do
     .meter{width:84px;height:4px;border-radius:2px;background:var(--raised2);overflow:hidden;display:block}
     .meter i{display:block;height:100%;background:var(--c,var(--teal))}
     @media (max-width:560px){.item{grid-template-columns:6px 40px minmax(0,1fr)}.thumb{width:40px;height:40px}.sla{grid-column:3;flex-direction:row;align-items:center}}
+    .cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+    @media (max-width:1000px){.cols2{grid-template-columns:1fr}}
+    form.party{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;margin-top:8px}
+    td details>summary.danger{color:var(--danger)}
+    td form{display:inline}
     /* A-02 report detail */
     .split{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
     @media (max-width:1100px){.split{grid-template-columns:1fr}}

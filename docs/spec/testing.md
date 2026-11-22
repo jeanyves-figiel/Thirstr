@@ -49,8 +49,8 @@ Nightly (02:30 UTC) and on demand: `.github/workflows/device-matrix.yml`. No pai
 
 | Profile | Runs on | Stands for | CPU / RAM | Screen | Network | Backend |
 |---|---|---|---|---|---|---|
-| `android-low` | Android emulator, API 30 (Android 11), AOSP x86_64 | low-end Android (Android Go class, ~€100 phone) | 2 cores, 2 GB | 720×1280, 320 dpi | **3G** (`-netspeed umts -netdelay umts`: 384/384 kbit/s, ~200 ms) | hermetic DEV stack on the runner |
-| `android-mid` | Android emulator, API 35 (Android 15), AOSP x86_64 | Pixel 6a class | 4 cores, 4 GB | 1080×2400, 420 dpi | full | hermetic DEV stack on the runner |
+| `android-low` | Android emulator, API 30 (Android 11), Google APIs x86_64 (Play services, as on real phones; expo-location needs them) | low-end Android (Android Go class, ~€100 phone) | 2 cores, 2 GB | 720×1280, 320 dpi | **3G** (`-netspeed umts -netdelay umts`: 384/384 kbit/s, ~200 ms) | hermetic DEV stack on the runner |
+| `android-mid` | Android emulator, API 35 (Android 15), Google APIs x86_64 | Pixel 6a class | 4 cores, 4 GB | 1080×2400, 420 dpi | full | hermetic DEV stack on the runner |
 | `ios-old` | iOS simulator, smallest iPhone on the image (oldest model the runtime supports: iPhone SE 3 or iPhone 11 class; iOS 27 dropped SE 3), Release build | old iPhone | host Mac (no CPU limit possible) | 4.7″–6.1″ | **3G** via `dnctl`/`pfctl` dummynet on the runner (780 kbit/s down, 330 kbit/s up, 100 ms) | staging (read-only, signed out) |
 
 - **Hermetic backend (Android)**: `docker compose` api + db + valkey + s3 + mailpit (`infra/e2e/compose.e2e.yml` on top of `docker-compose.yml`, `MIX_ENV=dev`), plus the chat test bot `Testbot 🤖` (`apps/testbot`, `BOTS=testbot`) on the runner. The app is a Release APK built with `EXPO_PUBLIC_ENV=dev` and `EXPO_PUBLIC_API_URL=http://10.0.2.2:4000` (emulator → runner), so "Continue with Google" signs in through the DEV issuer (no real account, no email). Cleartext HTTP is allowed in this E2E APK only (manifest patched in CI); TestFlight/store builds are untouched. Nothing touches staging or prod.
@@ -72,7 +72,7 @@ Nightly (02:30 UTC) and on demand: `.github/workflows/device-matrix.yml`. No pai
   | Cold start to first frame (ms) | Android `am start -W` TotalTime | report |
   | Cold start to Welcome (ms) | launch → `start` visible (Maestro, includes ~1 s tool overhead) | report |
   | Memory after Explore (MB) | Android `dumpsys meminfo` TOTAL PSS; iOS host RSS of the simulator process | report |
-  | Network bytes during the flows | Android `/proc/net/dev` delta (AOSP image, no Google services); iOS dummynet pipe counters | report |
+  | Network bytes during the flows | Android `/proc/net/dev` delta (includes some Play services background traffic); iOS dummynet pipe counters | report |
   | Flow duration (s) | per flow | report |
 - **Gate**: a failing flow or an enforced budget fails the run. "report" budgets print ⚠ when exceeded; they switch to enforced once 7 nightly runs give a baseline (EN-18 #177: "release blocked on regression"). Emulators on shared CI hosts are noisy, so timing budgets are ceilings for regressions, not the EN-18 targets on real phones.
 - **Run by hand**: also runs on PRs that change the matrix (flows, scripts, budgets). Actions › Device matrix › Run workflow (input `profiles`: `all`, `android-low`, `android-mid`, `ios-old`). Locally with an emulator: `scripts/device-matrix/android.sh` (needs Docker, Android SDK, Maestro).

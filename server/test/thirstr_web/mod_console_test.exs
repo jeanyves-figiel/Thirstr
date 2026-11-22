@@ -249,6 +249,53 @@ defmodule ThirstrWeb.ModConsoleTest do
     end
   end
 
+  test "dismiss tells the notifier; their review lands in A-05 and can reopen the report", %{
+    admin: admin,
+    bad: bad,
+    reporter: r
+  } do
+    r.c
+    |> recycle_authed()
+    |> post("/v1/reports", %{profile_id: bad.pid, reason: "harassment"})
+    |> json_response(201)
+
+    [[rid]] = Repo.query!("SELECT id::text FROM reports").rows
+    c = admin_conn(admin)
+    html = c |> recycle() |> get("/admin/reports/#{rid}") |> html_response(200)
+
+    c
+    |> recycle()
+    |> post("/admin/reports/#{rid}/action", %{
+      _csrf_token: csrf(html),
+      action: "dismiss",
+      reason: "no_violation"
+    })
+    |> redirected_to()
+
+    assert [["no_action"]] = Repo.query!("SELECT decision FROM reports").rows
+
+    r.c
+    |> recycle_authed()
+    |> post("/v1/me/reports/#{rid}/review", %{text: "He keeps insulting me"})
+    |> response(204)
+
+    html = c |> recycle() |> get("/admin/appeals") |> html_response(200)
+    assert html =~ "He keeps insulting me"
+    assert c |> recycle() |> get("/admin") |> html_response(200) =~ "notifier review"
+
+    c
+    |> recycle()
+    |> post("/admin/reviews/#{rid}", %{
+      _csrf_token: csrf(html),
+      decision: "overturned",
+      reason: "Looked again: the messages are abusive."
+    })
+    |> redirected_to()
+
+    assert [["open", "overturned"]] =
+             Repo.query!("SELECT state, notifier_review_state FROM reports").rows
+  end
+
   test "an action without facts is refused (R-15.28)", %{admin: admin, bad: bad, reporter: r} do
     r.c
     |> recycle_authed()

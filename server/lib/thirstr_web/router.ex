@@ -128,6 +128,7 @@ defmodule ThirstrWeb.Router do
     post "/accounts/:id/action", AdminController, :account_action
     get "/appeals", ModController, :appeals
     post "/appeals/:id", ModController, :appeal_decision
+    post "/reviews/:id", ModController, :review_decision
     get "/audit", AdminController, :audit_log
     get "/delivery", AdminController, :delivery
     get "/places", AdminController, :places

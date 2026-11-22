@@ -16,6 +16,15 @@ defmodule ThirstrWeb.AdminController do
   @idle_s 30 * 60
   @session_s 8 * 3600
   @actions ~w(dismiss warn remove_photo suspend ban release)
+  # Report outcome shown to the notifier (R-15.27) per console action.
+  @decision_of %{
+    "dismiss" => "no_action",
+    "warn" => "warned",
+    "remove_photo" => "removed",
+    "suspend" => "suspended",
+    "ban" => "banned",
+    "release" => "no_action"
+  }
   @reason_codes ~w(spam_bot scam underage harassment non_consensual hate impersonation creator_undeclared other no_violation)
 
   # ------------------------------------------------------------------ plugs
@@ -131,11 +140,30 @@ defmodule ThirstrWeb.AdminController do
 
   def report(conn, %{"id" => id}) do
     with {:ok, _} <- Ecto.UUID.cast(id),
-         [[rid, reason, ctx, note, franked, state, at, pid, aid, sev]] <-
+         [
+           [
+             rid,
+             reason,
+             ctx,
+             note,
+             franked,
+             state,
+             at,
+             pid,
+             aid,
+             sev,
+             illegal,
+             ltype,
+             cc,
+             expl,
+             chan
+           ]
+         ] <-
            q(
              """
              SELECT r.id::text, r.reason, r.context, r.note, r.franked, r.state, r.created_at,
-                    r.target_profile::text, r.target_account::text, r.severity
+                    r.target_profile::text, r.target_account::text, r.severity,
+                    r.illegal, r.legal_type, r.country, r.explanation, r.channel
              FROM reports r WHERE r.id = $1
              """,
              [Nearby.dump(id)]
@@ -153,6 +181,7 @@ defmodule ThirstrWeb.AdminController do
       <h1>A-02 Report</h1>
       <p><b>#{e(reason)}</b> · #{e(ctx)} · #{e(state)} · #{DateTime.to_iso8601(at)}</p>
       #{if note, do: "<p>Reporter note: #{e(note)}</p>", else: ""}
+      #{if illegal, do: ~s{<div class="banner"><b>Illegal content notice</b> (DSA Art. 16) · #{e(ltype)} · #{e(cc || "—")} · via #{e(chan)}<br>#{e(expl || "")}</div>}, else: ""}
       <h2>Attached messages (franking verified)</h2>
       #{if msgs == "", do: ~s(<p class="muted">None.</p>), else: "<ul>#{msgs}</ul>"}
       #{profile_snapshot(pid, aid)}
@@ -212,10 +241,16 @@ defmodule ThirstrWeb.AdminController do
         state = if action == "dismiss", do: "dismissed", else: "actioned"
 
         # Dismiss closes this report; an enforcement closes every open report on the account.
-        q(
-          "UPDATE reports SET state = $2, action = $3, resolved_at = now() WHERE target_account = (SELECT target_account FROM reports WHERE id = $1) AND state = 'open' AND (id = $1 OR $3 <> 'dismiss')",
-          [Nearby.dump(id), state, action]
-        )
+        closed =
+          q(
+            "UPDATE reports SET state = $2, action = $3, resolved_at = now() WHERE target_account = (SELECT target_account FROM reports WHERE id = $1) AND state = 'open' AND (id = $1 OR $3 <> 'dismiss') RETURNING id::text",
+            [Nearby.dump(id), state, action]
+          )
+
+        # R-15.27: every notifier learns the outcome; R-15.34 misuse check on "no action".
+        Enum.each(closed, fn [rid] ->
+          Thirstr.Reports.decide(rid, @decision_of[action], unfounded: p["unfounded"] == "yes")
+        end)
 
         audit(conn.assigns.admin, "report_" <> action, id, reason)
         redirect(conn, to: "/admin")
@@ -285,6 +320,7 @@ defmodule ThirstrWeb.AdminController do
         <textarea name="facts" maxlength="300" rows="2" style="width:100%;font:inherit;background:#2c2650;color:#f3f0ff;border:1px solid #463e7a;border-radius:8px"></textarea></label></p>
       <p><select name="ground"><option value="tos">Breaks our rules</option><option value="law">Illegal</option></select>
         <input name="law_ref" placeholder="Law and country, if illegal" maxlength="200"></p>
+      <p><label><input type="checkbox" name="unfounded" value="yes"> Dismiss: manifestly unfounded (counts toward report misuse, R-15.34)</label></p>
       <button>Apply</button>
       <p class="muted">remove_photo: pick a photo above. Every action sends the user a notice with appeal (R-AD.9).</p>
     </form>

@@ -24,7 +24,10 @@ netbytes() { adb shell cat /proc/net/dev | awk -F'[: ]+' 'NR>2 && $2 != "lo" {s 
 adb install -r -g "$APK" >/dev/null || { echo "::error::install failed"; exit 1; }
 put apk_bytes "$(stat -c %s "$APK")"
 put js_bundle_bytes "$(unzip -l "$APK" assets/index.android.bundle | awk 'NR==4{print $1}')"
-adb emu geo fix 8.4887 47.3914 >/dev/null 2>&1 || true   # Zurich Altstetten (Testbot's area)
+adb shell settings put secure location_mode 3 >/dev/null 2>&1 || true   # GPS + network
+# Zurich Altstetten (Testbot's area), re-sent so a fresh fix is always there for the app.
+( while :; do adb emu geo fix 8.4887 47.3914 >/dev/null 2>&1; sleep 3; done ) & GEO=$!
+trap 'kill $GEO 2>/dev/null' EXIT
 # No system "isn't responding" / crash dialogs over the app (emulator launcher ANRs on slow CI hosts);
 # app crashes still show up in the logcat diagnostics.
 adb shell settings put global hide_error_dialogs 1

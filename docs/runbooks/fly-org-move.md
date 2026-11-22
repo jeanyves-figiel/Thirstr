@@ -38,6 +38,12 @@ Planned with the release orchestrator thread: freeze merges, no promote running,
 4. `scripts/ops/fly-ci-tokens.sh production` (deletes the repo-level `FLY_TOKEN` when both environments have their own).
 5. Replace the Claude environment token with an org token for `thirstr` (`access.md` §2) and revoke the old org-wide token.
 
+## Staging run, 2026-11-22 06:16–06:31 UTC (dashboard, owner OK in thread)
+Done through the dashboard (app › Settings › Move app), order as above. API healthy in `thirstr` at 06:28; ~12 min staging downtime. Lessons for prod (the script now handles 1 and 2):
+1. **DB machine kept its old-org address.** The move updated machines with a process group (API, Valkey, bot, classifier) but not `thirstr-db-*` (made through the Machines API, no `fly_process_group`). Stop/start does not change the 6PN; API got `tcp connect (thirstr-db-staging.internal:5432): timeout` until the DB machine was **updated** (dashboard: Machine › Scale machine › same size). Check after each move: every machine's IP must start with the new org prefix (staging: `fdaa:117:7e7c:`).
+2. **Flycast:** the old private IPv6 moves with the app but is dead in the new org, and an app can have only one. Release it first, then Add IP › **Flycast (private IPv6)**. In the dashboard menu, Shared IPv4 is the first item: never pick it for the classifier (it would expose it publicly).
+3. Secrets badges ("pending") on DB/Valkey were there before the move; not touched.
+
 ## Rollback
 `fly apps move <app> --org personal -y` for each app in the same order. Data stays on the volumes, so a rollback costs only the same few minutes. If the DB machine does not come up after the move: it is the same volume; follow `db-backups.md` › Real incident only if the volume itself is lost.
 

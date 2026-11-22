@@ -2,6 +2,7 @@
 appId: app.thirstr
 name: dismiss
 ---
+- runFlow: anr.yaml
 - runFlow:
     when:
       visible:

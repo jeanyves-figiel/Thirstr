@@ -1,0 +1,9 @@
+# Taps "Wait" on a system "<app> isn't responding" dialog (slow CI emulators). No-op otherwise.
+appId: app.thirstr
+name: anr
+---
+- runFlow:
+    when:
+      visible: ".*isn't responding.*"
+    commands:
+      - tapOn: "Wait"

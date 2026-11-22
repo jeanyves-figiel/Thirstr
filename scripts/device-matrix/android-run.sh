@@ -31,6 +31,9 @@ trap 'kill $GEO 2>/dev/null' EXIT
 # No system "isn't responding" / crash dialogs over the app (emulator launcher ANRs on slow CI hosts);
 # app crashes still show up in the logcat diagnostics.
 adb shell settings put global hide_error_dialogs 1
+# Google APIs image: no Play Store self-updates during the run (CPU + network noise); let boot settle.
+adb shell pm disable-user --user 0 com.android.vending >/dev/null 2>&1 || true
+sleep 20
 adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0; adb shell settings put global animator_duration_scale 0
 
 # Cold start to first frame (am start -W), app installed + never started before = worst case

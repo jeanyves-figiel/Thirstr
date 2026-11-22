@@ -8,5 +8,21 @@ name: launch
 - extendedWaitUntil:
     visible:
       id: start
-    timeout: 120000
+    timeout: 60000
+    optional: true
+# Slow CI emulators: the system launcher can raise an "isn't responding" dialog over the app.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: start
+    commands:
+      - runFlow: anr.yaml
+      - extendedWaitUntil:
+          visible:
+            id: start
+          timeout: 20000
+          optional: true
+- assertVisible:
+    id: start
 - takeScreenshot: launch-welcome

@@ -63,6 +63,10 @@ name: onboarding
       visible: "(While using the app|Only this time|Allow)"
     commands:
       - tapOn: "(While using the app|Only this time|Allow)"
+# First fused fix on a cold, slow emulator can take minutes; wait for either outcome.
+- extendedWaitUntil:
+    notVisible: "Allow location, busy"
+    timeout: 180000
 # No position fix (emulators without Play services can't serve Balanced accuracy): the app falls
 # back to the city picker. Pick Zürich so the account still lands near Testbot.
 - runFlow:

@@ -1,7 +1,7 @@
 # F-08 Media & private albums
 
 ## Rules
-- R-08.1 Public photos: see F-06 R-06.3 + F-15 classifier. Stored plaintext, AVIF, max 2048 px, EXIF/GPS stripped on device before upload.
+- R-08.1 Public photos: see F-06 R-06.3 + F-15 classifier. Stored plaintext, max 2048 px long edge, EXIF/GPS stripped on device before upload. Beta (#305): JPEG 0.82 (AVIF later); one on-device pass: system picker without edit step (iOS PHPicker), original handed over unconverted, decoded downsampled to ≤ 2048 px, 480 px card copy cut from the same decode; upload slot reserved in parallel; native streaming PUT; the check response updates the profile (no extra read). Target: tap → picker < 0.5 s; picked → visible in slot immediately.
 - R-08.2 Chat media: photos (≤ 20 MB), videos (≤ 3 min, ≤ 200 MB, transcoded on device to H.265 1080p), voice notes (≤ 2 min). Encrypted on device (AES-256-GCM, random key), blob uploaded, key sent in MLS message.
 - R-08.3 Options per send: view-once, expiry (1 h / 24 h / 7 d / keep), allow save (off by default).
 - R-08.4 Private albums: unlimited albums/items; each album has its own key; **grant** = send album key E2EE to a person; **revoke** = rotate key, re-encrypt (lazy), receivers lose access on next sync; grant expiry optional.

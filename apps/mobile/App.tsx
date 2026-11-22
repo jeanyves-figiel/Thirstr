@@ -29,6 +29,8 @@ import { color } from './src/theme/tokens';
 import { StartupGuard } from './src/app/StartupGuard';
 import { loadCached, refreshConfig, useAppConfig } from './src/app/config';
 import { UpdateRequiredScreen } from './src/screens/UpdateRequired';
+import { CantSignInScreen } from './src/help/CantSignIn';
+import { setClaimIntent } from './src/help/kit';
 import { installCrashReporter } from './src/app/crash';
 
 installCrashReporter();
@@ -52,7 +54,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
-  const [screen, setScreen] = useState<S | 'loading' | 'recover' | 'recovered'>('loading');
+  const [screen, setScreen] = useState<S | 'loading' | 'recover' | 'recovered' | 'cant'>('loading');
   const [restored, setRestored] = useState<Restored | null>(null);
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
   const [sent, setSent] = useState<{ email: string; adult: boolean }>({ email: '', adult: true });
@@ -110,8 +112,12 @@ export default function App() {
     case 'loading':
       body = <ActivityIndicator style={{ flex: 1 }} color={color.hookup} />;
       break;
+    case 'cant':
+      // S-84 (#178): recovery ladder; "someone else got in" signs in first, then opens the identity check.
+      body = <CantSignInScreen onBack={() => setScreen('create')} onLink={() => setScreen('link')} onWords={() => setScreen('recover')} onSignIn={(claim) => { setClaimIntent(claim); setMode('login'); setScreen('create'); }} />;
+      break;
     case 'recover':
-      body = <RecoverSignInScreen onBack={() => setScreen('create')} onDone={(m, r) => { setMe(m); setRestored(r); setScreen('recovered'); }} />;
+      body = <RecoverSignInScreen onBack={() => setScreen('cant')} onDone={(m, r) => { setMe(m); setRestored(r); setScreen('recovered'); }} />;
       break;
     case 'recovered':
       body = <RecoveredScreen me={me!} restored={restored} onDone={() => land(me!)} />;
@@ -123,7 +129,7 @@ export default function App() {
       body = <LinkDeviceScreen onDone={land} onBack={() => setScreen('welcome')} />;
       break;
     case 'create':
-      body = <CreateAccountScreen mode={mode} onBack={() => setScreen('welcome')} onDone={land} onEmailSent={(email, adult) => { setSent({ email, adult }); setScreen('inbox'); }} onUnderage={() => setScreen('underage')} onRecover={() => setScreen('recover')} />;
+      body = <CreateAccountScreen mode={mode} onBack={() => setScreen('welcome')} onDone={land} onEmailSent={(email, adult) => { setSent({ email, adult }); setScreen('inbox'); }} onUnderage={() => setScreen('underage')} onRecover={() => setScreen('cant')} />;
       break;
     case 'inbox':
       body = <CheckInboxScreen email={sent.email} adult={sent.adult} onBack={() => setScreen('create')} />;

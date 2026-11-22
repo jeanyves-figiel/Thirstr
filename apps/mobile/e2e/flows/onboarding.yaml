@@ -1,0 +1,78 @@
+# EN-16 (#175) sign-up through the DEV issuer ("Continue with Google" in EXPO_PUBLIC_ENV=dev builds),
+# full onboarding, lands on Explore. Android hermetic stack only (testing.md › Device matrix).
+appId: app.thirstr
+name: onboarding
+---
+- tapOn:
+    id: start
+- extendedWaitUntil:
+    visible:
+      id: google
+    timeout: 30000
+- tapOn:
+    id: google
+- extendedWaitUntil:
+    visible:
+      id: name
+    timeout: 60000
+- tapOn:
+    id: name
+- inputText: E2E ${PROFILE}
+- hideKeyboard
+- tapOn:
+    id: name-continue
+- tapOn:
+    id: birthday-continue
+- tapOn:
+    id: gender-man
+- tapOn:
+    id: identity-continue
+- tapOn:
+    id: here-hookup
+- tapOn:
+    id: here-friends
+- tapOn:
+    id: basics-continue
+- extendedWaitUntil:
+    visible:
+      id: allow-location
+    timeout: 60000
+- takeScreenshot: onboarding-location
+- scrollUntilVisible:
+    element:
+      id: closer-no
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: closer-no
+- tapOn:
+    id: allow-location
+# Runtime permission dialog, in case launchApp's pre-grant did not stick
+- runFlow:
+    when:
+      visible: "(While using the app|Only this time|Allow)"
+    commands:
+      - tapOn: "(While using the app|Only this time|Allow)"
+- extendedWaitUntil:
+    visible:
+      id: photo-later
+    timeout: 60000
+- tapOn:
+    id: photo-later
+- extendedWaitUntil:
+    visible:
+      id: verify-later
+    timeout: 60000
+- tapOn:
+    id: verify-later
+- extendedWaitUntil:
+    visible:
+      id: done-continue
+    timeout: 60000
+- tapOn:
+    id: done-continue
+- extendedWaitUntil:
+    visible:
+      id: tab-Explore
+    timeout: 90000
+- takeScreenshot: onboarding-explore

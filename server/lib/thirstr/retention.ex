@@ -29,7 +29,13 @@ defmodule Thirstr.Retention do
     {"chat_backup_idle", "chat_backups", "updated_at < now() - interval '211 days'"},
     {"transfer_2h", "device_transfers", "updated_at < now() - interval '2 hours 20 minutes'"},
     {"csam_evidence_1y", "csam_cases",
-     "evidence_key IS NOT NULL AND state <> 'open' AND hold_until < now() - interval '1 hour'"}
+     "evidence_key IS NOT NULL AND state <> 'open' AND hold_until < now() - interval '1 hour'"},
+    # F-22 (#178)
+    {"support_solved_90d", "support_requests",
+     "status = 'solved' AND solved_at < now() - interval '91 days'"},
+    {"feedback_30d", "feedback", "created_on < current_date - 31"},
+    {"help_notes_90d", "help_notes", "created_at < now() - interval '91 days'"},
+    {"security_events_1y", "security_events", "at < now() - interval '1 year 1 day'"}
   ]
 
   @queries for {rule, from, where} <- @rules,

@@ -38,6 +38,26 @@ export const NOTES: Note[] = [
           de: ['Illegales melden', 'Klarer Weg, mit Referenznummer.'],
         },
       },
+      {
+        tone: 'trust',
+        glyph: 'spark',
+        to: { route: 'Help' },
+        text: {
+          en: ['Help in the app', '33 answers, offline. Ask us from there.'],
+          fr: ['L’aide dans l’app', '33 réponses hors ligne. Écris-nous.'],
+          de: ['Hilfe in der App', '33 Antworten offline. Schreib uns dort.'],
+        },
+      },
+      {
+        tone: 'hookup',
+        glyph: 'shield',
+        to: { route: 'Help' },
+        text: {
+          en: ['Locked out? Get back in', 'Selfie check. Support can’t hand it over.'],
+          fr: ['Bloqué ? Reviens', 'Selfie. Le support ne peut rien céder.'],
+          de: ['Ausgesperrt? Zurück', 'Selfie-Check. Support gibt nichts weiter.'],
+        },
+      },
     ],
   },
   {

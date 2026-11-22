@@ -122,4 +122,5 @@ Pay for Thirstr without making the free app worse than a competitor's paid one. 
 ## Build status
 - **Server, done (PR for #7):** `Thirstr.Plus` (sources R-23.1–4, limits R-23.5), `plus` + `limits` on `/me`, `plus_billing` flag (off), table `plus_entitlements`, 422 `plus_limit` (R-23.16). Enforced now: nearby list 200, Tonight plans, trips, party capacity / 1 a week / co-host, Moments live + per day.
 - **Reported in `limits`, enforced with the app work:** distance 300 km (needs a candidate-query load test first, SR), look around any city, Moments 48 h, album bytes, video length, translation, friend alerts, presets, folders, extras, Views.
-- **Next:** app screens S-90 / limit cards / "+" tags (after mockup OK), Views S-91, presets + folders + extras, billing R-23.40–45 before open beta.
+- **App, done (#318):** S-90 Plus screen (beta, Safe Mode, active and Free states; plan picker comes with billing, R-23.14), Settings › Plus, `PlusLimit` card on Explore list end, Tonight, trips, parties (stepper capped from `limits`), Moments; `PlusTag`; `X-Thirstr-Plus: 1`.
+- **Next:** Views S-91 (#319), presets + folders + extras + remaining limits (#320), billing R-23.40–45 and the S-90 plan picker before open beta (#321).

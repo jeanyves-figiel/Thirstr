@@ -1,3 +1,5 @@
+import { PlusLimit } from '../plus/PlusLimit';
+import { plusLimitOf, type PlusLimitHit } from '../plus/plus';
 import { getLocales } from 'expo-localization';
 import React, { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -49,6 +51,8 @@ export function TripSheet({
   const [month, setMonth] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // F-23 R-23.16: a Free limit shows the limit card instead of a red error.
+  const [hit, setHit] = useState<PlusLimitHit | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [safeAsk, setSafeAsk] = useState(false);
 
@@ -108,6 +112,9 @@ export function TripSheet({
       else await createTrip(body);
       onSaved();
     } catch (e) {
+      const h = plusLimitOf(e);
+      setHit(h);
+      if (h) return;
       if (e instanceof ApiError && e.fields?.safe_mode_ack) setSafeAsk(true);
       else setErr(e instanceof ApiError ? (Object.values(e.fields ?? {})[0]?.[0] ?? e.message) : tx.common.error);
     } finally {
@@ -232,6 +239,7 @@ export function TripSheet({
         </View>
       ) : null}
 
+      {hit ? <PlusLimit hit={hit} /> : null}
       <ErrorText text={err} />
 
       {!safeAsk ? <Button testID="trip-save" title={trip ? tr.saveEdit : tr.save} fill={color.travel} disabled={!ready} busy={busy && !confirmDel} onPress={() => save()} /> : null}

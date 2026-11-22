@@ -1,0 +1,15 @@
+# EN-16 (#175) date check-in from the chat menu: the sheet opens. Starting one needs an accepted
+# safety contact; the bot can't accept invites yet (#266).
+appId: app.thirstr
+name: checkin
+---
+- hideKeyboard
+- tapOn:
+    id: chat-menu
+- tapOn:
+    id: chat-checkin
+- extendedWaitUntil:
+    visible:
+      id: checkin-sheet
+    timeout: 30000
+- takeScreenshot: checkin-sheet

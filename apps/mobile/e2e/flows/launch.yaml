@@ -1,0 +1,14 @@
+# EN-16 (#175) cold start to the Welcome screen. TTI = launchApp + wait (measured from Maestro's command log).
+appId: app.thirstr
+name: launch
+---
+- launchApp:
+    clearState: true
+    permissions:
+      location: allow
+      notifications: deny
+- extendedWaitUntil:
+    visible:
+      id: start
+    timeout: 120000
+- takeScreenshot: launch-welcome

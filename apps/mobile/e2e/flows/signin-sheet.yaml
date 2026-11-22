@@ -1,0 +1,13 @@
+# EN-16 (#175) iOS signed out: Get started → sign-in methods render (staging, 3G).
+appId: app.thirstr
+name: signin-sheet
+---
+- tapOn:
+    id: start
+- extendedWaitUntil:
+    visible:
+      id: apple
+    timeout: 60000
+- assertVisible:
+    id: google
+- takeScreenshot: signin-methods

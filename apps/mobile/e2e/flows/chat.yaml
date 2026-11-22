@@ -1,0 +1,37 @@
+# EN-16 (#175) chat with Testbot: send → echo reply; offline send → back online → delivered + reply (outbox).
+appId: app.thirstr
+name: chat
+---
+- tapOn:
+    id: message-btn
+- extendedWaitUntil:
+    visible:
+      id: chat-input
+    timeout: 60000
+- tapOn:
+    id: chat-input
+- inputText: echo e2e one
+- tapOn:
+    id: chat-send
+- extendedWaitUntil:
+    visible:
+      text: "e2e one"
+    timeout: 90000
+- takeScreenshot: chat-online
+- setAirplaneMode: enabled
+- tapOn:
+    id: chat-input
+- inputText: echo e2e two
+- tapOn:
+    id: chat-send
+- extendedWaitUntil:
+    visible:
+      id: chat-offline
+    timeout: 45000
+- takeScreenshot: chat-offline
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    visible:
+      text: "e2e two"
+    timeout: 180000
+- takeScreenshot: chat-back-online

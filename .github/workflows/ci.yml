@@ -143,6 +143,12 @@ jobs:
         run: ./scripts/check-fly-regions.sh
       - name: Compose file is valid
         run: docker compose -f docker-compose.yml config -q
+      - name: E2E compose overlay is valid (EN-16)
+        run: docker compose -f docker-compose.yml -f infra/e2e/compose.e2e.yml config -q
+      - name: Chaos tool, offline against a mock (EN-15, staging-only guard)
+        run: ./scripts/chaos/test.sh
+      - name: Device-matrix budget checker
+        run: python3 scripts/device-matrix/test_budgets.py
       - name: Alert rules valid, each has a runbook (EN-06)
         run: python3 scripts/ops/oncall.py --check && python3 -m unittest scripts/ops/test_oncall.py
 

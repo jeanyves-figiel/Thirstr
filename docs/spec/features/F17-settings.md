@@ -2,7 +2,7 @@
 
 Full tree: [concept/profile-and-settings.md §3](../../concept/profile-and-settings.md). Behavioural rules:
 
-- R-17.1 All settings free. No setting behind Plus.
+- R-17.1 All privacy, safety and notification settings are free. Plus-only rows (F-23: translation, chat themes, app icon, supporter badge, early access) carry the "+" tag (R-23.17); everything else is free.
 - R-17.2 Settings sync across own devices E2EE (settings blob encrypted to account key); server stores only what it must enforce (visibility, message permissions, safe_mode, hide_from_hidden, hidden).
 - R-17.3 Safe defaults: verified-only messaging, explicit media blur, disappearing 7 d, previews None, watermark on, creators hidden.
 - R-17.4 Search field at top of Settings (S-61).

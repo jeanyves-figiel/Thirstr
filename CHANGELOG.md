@@ -6,6 +6,15 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Added
+- **Thirstr Plus: who has it and the Free / Plus limits** (server, #7, F-23, D-25, [mockup](https://claude.ai/artifact/C2t81w4khbvFPRxPgXdNRn)): new `Thirstr.Plus` decides Plus per account (beta: everyone; Safe Mode on: free; store, lifetime or owner grant from the new `plus_entitlements` table) and holds every limit in one table. `/me` now returns `plus {active, source}` and `limits`. Free limits enforced on the server once billing starts (flag `plus_billing`, off for the closed beta, so nothing changes for testers): Explore list stops at the 200 nearest people (`capped: true`; the map is never capped), 1 Tonight plan (Plus 3), 1 trip (Plus 5), parties up to 10 guests and 1 a week (Plus 40 guests, co-hosts), Moments 3 live and 3 a day (Plus 10 live, 20 a day). Apps that send `X-Thirstr-Plus: 1` get 422 `plus_limit` with the limit, both values and `next_at`; older builds get the `validation` error they already show.
+
+### Changed
+- **Plus limits replace some beta numbers** (server, #7, F-23): Tonight plans 2 → 3 and trips 3 → 5 for Plus (everyone in the beta); party capacity max 50 → 40 for Plus, 10 for Free. Specs F-04, F-09, F-10, F-17, F-20, F-21, api.md, data-model.md and decisions D-11 / D-25 updated.
+
+### Specified
+- **F-23 Thirstr Plus** (docs, #7, D-25): Plus split and price (€5.99 / mo, €49 / yr, €149 lifetime, fair price by country down to 40 %), "free stays free" pledge, soft limit cards only (never in chat, safety, onboarding or the first 3 days, no push about Plus), Views (who viewed me, reciprocal opt-in, Hidden never recorded, 30 days), presets, chat folders, extras, what happens when Plus ends (nothing deleted), and billing with StoreKit 2 and Play Billing verified on our server (no billing SDK) for open beta.
+
 ### Fixed
 - **iOS build compiles again after Moments part 2** (app, #221, CI): Xcode 27.2 timed out type-checking the chained expression in `thirstr-face` `faceBoxes` (TestFlight run 113 failed at Archive). It is now split into typed steps, with no change in behavior.
 - **Edit profile usable again with a main photo** (app, #305, S-74): the main photo tile grew to the full screen height on iPhone, pushing quick wins and every section row off screen. Cause: a `100%` photo height inside the scroll view resolved against the screen (reproduced with React Native's own layout engine: 768 pt instead of 175 pt). Photos now fill their tile absolutely; the grid takes its height from the right-hand tiles.

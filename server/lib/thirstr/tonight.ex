@@ -1,7 +1,7 @@
 defmodule Thirstr.Tonight do
   @moduledoc """
   F-09 Tonight board (S-13): plans for tonight within ~10 km (widened when sparse),
-  verified posters only (AC-09.2), max 2 active, expiry 06:00 local or window end + 1 h
+  verified posters only (AC-09.2), max 1 active (Free) / 3 (Plus, F-23), expiry 06:00 local or window end + 1 h
   (R-09.11). Expired plans are filtered by every query (AC-09.1).
   """
   alias Thirstr.{Nearby, Repo, Social}
@@ -145,7 +145,7 @@ defmodule Thirstr.Tonight do
          :ok <- check(DateTime.diff(ws, now) > -3600, :window_start, "in the past"),
          expires = expiry(ws, we, tz),
          :ok <- check(DateTime.compare(ws, expires) == :lt, :window_start, "tonight only"),
-         :ok <- check(active_count(ctx.profile_id) < 2, :plans, "max 2 active plans") do
+         :ok <- plans_ok(ctx) do
       id = Ecto.UUID.generate()
 
       Repo.query!(
@@ -229,4 +229,13 @@ defmodule Thirstr.Tonight do
   end
 
   def parse_time(_), do: nil
+
+  # F-23 R-23.5: Free 1 active plan, Plus 3.
+  defp plans_ok(ctx) do
+    max = Thirstr.Plus.limit(ctx.account, :tonight_active)
+
+    if active_count(ctx.profile_id) < max,
+      do: :ok,
+      else: Thirstr.Plus.limit_error(:tonight_active, "max #{max} active plans")
+  end
 end

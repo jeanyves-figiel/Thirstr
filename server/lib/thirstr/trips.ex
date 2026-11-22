@@ -13,7 +13,7 @@ defmodule Thirstr.Trips do
   alias Thirstr.Accounts.Account
 
   # R-20.3 limits
-  @max_trips 3
+  # F-23 R-23.5: trips per account come from Thirstr.Plus (Free 1, Plus 5).
   @ahead_days 180
   @max_days 30
   @show_days [0, 3, 7, 14]
@@ -31,7 +31,7 @@ defmodule Thirstr.Trips do
       |> hd()
 
     %{
-      max: @max_trips,
+      max: Thirstr.Plus.limit(a, :trips),
       ahead_days: @ahead_days,
       max_days: @max_days,
       creates_left: max(@creates_per_30d - used, 0)
@@ -161,8 +161,10 @@ defmodule Thirstr.Trips do
       |> hd()
       |> hd()
 
-    if n >= @max_trips,
-      do: {:error, {:validation, %{trips: ["You can plan up to #{@max_trips} trips"]}}},
+    max = Thirstr.Plus.limit(a, :trips)
+
+    if n >= max,
+      do: Thirstr.Plus.limit_error(:trips, "You can plan up to #{max} trips"),
       else: :ok
   end
 

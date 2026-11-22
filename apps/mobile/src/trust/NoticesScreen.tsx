@@ -69,14 +69,19 @@ export function NoticesScreen() {
     () =>
       Promise.all([
         api<{ notices: Notice[] }>('GET', '/me/notices').then(
-          (r) => setList(r.notices),
-          () => setList([]),
+          (r) => r.notices,
+          () => [] as Notice[],
         ),
         api<{ reports: MyReport[] }>('GET', '/me/reports').then(
-          (r) => setReports(r.reports),
-          () => {},
+          (r) => r.reports,
+          () => [] as MyReport[],
         ),
-      ]),
+      ]).then(([ns, rs]) => {
+        setList(ns);
+        setReports(rs);
+        // A fresh outcome on a report opens that tab first.
+        if (ns.every((n) => n.seen) && rs.some((r) => !r.seen)) setTab('reports');
+      }),
     [],
   );
 
@@ -87,11 +92,6 @@ export function NoticesScreen() {
   useEffect(() => {
     if (tab === 'reports' && reports.some((r) => !r.seen)) api('POST', '/me/reports/seen').catch(() => {});
   }, [tab, reports]);
-
-  // A fresh outcome on a report opens that tab first.
-  useEffect(() => {
-    if (list && list.every((n) => n.seen) && reports.some((r) => !r.seen)) setTab('reports');
-  }, [list, reports]);
 
   const sendReview = async () => {
     if (!review) return;

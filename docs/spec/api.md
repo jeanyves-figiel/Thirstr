@@ -49,6 +49,8 @@ Errors: `{ "error": { "code": "rate_limited", "message": "...", "retry_after": 3
 | POST · DELETE | /devices/transfer/:id/done · /devices/transfer/:id | done (old phone, {total}) · cancel (either phone): deletes all chunks |
 | GET | /me/devices | → {devices: [{id, platform, last_seen_day, current}]} |
 | DELETE | /me/devices/{id} | → 204 (signs that device out) |
+| GET | /me/passkeys | → {passkeys: [{id, provider, added_at, last_used_at}]} newest first (F-01 R-01.16) |
+| DELETE | /me/passkeys/{id} | → 204; 409 `last_method` when it is the only way back in; 404 not yours |
 | POST | /devices/link | {xfer_pub?} → {code, expires_in: 120} (`xfer_pub`: one-time X25519 key, base64url, R-01.14) |
 | GET | /devices/link/{code} | → {state: pending\|claimed\|confirmed, platform?, xfer_pub?} (the new phone's key) |
 | POST | /devices/link/{code}/confirm | → 204 (after app lock / Face ID on the old device) |

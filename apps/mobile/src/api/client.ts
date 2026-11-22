@@ -34,6 +34,9 @@ export type Me = {
   has_email?: boolean;
   /** F-22 (#178): Apple / Google sign-in linked. */
   has_oidc?: boolean;
+  /** F-01 R-01.16: which OIDC provider (null = not known yet, or none) and how many passkeys. */
+  oidc_provider?: 'apple' | 'google' | null;
+  passkey_count?: number;
   created_at?: string;
   profile: null | MyProfile;
   profiles?: MyProfile[];

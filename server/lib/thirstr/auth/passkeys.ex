@@ -42,7 +42,7 @@ defmodule Thirstr.Auth.Passkeys do
     }
   end
 
-  @doc "Verifies an attestation. Returns {:ok, credential_id, cose_key, sign_count}."
+  @doc "Verifies an attestation. Returns {:ok, credential_id, cose_key, sign_count, aaguid}."
   def verify_registration(%{
         "challenge_id" => cid,
         "attestation_object" => ao,
@@ -53,7 +53,7 @@ defmodule Thirstr.Auth.Passkeys do
          {:ok, cdj} <- unb64(cdj),
          {:ok, {auth_data, _att}} <- Wax.register(ao, cdj, ch) do
       acd = auth_data.attested_credential_data
-      {:ok, acd.credential_id, acd.credential_public_key, auth_data.sign_count}
+      {:ok, acd.credential_id, acd.credential_public_key, auth_data.sign_count, acd.aaguid}
     else
       _ -> {:error, :unauthorized}
     end

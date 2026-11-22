@@ -14,6 +14,10 @@ import { toast } from '../../ui/Toast';
 import { LocationSheet } from '../../explore/LocationSheet';
 import { langName, targetLang, translateAvailable } from '../../chat/translate';
 import { rx } from '../../i18n/recovery';
+import { pkx } from '../../i18n/passkeys';
+import { passkeysAvailable } from '../../auth/passkey';
+import { Icon } from '../../ui/icons';
+import { firstMethod } from '../PasskeysScreen';
 import { tx } from '../../i18n/app';
 import { tr } from '../../i18n/travel';
 import { trx } from '../../i18n/translate';
@@ -353,9 +357,15 @@ export function AccountSettings({ navigation }: { navigation: Nav }) {
   return (
     <Page title={S.account} err={err}>
       <Group label={S.signIn}>
+        {passkeysAvailable() ? (
+          <Row testID="settings-passkeys" left={<Icon.Key size={20} c={color.trust} />} title={pkx.row} sub={pkx.rowSub} value={me.passkey_count ? String(me.passkey_count) : pkx.add} valueTone={me.passkey_count ? undefined : color.trust} onPress={() => navigation.navigate('Passkeys')} />
+        ) : null}
         <Row testID="settings-email" title={tx.signInEmail.row} sub={me.has_email ? undefined : tx.signInEmail.rowSub} value={me.has_email ? tx.signInEmail.added : undefined} valueTone={me.has_email ? color.trust : undefined} onPress={me.has_email ? undefined : () => setEmailSheet(true)} />
         <Row testID="settings-recovery" title={rx.row} sub={recovery?.on ? undefined : rx.rowSub} value={recoveryRowValue(recovery)} valueTone={recovery?.on ? color.trust : undefined} onPress={() => navigation.navigate('Recovery')} />
         <Row testID="settings-devices" title={tx.devices.title} sub={S.devicesSub} value={devices != null ? String(devices) : undefined} onPress={() => navigation.navigate('Devices')} />
+      </Group>
+      <Group label={pkx.signedInWith}>
+        <Row testID="settings-first-method" title={firstMethod(me)} sub={pkx.firstMethod} value="✓" valueTone={color.trust} />
       </Group>
       <Group label={S.yourData}>
         <Row testID="settings-export" title={tx.exportData.title} sub={exported ? tx.exportData.ready : S.exportSub} chevron={false} onPress={packing ? undefined : async () => {

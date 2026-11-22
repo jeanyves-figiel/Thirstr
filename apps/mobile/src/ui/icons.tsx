@@ -7,6 +7,13 @@ type P = { size?: number; c?: string; w?: number; fill?: string };
 const base = (c: string, w: number) => ({ fill: 'none', stroke: c, strokeWidth: w, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const });
 
 export const Icon = {
+  /** F-01 R-01.16 passkeys */
+  Key: ({ size = 22, c = color.fgPrimary, w = 2.1 }: P) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx={8} cy={9} r={4} {...base(c, w)} />
+      <Path d="M11 12l9 9M17 18l2-2M15 16l2-2" {...base(c, w)} />
+    </Svg>
+  ),
   Pin: ({ size = 22, c = color.fgPrimary, w = 2.1 }: P) => (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" {...base(c, w)} />

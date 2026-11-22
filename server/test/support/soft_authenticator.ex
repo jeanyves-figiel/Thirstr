@@ -24,7 +24,7 @@ defmodule ThirstrWeb.SoftAuthenticator do
       :crypto.hash(:sha256, pk["rp"]["id"]) <>
         <<0x45>> <>
         <<0::32>> <>
-        <<0::128>> <>
+        Map.get(auth, :aaguid, <<0::128>>) <>
         <<byte_size(auth.cred_id)::16>> <> auth.cred_id <> CBOR.encode(cose)
 
     att = CBOR.encode(%{"fmt" => "none", "attStmt" => %{}, "authData" => bytes(auth_data)})

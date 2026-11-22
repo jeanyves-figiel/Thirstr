@@ -184,6 +184,11 @@ export class Bot {
     every(SCENE_MS, () => this.activity(), 'activity');
     every(5 * 60_000, () => this.tapBack(), 'taps');
     if (this.p.icebreaker) bus.on('peer', (peer: string) => void this.icebreak(peer).catch(() => {}));
+    // EN-16 (#175): the device matrix opens this profile by link instead of hunting the grid.
+    if (process.env.BOT_SHARE_LINK === '1') {
+      const r = await this.api<{ url: string }>('POST', `/me/profiles/${this.me}/share`, {}).catch(() => null);
+      this.say('share link', r?.url ?? 'unavailable');
+    }
     this.say('up as', this.me, 'on', API);
   }
 

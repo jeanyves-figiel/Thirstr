@@ -47,7 +47,7 @@ net0=$(netbytes)
 status=0
 for f in launch onboarding explore chat checkin; do
   t0=$(date +%s.%N)
-  maestro --device emulator-5554 test "$FLOWS/$f.yaml" -e PROFILE="$PROFILE" \
+  maestro --device emulator-5554 test "$FLOWS/$f.yaml" -e PROFILE="$PROFILE" -e TESTBOT_SLUG="${TESTBOT_SLUG:-}" \
     --debug-output "$OUT/maestro/$f" --flatten-debug-output --test-output-dir "$OUT/shots" >"$OUT/maestro/$f.log" 2>&1
   rc=$?; t1=$(date +%s.%N)
   put "flow_${f}_s" "$(python3 -c "print(round($t1-$t0,1))")"

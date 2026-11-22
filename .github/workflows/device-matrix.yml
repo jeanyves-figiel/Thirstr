@@ -136,10 +136,13 @@ jobs:
           for i in $(seq 120); do curl -fs http://localhost:4000/v1/health && break; sleep 5; done
           curl -fsS http://localhost:4000/v1/health || { docker compose logs api | tail -80; exit 1; }
           cd apps/testbot
-          API_URL=http://localhost:4000 TESTBOT_KEY=e2e-device-matrix-testbot-key-0001 BOTS=testbot \
+          API_URL=http://localhost:4000 TESTBOT_KEY=e2e-device-matrix-testbot-key-0001 BOTS=testbot BOT_SHARE_LINK=1 \
             BOT_DATA_DIR="$RUNNER_TEMP/bot" BOT_POLL_MS=3000 nohup npm start > "$RUNNER_TEMP/testbot.log" 2>&1 &
           for i in $(seq 60); do grep -q "test bots up" "$RUNNER_TEMP/testbot.log" && break; sleep 2; done
           tail -5 "$RUNNER_TEMP/testbot.log"
+          slug=$(grep -oE '/p/[a-z0-9]{10}' "$RUNNER_TEMP/testbot.log" | head -1 | cut -d/ -f3)
+          [ -n "$slug" ] || { echo "::error::Testbot share link missing"; exit 1; }
+          echo "TESTBOT_SLUG=$slug" >> "$GITHUB_ENV"
       - name: Enable KVM
         if: steps.want.outputs.run == 'true'
         run: |

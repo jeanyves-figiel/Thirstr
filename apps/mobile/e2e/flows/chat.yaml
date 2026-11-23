@@ -11,6 +11,10 @@ name: chat
 - tapOn:
     id: chat-input
 - inputText: echo e2e one
+- extendedWaitUntil:
+    visible:
+      id: chat-send
+    timeout: 10000
 - tapOn:
     id: chat-send
 - extendedWaitUntil:
@@ -22,6 +26,10 @@ name: chat
 - tapOn:
     id: chat-input
 - inputText: echo e2e two
+- extendedWaitUntil:
+    visible:
+      id: chat-send
+    timeout: 10000
 - tapOn:
     id: chat-send
 - extendedWaitUntil:

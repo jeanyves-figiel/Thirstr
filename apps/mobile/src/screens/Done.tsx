@@ -68,12 +68,13 @@ export function DoneScreen({ me, onContinue }: { me: Me; onContinue: () => void 
 
 const d = StyleSheet.create({
   title: { fontFamily: font.heavy, fontSize: 40, lineHeight: 42, letterSpacing: -1.2, color: color.fgPrimary },
-  card: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: color.bgRaised },
+  // Small phones (360×640 dp): the photo gives up height so "Continue" stays on screen.
+  card: { flexShrink: 1, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: color.bgRaised },
   noPhoto: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
   initial: { fontFamily: font.heavy, fontSize: 96, color: color.fgPrimary, opacity: 0.35 },
   nudge: { alignSelf: 'flex-start', borderRadius: radius.pill, paddingHorizontal: space.l, paddingVertical: space.s, backgroundColor: 'rgba(255,203,61,0.14)' },
   nudgeText: { fontFamily: font.bold, fontSize: 14, color: color.personal },
-  photo: { height: 300 },
+  photo: { height: 300, flexShrink: 1, minHeight: 120 },
   loc: { position: 'absolute', left: 14, top: 14, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: color.bgRaised },
   locDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.trust },
   locText: { fontFamily: font.heavy, fontSize: 12, color: color.trust },

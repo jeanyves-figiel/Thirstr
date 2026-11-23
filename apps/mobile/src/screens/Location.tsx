@@ -13,6 +13,7 @@ import { ErrorText } from '../ui';
 
 type Level = 'hidden' | 'city' | 'area' | 'exact';
 type City = { id: number; name: string; country: string };
+const FIX_TIMEOUT_MS = 20_000;
 const LEVELS: Level[] = ['hidden', 'city', 'area', 'exact'];
 
 // S-04 v2 (R-02.6): live map preview per level; Area default; Hidden locked until verified. Only the r9 cell leaves the phone.
@@ -34,7 +35,14 @@ export function LocationScreen({ me, onDone }: { me: Me; onDone: (me: Me) => voi
     try {
       const perm = await ExpoLocation.requestForegroundPermissionsAsync();
       if (perm.status !== 'granted') return setPicker(true);
-      const pos = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+      // No fix (indoors, no GPS, old Play services) used to leave the button spinning forever:
+      // give up after 20 s, try the last known fix, else open the city picker.
+      const pos =
+        (await Promise.race([
+          ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced }),
+          new Promise<null>((r) => setTimeout(() => r(null), FIX_TIMEOUT_MS)),
+        ])) ?? (await ExpoLocation.getLastKnownPositionAsync({ maxAge: 30 * 60_000 }));
+      if (!pos) return setPicker(true);
       const { latitude: la, longitude: lo } = pos.coords;
       const p = level === 'area' && precise === true;
       onDone(await api<Me>('PUT', '/me/location', { level, ...areaBody(la, lo, p), ...(level === 'area' && !safe ? { precise: p } : {}) }));
@@ -85,7 +93,7 @@ export function LocationScreen({ me, onDone }: { me: Me; onDone: (me: Me) => voi
         />
         <View style={{ gap: space.s }}>
           {cities.map((c) => (
-            <Pressable key={c.id} accessibilityRole="button" onPress={busy ? undefined : () => chooseCity(c)} style={({ pressed }) => [l.cityRow, pressed && k.pressed]}>
+            <Pressable key={c.id} testID={`city-${c.id}`} accessibilityRole="button" onPress={busy ? undefined : () => chooseCity(c)} style={({ pressed }) => [l.cityRow, pressed && k.pressed]}>
               <Text style={l.cityName}>{c.name}</Text>
               <Text style={l.cityCountry}>{c.country}</Text>
             </Pressable>

@@ -24,30 +24,67 @@ netbytes() { adb shell cat /proc/net/dev | awk -F'[: ]+' 'NR>2 && $2 != "lo" {s 
 adb install -r -g "$APK" >/dev/null || { echo "::error::install failed"; exit 1; }
 put apk_bytes "$(stat -c %s "$APK")"
 put js_bundle_bytes "$(unzip -l "$APK" assets/index.android.bundle | awk 'NR==4{print $1}')"
-adb emu geo fix 8.4887 47.3914 >/dev/null 2>&1 || true   # Zurich Altstetten (Testbot's area)
-adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0; adb shell settings put global animator_duration_scale 0
+adb shell settings put secure location_mode 3 >/dev/null 2>&1 || true   # GPS + network
+# Zurich Altstetten (Testbot's area), re-sent so a fresh fix is always there for the app.
+( while :; do adb emu geo fix 8.4887 47.3914 >/dev/null 2>&1; sleep 3; done ) & GEO=$!
+trap 'kill $GEO 2>/dev/null' EXIT
+# No system "isn't responding" / crash dialogs over the app (emulator launcher ANRs on slow CI hosts);
+# app crashes still show up in the logcat diagnostics.
+adb shell settings put global hide_error_dialogs 1
+# Google APIs image: no Play Store self-updates during the run (CPU + network noise); let boot settle.
+adb shell pm disable-user --user 0 com.android.vending >/dev/null 2>&1 || true
+sleep 20
+# Window/transition animations off (flakiness); app animations stay on as on real phones: with
+# animator_duration_scale 0, native-driver sheet springs never left their start (sheets stayed off screen).
+adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0; adb shell settings put global animator_duration_scale 1
 
 # Cold start to first frame (am start -W), app installed + never started before = worst case
 adb shell am force-stop $PKG
-ff=$(adb shell am start -W -n $PKG/.MainActivity | awk -F': ' '/TotalTime/{print $2+0}')
+am=$(adb shell am start -W -n $PKG/.MainActivity 2>&1); echo "$am"
+ff=$(echo "$am" | awk -F': ' '/TotalTime/{print $2+0}')
 put first_frame_ms "${ff:-null}"
 sleep 5; adb shell am force-stop $PKG
 
 net0=$(netbytes)
 status=0
-for f in launch onboarding explore chat checkin; do
+# Messaging needs a verified account (ProfileScreen › message-btn); the selfie check can't run on an
+# emulator. While the flows run, mark accounts created by this run as verified (hermetic DEV DB only,
+# never staging/prod), so the app picks it up from its own /me responses during onboarding.
+psql_dev() { docker compose exec -T db psql -U postgres -d thirstr_dev -Atc "$1"; }
+T0=$(psql_dev "SELECT now()")
+( while :; do psql_dev "UPDATE accounts SET verified_at = now() WHERE verified_at IS NULL AND NOT test_bot AND inserted_at > '$T0'" >/dev/null 2>&1; sleep 3; done ) & VER=$!
+trap 'kill $GEO $VER 2>/dev/null' EXIT
+for f in launch onboarding explore chat; do
   t0=$(date +%s.%N)
-  maestro --device emulator-5554 test "$FLOWS/$f.yaml" -e PROFILE="$PROFILE" \
+  maestro --device emulator-5554 test "$FLOWS/$f.yaml" -e PROFILE="$PROFILE" -e TESTBOT_SLUG="${TESTBOT_SLUG:-}" \
     --debug-output "$OUT/maestro/$f" --flatten-debug-output --test-output-dir "$OUT/shots" >"$OUT/maestro/$f.log" 2>&1
   rc=$?; t1=$(date +%s.%N)
   put "flow_${f}_s" "$(python3 -c "print(round($t1-$t0,1))")"
   put "flow_${f}" "$([ $rc = 0 ] && echo '"pass"' || echo '"fail"')"
-  [ $rc = 0 ] || { status=1; echo "::error::flow $f failed on $PROFILE"; tail -30 "$OUT/maestro/$f.log"; adb exec-out screencap -p >"$OUT/shots/FAILED-$f.png"; break; }
+  [ $rc = 0 ] || { status=1; echo "::error::flow $f failed on $PROFILE"; tail -30 "$OUT/maestro/$f.log"; adb exec-out screencap -p >"$OUT/shots/FAILED-$f.png"
+    echo "::group::Diagnostics ($f)"; adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -3
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && adb shell cat /sdcard/ui.xml | grep -oE '(text|resource-id|content-desc)="[^"]+"' | sort -u | head -60
+    adb logcat -d -s ReactNativeJS:V ReactNative:W AndroidRuntime:E expo:W | tail -80; echo "::endgroup::"; break; }
   if [ "$f" = launch ]; then put tti_ms "$(python3 "$(dirname "$0")/tti.py" "$OUT/maestro/launch")"; fi
   if [ "$f" = explore ]; then
     put pss_mb "$(adb shell dumpsys meminfo $PKG | awk '/TOTAL PSS:/{print int($3/1024); exit} /^ *TOTAL /{print int($2/1024); exit}')"
   fi
 done
 put net_bytes "$(( $(netbytes) - net0 ))"
+# Report-only (#331): the check-in sheet is in the view tree but Maestro reports it off screen on Android.
+if [ $status = 0 ]; then
+  maestro --device emulator-5554 test "$FLOWS/checkin.yaml" --debug-output "$OUT/maestro/checkin" --flatten-debug-output \
+    --test-output-dir "$OUT/shots" >"$OUT/maestro/checkin.log" 2>&1 && put checkin '"pass"' || {
+    put checkin '"fail"'; echo "::warning::check-in sheet not visible on $PROFILE (report-only)"; adb exec-out screencap -p >"$OUT/shots/WARN-checkin.png"; }
+fi
+# Report-only: cold relaunch with a signed-in session must land on the tabs again.
+if [ $status = 0 ]; then
+  adb shell am force-stop $PKG; adb logcat -c
+  maestro --device emulator-5554 test "$FLOWS/relaunch.yaml" --debug-output "$OUT/maestro/relaunch" --flatten-debug-output \
+    --test-output-dir "$OUT/shots" >"$OUT/maestro/relaunch.log" 2>&1 && put relaunch '"pass"' || {
+    put relaunch '"fail"'; echo "::warning::relaunch with session did not reach the tabs on $PROFILE"
+    echo "::group::Diagnostics (relaunch)"; adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && adb shell cat /sdcard/ui.xml | grep -oE '(text|resource-id|content-desc)="[^"]+"' | sort -u | head -40
+    adb logcat -d '*:E' ReactNativeJS:V | tail -120; echo "::endgroup::"; }
+fi
 adb logcat -d -s ReactNativeJS:V ReactNative:V AndroidRuntime:E >"$OUT/logcat.txt" 2>/dev/null || true
 exit $status

@@ -1,4 +1,4 @@
-# EN-16 (#175) Explore: map + Active now sheet, open the Testbot profile from the grid.
+# EN-16 (#175) Explore: map + Active now sheet, open the Testbot profile by its share link.
 appId: app.thirstr
 name: explore
 ---
@@ -12,14 +12,9 @@ name: explore
 - takeScreenshot: explore-map
 - tapOn:
     id: sheet-handle
-- scrollUntilVisible:
-    element:
-      text: "Testbot.*"
-    direction: DOWN
-    timeout: 60000
 - takeScreenshot: explore-grid
-- tapOn:
-    text: "Testbot.*"
+# Testbot's own share link (logged by the bot at start): the seeded city has 99+ profiles.
+- openLink: thirstr://p/${TESTBOT_SLUG}
 - extendedWaitUntil:
     visible:
       id: message-btn

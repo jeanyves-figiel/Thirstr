@@ -1,7 +1,7 @@
 import { PlusLimit } from '../plus/PlusLimit';
 import { plusLimitOf, type PlusLimitHit } from '../plus/plus';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
@@ -20,6 +20,7 @@ import { CaptionPreview } from './MomentViewer';
 import * as B from './blur';
 import { BlurPreview, bake } from './BlurCanvas';
 import { faceBoxes, faceBoxesAvailable } from '../../modules/thirstr-face';
+import { kavBehavior } from '../ui/keyboard';
 
 type Nav = { goBack: () => void; navigate: (r: string, p?: object) => void; replace?: (r: string, p?: object) => void };
 type Picked = { uri: string; w: number; h: number };
@@ -206,7 +207,7 @@ export function MomentNewScreen({ navigation }: { navigation: Nav }) {
   const lensLabel = lenses.map((l) => tx.modes[l]).join(', ');
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: color.shadow }}>
+    <KeyboardAvoidingView behavior={kavBehavior} style={{ flex: 1, backgroundColor: color.shadow }}>
       <View style={{ paddingTop: insets.top + space.s, alignItems: 'center' }}>
         <View style={{ width: frameW, height: frameH, borderRadius: 22, overflow: 'hidden', backgroundColor: color.bgRaised }}>
           <Image source={{ uri: src.uri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} accessibilityLabel={mx.newTitle} />

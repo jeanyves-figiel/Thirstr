@@ -21,14 +21,34 @@ put js_bundle_bytes "$(stat -f %z "$APP/main.jsbundle")"
 
 # Old-iPhone class device on the newest runtime on the image (older runtimes aren't installed).
 rt=$(xcrun simctl list runtimes -j | python3 -c "import json,sys;r=[x for x in json.load(sys.stdin)['runtimes'] if x['isAvailable'] and x['platform']=='iOS'];print(sorted(r,key=lambda x:[int(p) for p in x['version'].split('.')])[-1]['identifier'])")
-dt=$(xcrun simctl list devicetypes -j | python3 -c "
+# Smallest/oldest model first; skip models the runtime no longer supports (iOS 27 dropped SE 3).
+cands=$(xcrun simctl list runtimes -j | python3 -c "
 import json,sys
-t={x['name']:x['identifier'] for x in json.load(sys.stdin)['devicetypes']}
-for n in ['iPhone SE (3rd generation)','iPhone 11','iPhone 12 mini','iPhone 13 mini','iPhone SE (2nd generation)','iPhone 16e','iPhone 15','iPhone 16']:
-    if n in t: print(n+'|'+t[n]); break
+rt=[x for x in json.load(sys.stdin)['runtimes'] if x['identifier']=='$rt'][0]
+sup=[d for d in rt.get('supportedDeviceTypes',[]) if d.get('productFamily','iPhone')=='iPhone' and d['name'].startswith('iPhone')]
+pref=['iPhone SE (3rd generation)','iPhone 11','iPhone 12 mini','iPhone 13 mini','iPhone SE (2nd generation)','iPhone 16e','iPhone 15','iPhone 16','iPhone 17e','iPhone 17']
+rank=lambda d: (pref.index(d['name']) if d['name'] in pref else len(pref), d['name'])
+for d in sorted(sup,key=rank): print(d['name']+'|'+d['identifier'])
 ")
+echo "supported iPhones on $rt: $(echo "$cands" | cut -d'|' -f1 | paste -sd, -)"
+udid=""
+while IFS= read -r dt; do
+  [ -n "$dt" ] || continue
+  if udid=$(xcrun simctl create e2e-old "${dt##*|}" "$rt" 2>/dev/null); then break; fi
+  echo "skip ${dt%%|*}: not supported on $rt"; udid=""
+done <<<"$cands"
+if [ -z "$udid" ]; then  # fall back to a simulator the image already ships for this runtime
+  dt=$(xcrun simctl list devices available -j | python3 -c "
+import json,sys
+d=[x for x in json.load(sys.stdin)['devices'].get('$rt',[]) if x['name'].startswith('iPhone')]
+d.sort(key=lambda x:x['name'])
+print(d[0]['name']+'|'+d[0]['udid'] if d else '')
+")
+  udid="${dt##*|}"
+  [ -n "$udid" ] || { echo "::error::no iPhone simulator for $rt"; xcrun simctl list devices available; exit 1; }
+  echo "using preinstalled ${dt%%|*}"
+fi
 put device "\"${dt%%|*} / ${rt##*.}\""
-udid=$(xcrun simctl create e2e-old "${dt##*|}" "$rt") || { echo "::error::no simulator for ${dt%%|*} on $rt (device may not support this iOS)"; exit 1; }
 xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
 xcrun simctl install "$udid" "$APP"
 xcrun simctl privacy "$udid" grant location app.thirstr 2>/dev/null || true
@@ -48,7 +68,8 @@ for f in launch signin-sheet; do
   rc=$?; t1=$(date +%s.%N)
   put "flow_${f}_s" "$(python3 -c "print(round($t1-$t0,1))")"
   put "flow_${f}" "$([ $rc = 0 ] && echo '"pass"' || echo '"fail"')"
-  [ $rc = 0 ] || { status=1; echo "::error::flow $f failed on ios-old"; tail -30 "$OUT/maestro/$f.log"; xcrun simctl io "$udid" screenshot "$OUT/shots/FAILED-$f.png" || true; break; }
+  [ $rc = 0 ] || { status=1; echo "::error::flow $f failed on ios-old"; tail -30 "$OUT/maestro/$f.log"; xcrun simctl io "$udid" screenshot "$OUT/shots/FAILED-$f.png" || true
+    echo "::group::Diagnostics ($f)"; xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'process == "Thirstr"' 2>/dev/null | grep -iE "error|exception|javascript|warn" | tail -60; echo "::endgroup::"; break; }
   [ "$f" = launch ] && put tti_ms "$(python3 "$(dirname "$0")/tti.py" "$OUT/maestro/launch")"
 done
 rss=$(ps -axo rss=,command= | awk '/Thirstr.app\/Thirstr/ && !/awk/ {print int($1/1024); exit}')

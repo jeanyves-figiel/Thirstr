@@ -25,12 +25,22 @@ name: onboarding
     id: birthday-continue
 - tapOn:
     id: gender-man
-- tapOn:
-    id: identity-continue
+# Picking a gender auto-advances after ~380 ms (Basics.tsx); Continue only if still shown.
+- extendedWaitUntil:
+    visible:
+      id: here-hookup
+    timeout: 5000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: identity-continue
+    commands:
+      - tapOn:
+          id: identity-continue
 - tapOn:
     id: here-hookup
-- tapOn:
-    id: here-friends
+# One intent is enough; the others are below the fold on 720×1280.
 - tapOn:
     id: basics-continue
 - extendedWaitUntil:
@@ -53,21 +63,51 @@ name: onboarding
       visible: "(While using the app|Only this time|Allow)"
     commands:
       - tapOn: "(While using the app|Only this time|Allow)"
+# First fused fix on a cold, slow emulator can take minutes; wait for either outcome.
+- extendedWaitUntil:
+    notVisible: "Allow location, busy"
+    timeout: 180000
+# No position fix (emulators without Play services can't serve Balanced accuracy): the app falls
+# back to the city picker. Pick Zürich so the account still lands near Testbot.
+- runFlow:
+    when:
+      visible:
+        id: city-search
+    commands:
+      - tapOn:
+          id: city-search
+      - inputText: Zurich
+      - hideKeyboard   # Android ≤14: results can sit under the keyboard (#331)
+      - extendedWaitUntil:
+          visible:
+            id: "city-[0-9]+"
+          timeout: 60000
+      - tapOn:
+          id: "city-[0-9]+"
+          index: 0
 - extendedWaitUntil:
     visible:
       id: photo-later
     timeout: 60000
 - tapOn:
     id: photo-later
+# The runner marks this DEV account verified while onboarding runs, so the Verify step may be skipped.
 - extendedWaitUntil:
     visible:
-      id: verify-later
+      id: (verify-later|done-continue)
     timeout: 60000
-- tapOn:
-    id: verify-later
-- extendedWaitUntil:
-    visible:
+- runFlow:
+    when:
+      visible:
+        id: verify-later
+    commands:
+      - tapOn:
+          id: verify-later
+# 720×1280: the Done button can sit below the profile preview.
+- scrollUntilVisible:
+    element:
       id: done-continue
+    direction: DOWN
     timeout: 60000
 - tapOn:
     id: done-continue

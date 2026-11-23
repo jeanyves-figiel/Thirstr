@@ -11,6 +11,7 @@ name: chat
 - tapOn:
     id: chat-input
 - inputText: echo e2e one
+- hideKeyboard   # Android ≤14: composer can sit under the keyboard (#331)
 - extendedWaitUntil:
     visible:
       id: chat-send
@@ -26,6 +27,7 @@ name: chat
 - tapOn:
     id: chat-input
 - inputText: echo e2e two
+- hideKeyboard   # Android ≤14: composer can sit under the keyboard (#331)
 - extendedWaitUntil:
     visible:
       id: chat-send

@@ -440,7 +440,7 @@ export function Sheet({ visible, onClose, title, children, closeLabel = 'Close' 
       {/* Android: a Modal is its own window, so gestures need their own root. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
       {/* #134: the sheet rides up with the keyboard so its fields stay visible. */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <Animated.View style={[{ flex: 1 }, drag.scrimStyle]}>
         <Pressable style={s.scrim} onPress={onClose} accessibilityLabel={closeLabel} />
       </Animated.View>

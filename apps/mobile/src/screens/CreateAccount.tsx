@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { hx } from '../i18n/help';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { ApiError, Me } from '../api/client';
@@ -41,7 +41,7 @@ export function CreateAccountScreen({ mode, onDone, onEmailSent, onUnderage, onB
 
   return (
     // #134: the email field rides up with the keyboard instead of hiding behind it.
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[k.root, { paddingTop: insets.top + space.s, paddingBottom: (kb ? space.m : Math.max(insets.bottom, space.l)) + space.xs }]}>
+    <KeyboardAvoidingView behavior="padding" style={[k.root, { paddingTop: insets.top + space.s, paddingBottom: (kb ? space.m : Math.max(insets.bottom, space.l)) + space.xs }]}>
       <View style={c.head}>
         {onBack ? <BackButton onPress={onBack} /> : <View style={{ width: 44 }} />}
         <Wordmark size={24} />

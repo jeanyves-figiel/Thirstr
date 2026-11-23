@@ -659,7 +659,7 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.bgBase }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.bgBase }} behavior="padding">
       <View ref={anchor} pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1 }} onLayout={() => anchor.current?.measureInWindow((_x, y) => setRootY(y))} />
       {find !== null ? (
         <View style={{ paddingTop: insets.top + space.xs, paddingHorizontal: space.m, paddingBottom: space.s, flexDirection: 'row', alignItems: 'center', gap: space.s, borderBottomWidth: 1, borderColor: color.lineSubtle }}>

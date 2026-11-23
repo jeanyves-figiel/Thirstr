@@ -117,7 +117,7 @@ export function StepShell({
   const kb = useKeyboardShown();
   const Body = scroll ? ScrollView : View;
   return (
-    <KeyboardAvoidingView style={k.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={k.root} behavior="padding">
       <View style={[k.head, { paddingTop: insets.top + space.s }]}>
         {onBack ? <BackButton onPress={onBack} /> : <View style={{ width: touch }} />}
         {step ? <StepBar step={step} /> : <View style={{ flex: 1 }} />}

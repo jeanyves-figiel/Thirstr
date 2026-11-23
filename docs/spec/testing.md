@@ -59,8 +59,8 @@ Nightly (02:30 UTC) and on demand: `.github/workflows/device-matrix.yml`. No pai
   | Flow | Profiles | Checks |
   |---|---|---|
   | `launch.yaml` | all | cold start to the Welcome screen (`start`) |
-  | `onboarding.yaml` | Android | Get started → Google (DEV issuer) → name, birthday, identity, here-for → Area location (pinned to Zurich Altstetten) → photo later → verify later → Done → Explore |
-  | `explore.yaml` | Android | Explore map, grid sheet opens, Testbot 🤖 tile, profile opens |
+  | `onboarding.yaml` | Android | Get started → Google (DEV issuer) → name, birthday, identity, here-for → Area location (pinned to Zurich Altstetten) → photo later → verify later → Done → Explore. Then the runner marks this DEV account verified in the hermetic DB (messaging needs it; the selfie check can't run on an emulator) and relaunches the app |
+  | `explore.yaml` | Android | Explore map, grid sheet opens, Testbot 🤖 profile opens by its share link (`thirstr://p/{slug}`) |
   | `chat.yaml` | Android | Message Testbot → `echo` reply arrives; airplane mode on → send → offline banner → airplane mode off → message delivered and reply arrives (R-07 outbox) |
   | `checkin.yaml` | Android | chat menu › Date check-in sheet opens (safety contacts gate shown; a full started check-in needs a bot that accepts safety-contact invites, #266) |
   | `signin-sheet.yaml` | iOS | Get started → sign-in methods (Apple, passkey, Google) render |

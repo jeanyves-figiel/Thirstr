@@ -56,6 +56,14 @@ for f in launch onboarding explore chat checkin; do
     echo "::group::Diagnostics ($f)"; adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -3
     adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && adb shell cat /sdcard/ui.xml | grep -oE '(text|resource-id|content-desc)="[^"]+"' | sort -u | head -60
     adb logcat -d -s ReactNativeJS:V ReactNative:W AndroidRuntime:E expo:W | tail -80; echo "::endgroup::"; break; }
+  if [ "$f" = onboarding ]; then
+    # Messaging needs a verified account (ProfileScreen › message-btn). Selfie check can't run on an
+    # emulator, so mark the account the app just made as verified (hermetic DEV stack only), then relaunch
+    # so the app reloads /me.
+    docker compose exec -T db psql -U postgres -d thirstr_dev -c \
+      "UPDATE accounts SET verified_at = now() WHERE id = (SELECT id FROM accounts ORDER BY inserted_at DESC LIMIT 1)"
+    adb shell am force-stop $PKG; adb shell am start -W -n $PKG/.MainActivity >/dev/null; sleep 5
+  fi
   if [ "$f" = launch ]; then put tti_ms "$(python3 "$(dirname "$0")/tti.py" "$OUT/maestro/launch")"; fi
   if [ "$f" = explore ]; then
     put pss_mb "$(adb shell dumpsys meminfo $PKG | awk '/TOTAL PSS:/{print int($3/1024); exit} /^ *TOTAL /{print int($2/1024); exit}')"

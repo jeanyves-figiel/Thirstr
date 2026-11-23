@@ -34,7 +34,9 @@ adb shell settings put global hide_error_dialogs 1
 # Google APIs image: no Play Store self-updates during the run (CPU + network noise); let boot settle.
 adb shell pm disable-user --user 0 com.android.vending >/dev/null 2>&1 || true
 sleep 20
-adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0; adb shell settings put global animator_duration_scale 0
+# Window/transition animations off (flakiness); app animations stay on as on real phones: with
+# animator_duration_scale 0, native-driver sheet springs never left their start (sheets stayed off screen).
+adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0; adb shell settings put global animator_duration_scale 1
 
 # Cold start to first frame (am start -W), app installed + never started before = worst case
 adb shell am force-stop $PKG

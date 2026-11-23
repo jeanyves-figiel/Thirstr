@@ -77,13 +77,14 @@ name: onboarding
       - tapOn:
           id: city-search
       - inputText: Zurich
-      # Row's text is "Zürich" (CH on its own line); the field holds "Zurich", so take the 2nd match.
       - extendedWaitUntil:
-          visible: "CH"
+          visible:
+            id: "city-[0-9]+"
           timeout: 60000
+      - hideKeyboard
       - tapOn:
-          text: "Z.{1,2}rich"
-          index: 1
+          id: "city-[0-9]+"
+          index: 0
 - extendedWaitUntil:
     visible:
       id: photo-later

@@ -93,7 +93,7 @@ export function LocationScreen({ me, onDone }: { me: Me; onDone: (me: Me) => voi
         />
         <View style={{ gap: space.s }}>
           {cities.map((c) => (
-            <Pressable key={c.id} accessibilityRole="button" onPress={busy ? undefined : () => chooseCity(c)} style={({ pressed }) => [l.cityRow, pressed && k.pressed]}>
+            <Pressable key={c.id} testID={`city-${c.id}`} accessibilityRole="button" onPress={busy ? undefined : () => chooseCity(c)} style={({ pressed }) => [l.cityRow, pressed && k.pressed]}>
               <Text style={l.cityName}>{c.name}</Text>
               <Text style={l.cityCountry}>{c.country}</Text>
             </Pressable>

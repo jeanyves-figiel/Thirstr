@@ -11,6 +11,7 @@ import { t } from '../i18n/strings';
 import { BackButton, BigButton, Enter, k, StepShell } from '../onboarding/kit';
 import { color, font, radius, space } from '../theme/tokens';
 import { ErrorText, useKeyboardShown, Wordmark } from '../ui';
+import { kavBehavior } from '../ui/keyboard';
 
 // S-02 v2 (F-01 R-01.1, R-01.12, F-02 R-02.1b): Apple first, passkey, Google, email link; 18+ by consent line.
 export function CreateAccountScreen({ mode, onDone, onEmailSent, onUnderage, onBack, onRecover }: { mode: 'signup' | 'login'; onDone: (me: Me) => void; onEmailSent: (email: string, adult: boolean) => void; onUnderage: () => void; onBack?: () => void; onRecover?: () => void }) {
@@ -41,7 +42,7 @@ export function CreateAccountScreen({ mode, onDone, onEmailSent, onUnderage, onB
 
   return (
     // #134: the email field rides up with the keyboard instead of hiding behind it.
-    <KeyboardAvoidingView behavior="padding" style={[k.root, { paddingTop: insets.top + space.s, paddingBottom: (kb ? space.m : Math.max(insets.bottom, space.l)) + space.xs }]}>
+    <KeyboardAvoidingView behavior={kavBehavior} style={[k.root, { paddingTop: insets.top + space.s, paddingBottom: (kb ? space.m : Math.max(insets.bottom, space.l)) + space.xs }]}>
       <View style={c.head}>
         {onBack ? <BackButton onPress={onBack} /> : <View style={{ width: 44 }} />}
         <Wordmark size={24} />

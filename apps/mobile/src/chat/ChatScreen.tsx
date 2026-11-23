@@ -45,6 +45,7 @@ import * as Online from './friendOnline';
 import { hitSlot, MsgRow, ReactionBar, useChatGestures, type Hold } from './MsgGestures';
 import { mx as momx } from '../i18n/moments';
 import * as Moments from '../moments/api';
+import { kavBehavior } from '../ui/keyboard';
 
 type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void; setOptions: (o: object) => void };
 /** #210 draft: text placed in the composer, not sent ("I'm in" on a Tonight plan). */
@@ -659,7 +660,7 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.bgBase }} behavior="padding">
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.bgBase }} behavior={kavBehavior}>
       <View ref={anchor} pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1 }} onLayout={() => anchor.current?.measureInWindow((_x, y) => setRootY(y))} />
       {find !== null ? (
         <View style={{ paddingTop: insets.top + space.xs, paddingHorizontal: space.m, paddingBottom: space.s, flexDirection: 'row', alignItems: 'center', gap: space.s, borderBottomWidth: 1, borderColor: color.lineSubtle }}>

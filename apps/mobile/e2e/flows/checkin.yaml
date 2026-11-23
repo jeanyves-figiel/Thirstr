@@ -8,8 +8,8 @@ name: checkin
     id: chat-menu
 - tapOn:
     id: chat-checkin
+# The sheet's testID sits on a full-screen modal wrapper that Android reports as not visible; wait for its title.
 - extendedWaitUntil:
-    visible:
-      id: checkin-sheet
+    visible: "Meeting .*"
     timeout: 30000
 - takeScreenshot: checkin-sheet

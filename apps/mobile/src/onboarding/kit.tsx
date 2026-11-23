@@ -20,6 +20,7 @@ import Svg, { Path } from 'react-native-svg';
 import { o } from '../i18n/onboarding';
 import { color, font, motion, radius, space, touch } from '../theme/tokens';
 import { useKeyboardShown } from '../ui';
+import { kavBehavior } from '../ui/keyboard';
 
 // Onboarding v2 building blocks (F-02 R-02.1, issue 54). Pop tokens only.
 export const STEPS = 7;
@@ -117,7 +118,7 @@ export function StepShell({
   const kb = useKeyboardShown();
   const Body = scroll ? ScrollView : View;
   return (
-    <KeyboardAvoidingView style={k.root} behavior="padding">
+    <KeyboardAvoidingView style={k.root} behavior={kavBehavior}>
       <View style={[k.head, { paddingTop: insets.top + space.s }]}>
         {onBack ? <BackButton onPress={onBack} /> : <View style={{ width: touch }} />}
         {step ? <StepBar step={step} /> : <View style={{ flex: 1 }} />}

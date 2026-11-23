@@ -45,6 +45,13 @@ sleep 5; adb shell am force-stop $PKG
 
 net0=$(netbytes)
 status=0
+# Messaging needs a verified account (ProfileScreen › message-btn); the selfie check can't run on an
+# emulator. While the flows run, mark accounts created by this run as verified (hermetic DEV DB only,
+# never staging/prod), so the app picks it up from its own /me responses during onboarding.
+psql_dev() { docker compose exec -T db psql -U postgres -d thirstr_dev -Atc "$1"; }
+T0=$(psql_dev "SELECT now()")
+( while :; do psql_dev "UPDATE accounts SET verified_at = now() WHERE verified_at IS NULL AND NOT test_bot AND inserted_at > '$T0'" >/dev/null 2>&1; sleep 3; done ) & VER=$!
+trap 'kill $GEO $VER 2>/dev/null' EXIT
 for f in launch onboarding explore chat checkin; do
   t0=$(date +%s.%N)
   maestro --device emulator-5554 test "$FLOWS/$f.yaml" -e PROFILE="$PROFILE" -e TESTBOT_SLUG="${TESTBOT_SLUG:-}" \
@@ -56,19 +63,20 @@ for f in launch onboarding explore chat checkin; do
     echo "::group::Diagnostics ($f)"; adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -3
     adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && adb shell cat /sdcard/ui.xml | grep -oE '(text|resource-id|content-desc)="[^"]+"' | sort -u | head -60
     adb logcat -d -s ReactNativeJS:V ReactNative:W AndroidRuntime:E expo:W | tail -80; echo "::endgroup::"; break; }
-  if [ "$f" = onboarding ]; then
-    # Messaging needs a verified account (ProfileScreen › message-btn). Selfie check can't run on an
-    # emulator, so mark the account the app just made as verified (hermetic DEV stack only), then relaunch
-    # so the app reloads /me.
-    docker compose exec -T db psql -U postgres -d thirstr_dev -c \
-      "UPDATE accounts SET verified_at = now() WHERE id = (SELECT id FROM accounts ORDER BY inserted_at DESC LIMIT 1)"
-    adb shell am force-stop $PKG; adb shell am start -W -n $PKG/.MainActivity >/dev/null; sleep 5
-  fi
   if [ "$f" = launch ]; then put tti_ms "$(python3 "$(dirname "$0")/tti.py" "$OUT/maestro/launch")"; fi
   if [ "$f" = explore ]; then
     put pss_mb "$(adb shell dumpsys meminfo $PKG | awk '/TOTAL PSS:/{print int($3/1024); exit} /^ *TOTAL /{print int($2/1024); exit}')"
   fi
 done
 put net_bytes "$(( $(netbytes) - net0 ))"
+# Report-only: cold relaunch with a signed-in session must land on the tabs again.
+if [ $status = 0 ]; then
+  adb shell am force-stop $PKG; adb logcat -c
+  maestro --device emulator-5554 test "$FLOWS/relaunch.yaml" --debug-output "$OUT/maestro/relaunch" --flatten-debug-output \
+    --test-output-dir "$OUT/shots" >"$OUT/maestro/relaunch.log" 2>&1 && put relaunch '"pass"' || {
+    put relaunch '"fail"'; echo "::warning::relaunch with session did not reach the tabs on $PROFILE"
+    echo "::group::Diagnostics (relaunch)"; adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && adb shell cat /sdcard/ui.xml | grep -oE '(text|resource-id|content-desc)="[^"]+"' | sort -u | head -40
+    adb logcat -d '*:E' ReactNativeJS:V | tail -120; echo "::endgroup::"; }
+fi
 adb logcat -d -s ReactNativeJS:V ReactNative:V AndroidRuntime:E >"$OUT/logcat.txt" 2>/dev/null || true
 exit $status

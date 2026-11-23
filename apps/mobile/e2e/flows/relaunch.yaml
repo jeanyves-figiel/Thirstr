@@ -1,0 +1,11 @@
+# EN-16 (#175) report-only: cold relaunch with a signed-in session lands on the tabs (no clearState).
+appId: app.thirstr
+name: relaunch
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: tab-Explore
+    timeout: 60000
+- takeScreenshot: relaunch

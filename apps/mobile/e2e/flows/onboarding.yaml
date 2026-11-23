@@ -88,15 +88,23 @@ name: onboarding
     timeout: 60000
 - tapOn:
     id: photo-later
+# The runner marks this DEV account verified while onboarding runs, so the Verify step may be skipped.
 - extendedWaitUntil:
     visible:
-      id: verify-later
+      id: (verify-later|done-continue)
     timeout: 60000
-- tapOn:
-    id: verify-later
-- extendedWaitUntil:
-    visible:
+- runFlow:
+    when:
+      visible:
+        id: verify-later
+    commands:
+      - tapOn:
+          id: verify-later
+# 720×1280: the Done button can sit below the profile preview.
+- scrollUntilVisible:
+    element:
       id: done-continue
+    direction: DOWN
     timeout: 60000
 - tapOn:
     id: done-continue

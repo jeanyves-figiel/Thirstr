@@ -77,11 +77,11 @@ name: onboarding
       - tapOn:
           id: city-search
       - inputText: Zurich
+      - hideKeyboard   # Android ≤14: results can sit under the keyboard (#331)
       - extendedWaitUntil:
           visible:
             id: "city-[0-9]+"
           timeout: 60000
-      - hideKeyboard
       - tapOn:
           id: "city-[0-9]+"
           index: 0

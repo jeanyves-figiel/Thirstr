@@ -2,6 +2,11 @@
 appId: app.thirstr
 name: explore
 ---
+# The runner relaunches the app after onboarding (verified account): wait for the tab bar.
+- extendedWaitUntil:
+    visible:
+      id: tab-Explore
+    timeout: 60000
 - runFlow: dismiss.yaml
 - tapOn:
     id: tab-Explore

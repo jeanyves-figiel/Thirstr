@@ -77,10 +77,11 @@ name: onboarding
       - tapOn:
           id: city-search
       - inputText: Zurich
+      # Row label is "Zürich, CH"; regex so a decomposed ü (u + U+0308) from the city DB still matches.
       - extendedWaitUntil:
-          visible: "Zürich"
-          timeout: 30000
-      - tapOn: "Zürich"
+          visible: "Z.{1,2}rich, CH"
+          timeout: 60000
+      - tapOn: "Z.{1,2}rich, CH"
 - extendedWaitUntil:
     visible:
       id: photo-later

@@ -6,6 +6,9 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Specified
+- **F-24 Ask, Fit & Picks, proposed** (docs, #338, [mockup](https://claude.ai/artifact/UbsUPZs3DfVCDvw4NCfSPt)): three on-device concepts in answer to Grindr Edge: natural-language search parsed on the phone into existing filters (Ask), an Interests field with an explainable Fit score and hookup compatibility (Fit), and a few daily picks ranked on the phone (Picks). No AI provider, no query or score leaves the phone. Owner pick pending; nothing built.
+
 ### Changed
 - **Photos are reviewed after they go live, not approved one by one** (server, #325, F-15 R-15.56, admin-console A-03): photos the AI is unsure about (borderline score) now go live at once. They are kept out of Friends and Sport and listed in the console under "Live, AI unsure" with Keep / Remove. Remove sends the member a statement of reasons with appeal. Borderline Moments go live the same way. When the AI service gives no verdict, the check is retried automatically every 2 min, and a person only sees the photo after 6 h. Every day at 03:20 UTC, a random sample of live photos from the last 7 days (`PHOTO_SAMPLE_PER_DAY`, default 20) is listed for review. The known-image check before publishing is unchanged. Migration: `moments.after_review` (expand-only).
 

@@ -54,7 +54,7 @@ Status: draft v0.1 · 2026-11-17 · Source of truth before any code. Product rat
 | F-21 | [Moments: temporary photos](features/F21-moments.md) (#212) |
 | F-22 | [Help & support: help center, contact, account recovery, feedback](features/F22-support.md) (#178) |
 | F-23 | [Thirstr Plus: Free / Plus limits, Plus screen, Views, billing](features/F23-plus.md) (#7) |
-| F-24 | [Ask, Fit & Picks: on-device AI search and interest matching](features/F24-ask-fit-picks.md) (#338, proposed) |
+| F-25 | [Ask, Fit & Picks: on-device AI search and interest matching, Plus](features/F25-ask-fit-picks.md) (#338, D-27) |
 | I-01 | [Social post sharing (X, Bluesky, OnlyFans, JustFor.Fans)](integrations/I01-social-share.md) |
 | I-02 | [GDPR export import & profile share link](integrations/I02-import-share-link.md) |
 | I-03 | [Platform services: push, maps, passkeys, attestation, stores](integrations/I03-platform.md) |

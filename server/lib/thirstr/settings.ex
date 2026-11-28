@@ -30,6 +30,8 @@ defmodule Thirstr.Settings do
     "read_receipts" => true,
     # F-21 R-21.17 (#212): watch Moments quietly (views counted, never named; reciprocal)
     "moments_quiet" => false,
+    # F-24 R-24.15 (#338): "Count me in others' Fit" (off = no Fit chips, card or Picks boost)
+    "fit_visible" => true,
     # R-17.6 verified | tapped | filters
     "who_can_message" => "verified",
     # R-07.10 blur | allow | block

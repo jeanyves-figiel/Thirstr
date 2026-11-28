@@ -26,6 +26,29 @@ defmodule Thirstr.Profiles.Fields do
   @prompts ~w(perfect_night ask_me_about green_flag weekend looking_for_someone_who)
   @languages ~w(en fr de it es pt nl pl tr ru ar he ja zh id th hi sv da no fi cs el hu ro uk)
 
+  # F-24 R-24.10 (#338): Interests, curated, safe for every lens, no free text. IDs never reuse
+  # another field's value (labels are looked up by value). Order = display order in the app.
+  @interest_groups [
+    {"music",
+     ~w(techno house pop_music hip_hop rock indie_music classical_music opera jazz karaoke djing festivals)},
+    {"nights",
+     ~w(clubbing cocktail_bars drag_shows ballroom cabaret pride_events eurovision live_gigs)},
+    {"outdoors",
+     ~w(mountains beach lakes camping road_trips sailing gardening stargazing nature_walks)},
+    {"play", ~w(video_games board_games tabletop_rpg anime comics sci_fi fantasy chess puzzles)},
+    {"screen", ~w(cinema tv_series reality_tv documentaries horror_films podcasts)},
+    {"food",
+     ~w(cooking baking wine craft_beer coffee brunch vegan_food street_food fine_dining bbq)},
+    {"culture",
+     ~w(art_galleries museums theatre musicals photography books poetry writing design fashion architecture history)},
+    {"mind", ~w(tech coding science languages_learning philosophy astrology psychology)},
+    {"travel", ~w(travelling city_breaks backpacking gay_cruises spa_days)},
+    {"home", ~w(dogs cats plants interior_design diy cars motorbikes)},
+    {"wellness", ~w(meditation healthy_eating mindfulness sober_life)},
+    {"causes", ~w(lgbtq_activism climate volunteering politics animal_rights)}
+  ]
+  @interests Enum.flat_map(@interest_groups, &elem(&1, 1))
+
   # key => {type, opts}; default visibility; lenses that show it besides Hookup (F-06 R-06.1b):
   # :all = every lens, "friends" = Friends and Sport, "sport" = Sport only, "now" = Hookup only.
   @catalogue %{
@@ -43,6 +66,7 @@ defmodule Thirstr.Profiles.Fields do
     "tribes" => {{:multi, @tribes, 3}, "public", ~w(now friends)},
     "looking_for" => {{:multi, @looking_for, 7}, "public", ~w(now friends)},
     "relationship" => {{:enum, @relationship}, "public", ~w(now friends)},
+    "interests" => {{:multi, @interests, 12}, "public", :all},
     "creator" => {:bool, "public", ~w(now)},
     # hookup, default Verified (R-06.5); Hookup lens only
     "position" => {{:enum, @positions}, "verified", ~w(now)},
@@ -111,6 +135,10 @@ defmodule Thirstr.Profiles.Fields do
   def visibilities, do: @visibilities
 
   def sports, do: @sports
+  def interests, do: @interests
+
+  @doc "F-24 R-24.10: interest groups in display order, for GET /profile-options."
+  def interest_groups, do: Enum.map(@interest_groups, fn {g, ids} -> %{id: g, interests: ids} end)
 
   def options do
     %{
@@ -131,7 +159,8 @@ defmodule Thirstr.Profiles.Fields do
       sport_intent: @intents,
       relationship: @relationship,
       prompt_q: @prompts,
-      languages: @languages
+      languages: @languages,
+      interests: @interests
     }
   end
 

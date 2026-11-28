@@ -54,7 +54,7 @@ Status: draft v0.1 · 2026-11-17 · Source of truth before any code. Product rat
 | F-21 | [Moments: temporary photos](features/F21-moments.md) (#212) |
 | F-22 | [Help & support: help center, contact, account recovery, feedback](features/F22-support.md) (#178) |
 | F-23 | [Thirstr Plus: Free / Plus limits, Plus screen, Views, billing](features/F23-plus.md) (#7) |
-| F-24 | [Seconds: bring back people you've met](features/F24-seconds.md) (#339, proposal, pick pending) |
+| F-25 | [Refill: bring back people you've met](features/F25-refill.md) (#339, Plus) |
 | I-01 | [Social post sharing (X, Bluesky, OnlyFans, JustFor.Fans)](integrations/I01-social-share.md) |
 | I-02 | [GDPR export import & profile share link](integrations/I02-import-share-link.md) |
 | I-03 | [Platform services: push, maps, passkeys, attestation, stores](integrations/I03-platform.md) |

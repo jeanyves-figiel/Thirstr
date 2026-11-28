@@ -6,6 +6,8 @@ Principle: store the minimum; anything audience-restricted is E2EE or coarse-fla
 
 ### db_maint_status (key, ok, at, detail) — DB-05/07 (#333): one row per upkeep task (`backup`, `verify` from the DB machine's backup-loop; `amcheck`, `maintenance` from `Thirstr.Jobs.DbMaintenance`). No user data; read by `Thirstr.DbHealth` for alerts ([db-integrity.md](db-integrity.md)). Churn tables (`location_cells`, `mls_messages`, `oban_jobs`, `now_status`, `taps`, `mls_send_keys`, `refresh_tokens`, `spent_tokens`) carry per-table autovacuum settings (DB-02).
 
+### idempotency_keys (account_id, key, path, req_hash, status, body, created_at) — DB-10 (#335): one claim per account and `Idempotency-Key`, the stored answer of an allow-listed create; 24 h (ExpirySweep). Answers hold no secrets (api.md › Idempotency).
+
 ### accounts
 | Column | Type | Notes |
 |---|---|---|

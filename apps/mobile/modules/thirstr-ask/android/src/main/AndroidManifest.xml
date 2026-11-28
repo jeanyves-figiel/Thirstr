@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- F-24 R-24.1: dictation in Ask, on-device recognizer only, asked on first hold of the mic. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+</manifest>

@@ -45,6 +45,7 @@ import { ppl } from '../i18n/people';
 import { away, filterMap, keep, restoreShow, Show, SHOW_KEY, showIds, wantMore } from './show';
 import { readSnapshot, saveSnapshot, snapshotSig } from './snapshot';
 import { parseAsk, type AskResult } from '../match/ask';
+import { askSmart } from '../match/engine';
 import { bestFitOrder, fitOf, type FitResult } from '../match/fit';
 import { useMatchState } from '../match/store';
 import { usePicks } from '../match/usePicks';
@@ -563,9 +564,15 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   // F-24 Ask (R-24.1–R-24.6): parse on this phone, review, then apply as ordinary filters.
   const profileOptions = useOptions();
   const options = profileOptions?.options;
+  const askSeq = useRef(0);
   const onAsk = useCallback((text: string) => {
     setAskCount(null);
+    // Grammar answer at once; the on-device model (when the phone has one) refines it (R-24.3).
     setAsk(parseAsk(text, options));
+    const n = ++askSeq.current;
+    askSmart(text, options).then((r) => {
+      if (askSeq.current === n) setAsk(r);
+    });
   }, [options]);
   const askFilters = useMemo(() => (ask ? { ...defaultFilters, ...ask.filters } as Filters : null), [ask]);
   const askIntents = ask?.intents ?? intents;

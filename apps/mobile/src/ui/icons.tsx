@@ -151,6 +151,13 @@ export const Icon = {
       <Path d="M20 20l-4.2-4.2" {...base(c, w)} />
     </Svg>
   ),
+  /** F-24 Ask dictation. */
+  Mic: ({ size = 18, c = color.fgMuted, w = 2.2 }: P) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Rect x={9} y={3} width={6} height={11} rx={3} {...base(c, w)} />
+      <Path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" {...base(c, w)} />
+    </Svg>
+  ),
   /** Friends (R-07.36). */
   UserPlus: ({ size = 22, c = color.friends, w = 2.2 }: P) => (
     <Svg width={size} height={size} viewBox="0 0 24 24">

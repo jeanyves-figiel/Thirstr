@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.thirstr'
+version = '1.0.0'
+
+android {
+  namespace "app.thirstr.ask"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // F-24 R-24.3 (#346): Gemini Nano through AICore, on-device only. No model ships in the APK;
+  // the system manages Nano. Devices without it fall back to the phrase grammar.
+  implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+}

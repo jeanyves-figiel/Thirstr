@@ -19,6 +19,7 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSSupportsLiveActivities": true,
+        "NSSpeechRecognitionUsageDescription": "While you hold the mic in Ask, your words are turned into text on your phone. Nothing is sent to Apple or Thirstr.",
         "NSSupportsLiveActivitiesFrequentUpdates": false
       },
       "config": {
@@ -53,14 +54,14 @@
         {
           "photosPermission": "Pick photos for your profile, or photos and videos to send in a chat. Nothing leaves your phone until you send it.",
           "cameraPermission": "Thirstr uses the camera for the selfie check, to take a photo or record a video to send in a chat, and to record a video check someone asked you for.",
-          "microphonePermission": "Thirstr uses the microphone only when you record a video to send in a chat. The video check records without sound."
+          "microphonePermission": "Thirstr uses the microphone when you record a video to send in a chat, and while you hold the mic in Ask to dictate a search (on your phone only). The video check records without sound."
         }
       ],
       [
         "expo-camera",
         {
           "cameraPermission": "Thirstr uses the camera for the selfie check (checked on your phone and deleted), to take a photo or record a video to send in a chat, and to record a video check someone asked you for.",
-          "microphonePermission": "Thirstr uses the microphone only when you record a video to send in a chat. The video check records without sound.",
+          "microphonePermission": "Thirstr uses the microphone when you record a video to send in a chat, and while you hold the mic in Ask to dictate a search (on your phone only). The video check records without sound.",
           "recordAudioAndroid": false
         }
       ],

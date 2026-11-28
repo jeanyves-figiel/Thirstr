@@ -53,8 +53,9 @@ Owner ask (2026-11-28): something similar to Grindr Edge (AI that narrows a sear
 
 ## Build notes (v1, PR 340)
 
-- Ask ships engine (3), the phrase grammar, on every phone. Engines (1) and (2) need native modules and come later (#346). Dictation uses the keyboard's own on-device dictation; no custom mic button.
-- Suggestion chips from past asks (R-24.1) are not in v1.
+- Ask engines (#346, native module `modules/thirstr-ask`): (1) iOS 26+ Foundation Models with guided generation (`@Generable AskOut`, temperature 0); (2) Android ML Kit GenAI Prompt API, Gemini Nano via AICore (JSON answer, temperature 0, 256 tokens max). The grammar always runs first and its answer shows at once; refused asks never reach a model; the model only fills keys the grammar missed (grammar wins on conflict) and every answer goes through `sanitize`. 2.5 s timeout, then grammar only. Never downloads a model.
+- Dictation (R-24.1): hold the mic in the Ask field. iOS `SFSpeechRecognizer` with `requiresOnDeviceRecognition`, Android `createOnDeviceSpeechRecognizer` (API 31+). Mic hidden when on-device recognition is not available (no server fallback). 15 s cap on iOS. Letting go sends what was heard.
+- Suggestion chips: up to 3 of the person's last asks (encrypted store `thirstr.ask.recent.v1`, max 20, newest first), else 3 starter examples. "Clear recent asks" in Settings › Ask, Fit & Picks.
 - Picks: `limits.picks_per_day` = 10 for Plus (5 per window), 0 for Free. Candidates exclude anyone with an existing chat on this phone. Model, cooldowns and window state live in the private store key `thirstr.picks.v1`.
 - Settings › Privacy › Ask, Fit & Picks: four switches (Ask, Fit, Picks, Learn from what I do), "Count me in others' Fit" (`fit_visible`, server setting), learned traits, Forget everything learned.
 

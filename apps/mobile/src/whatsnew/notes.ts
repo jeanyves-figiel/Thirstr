@@ -24,9 +24,9 @@ export const NOTES: Note[] = [
         glyph: 'spark',
         to: tab('Explore'),
         text: {
-          en: ['Ask in your words', 'Type what you want. Plus fills the filters.'],
-          fr: ['Demande avec tes mots', 'Écris ce que tu veux, Plus fait les filtres.'],
-          de: ['Frag in deinen Worten', 'Schreib, was du willst. Plus setzt Filter.'],
+          en: ['Ask in your words', 'Type or say it. Plus fills the filters.'],
+          fr: ['Demande avec tes mots', 'Écris ou dis-le, Plus fait les filtres.'],
+          de: ['Frag in deinen Worten', 'Schreib oder sag es. Plus setzt Filter.'],
         },
       },
       {

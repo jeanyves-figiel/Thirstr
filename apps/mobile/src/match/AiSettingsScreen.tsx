@@ -9,6 +9,7 @@ import { aiOn } from '../plus/plus';
 import { color, font, radius, space, type } from '../theme/tokens';
 import { toast } from '../ui/Toast';
 import { forget, learnedTraits, loadState, type Learned } from './picks';
+import { clearRecent } from './recent';
 import { setPrefs, useMatchState } from './store';
 import { traitLabel } from './ui';
 
@@ -58,6 +59,18 @@ export function AiSettingsScreen() {
         </View>
       </Group>
       <Group>
+        <Row
+          testID="ai-recent"
+          title={mt.sRecent}
+          sub={mt.sRecentSub}
+          chevron={false}
+          onPress={async () => {
+            await clearRecent();
+            toast(mt.recentCleared);
+          }}
+        />
+      </Group>
+      <Group>
         {confirm ? (
           <View style={{ padding: space.l, gap: space.m }}>
             <Text style={{ ...type.headline, color: color.fgPrimary }}>{mt.forgetAsk}</Text>
@@ -80,7 +93,7 @@ export function AiSettingsScreen() {
               </Pressable>
             </View>
           </View>
-        ) : (
+) : (
           <Row testID="ai-forget" title={mt.sForget} sub={mt.sForgetSub} danger chevron={false} onPress={() => setConfirm(true)} />
         )}
       </Group>

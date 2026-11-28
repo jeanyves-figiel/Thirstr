@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import type { Card } from '../api/types';
 import { distanceLabel, opt, tx } from '../i18n/app';
@@ -9,7 +9,9 @@ import { color, font, modeColor, radius, space, type } from '../theme/tokens';
 import { Button, Icon, Photo, Scrim, Sheet, VerifiedTick } from '../ui';
 import { askHasFilters, type AskResult, type Refusal } from './ask';
 import type { FitResult, Reason } from './fit';
+import { speech } from './engine';
 import { AGE_BANDS, type Learned } from './picks';
+import { addRecent, useRecent } from './recent';
 
 // F-24 Ask, Fit & Picks UI (#338, D-27, mockup https://claude.ai/artifact/UbsUPZs3DfVCDvw4NCfSPt).
 
@@ -151,12 +153,40 @@ export function SortChips({ order, onOrder, plus }: { order: Order; onOrder: (o:
 export function AskBar({ plus, onAsk, onPlus }: { plus: boolean; onAsk: (text: string) => void; onPlus: () => void }) {
   const [text, setText] = useState('');
   const [focused, setFocused] = useState(false);
+  const [listening, setListening] = useState(false);
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
-  const submit = () => {
-    const t = text.trim();
+  const recent = useRecent();
+  const suggestions = recent.length ? recent.slice(0, 3) : mt.askSuggestions;
+  const [canSpeak] = useState(() => plus && speech.supported());
+  const send = (raw: string) => {
+    const t = raw.trim();
     if (!t) return;
     input.current?.blur();
+    addRecent(t);
     onAsk(t);
+  };
+  const submit = () => send(text);
+  const sendRef = useRef(send);
+  useEffect(() => {
+    sendRef.current = send;
+  });
+  // R-24.1: hold the mic to dictate (on-device only); letting go sends what was heard.
+  useEffect(() => {
+    if (!canSpeak) return;
+    return speech.on(
+      (t, final) => {
+        setText(t);
+        if (final) {
+          setListening(false);
+          sendRef.current(t);
+        }
+      },
+      () => setListening(false),
+    );
+  }, [canSpeak]);
+  const hold = async () => {
+    setListening(true);
+    if (!(await speech.listen())) setListening(false);
   };
   return (
     <View style={{ gap: space.s }}>
@@ -189,7 +219,7 @@ export function AskBar({ plus, onAsk, onPlus }: { plus: boolean; onAsk: (text: s
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onSubmitEditing={submit}
-            placeholder={mt.askPlaceholder}
+            placeholder={listening ? mt.askListening : mt.askPlaceholder}
             placeholderTextColor={color.fgMuted}
             returnKeyType="search"
             enterKeyHint="search"
@@ -202,6 +232,19 @@ export function AskBar({ plus, onAsk, onPlus }: { plus: boolean; onAsk: (text: s
             {mt.askPlaceholder}
           </Text>
         )}
+        {plus && canSpeak && !text.trim() ? (
+          <Pressable
+            testID="ask-mic"
+            accessibilityRole="button"
+            accessibilityLabel={listening ? mt.askListening : mt.askMic}
+            onPressIn={hold}
+            onPressOut={() => speech.stop()}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: listening ? color.trust : 'transparent', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon.Mic size={17} c={listening ? color.onAccent : color.fgSecondary} />
+          </Pressable>
+        ) : null}
         {plus ? (
           text.trim() ? (
             <Pressable testID="ask-go" accessibilityRole="button" accessibilityLabel={mt.askGo} onPress={submit} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: color.trust, alignItems: 'center', justifyContent: 'center' }}>
@@ -216,14 +259,13 @@ export function AskBar({ plus, onAsk, onPlus }: { plus: boolean; onAsk: (text: s
       </Pressable>
       {plus && focused && !text ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-          {mt.askSuggestions.map((s) => (
+          {suggestions.map((s) => (
             <Pressable
               key={s}
               accessibilityRole="button"
               onPress={() => {
                 setText(s);
-                input.current?.blur();
-                onAsk(s);
+                send(s);
               }}
               style={{ height: 30, paddingHorizontal: space.m, borderRadius: 15, backgroundColor: 'rgba(38,34,72,0.92)', borderWidth: 1, borderColor: color.line, justifyContent: 'center' }}
             >

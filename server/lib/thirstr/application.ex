@@ -18,6 +18,8 @@ defmodule Thirstr.Application do
       Thirstr.Valkey,
       {DNSCluster, query: Application.get_env(:thirstr, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Thirstr.PubSub},
+      # EN-23 OB-1: cluster-wide live envelope sockets (:pg scope)
+      Thirstr.Delivery,
       {Finch, name: Thirstr.Finch},
       {Task.Supervisor, name: Thirstr.TaskSup},
       {Oban, Application.fetch_env!(:thirstr, Oban)},

@@ -16,24 +16,41 @@ defmodule ThirstrWeb.UserChannel do
   not see never produces an event).
   """
   use Phoenix.Channel
-  alias Thirstr.{Chat, Moments, Notify, Repo, Settings, Social}
+  alias Thirstr.{Chat, Delivery, Moments, Notify, Repo, Settings, Social}
   alias Thirstr.Accounts.Account
 
   @impl true
   def join("user:me", params, socket) do
+    t0 = System.monotonic_time(:millisecond)
     :ok = Phoenix.PubSub.subscribe(Thirstr.PubSub, Notify.topic(socket.assigns.account_id))
     env? = params["env"] == true
 
-    if env?,
-      do:
-        :ok =
-          Phoenix.PubSub.subscribe(Thirstr.PubSub, Chat.device_topic(socket.assigns.device_id))
+    if env? do
+      :ok = Phoenix.PubSub.subscribe(Thirstr.PubSub, Chat.device_topic(socket.assigns.device_id))
+      # EN-23 OB-1: this device is online for delivery metrics while this process lives.
+      Delivery.join_live(socket.assigns.device_id)
+      send(self(), :seen)
+    end
+
+    Delivery.socket_joined(env?, System.monotonic_time(:millisecond) - t0)
 
     {:ok,
      socket |> assign(:env, env?) |> assign(:rings, %{}) |> assign(:ring_intents, ["hookup"])}
   end
 
   @impl true
+  def terminate(reason, _socket) do
+    Delivery.socket_closed(reason)
+    :ok
+  end
+
+  # EN-23 OB-1: a pending push for this device woke it (off the join path).
+  @impl true
+  def handle_info(:seen, socket) do
+    Delivery.device_seen(socket.assigns.device_id)
+    {:noreply, socket}
+  end
+
   def handle_info({:event, "message.new", _}, %{assigns: %{env: true}} = socket),
     do: {:noreply, socket}
 
@@ -76,7 +93,9 @@ defmodule ThirstrWeb.UserChannel do
   end
 
   def handle_in("ack", %{"ids" => ids}, socket) when is_list(ids) and length(ids) <= 500 do
-    {:ok, n} = Chat.ack(%Account{id: socket.assigns.account_id}, socket.assigns.device_id, ids)
+    {:ok, n} =
+      Chat.ack(%Account{id: socket.assigns.account_id}, socket.assigns.device_id, ids, "socket")
+
     {:reply, {:ok, %{acked: n}}, socket}
   end
 

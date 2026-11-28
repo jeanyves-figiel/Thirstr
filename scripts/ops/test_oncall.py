@@ -112,5 +112,34 @@ class RulesFileTest(unittest.TestCase):
         self.assertEqual(oncall.check(oncall.load_rules(), oncall.runbook_anchors()), [])
 
 
+class BurnTest(unittest.TestCase):
+    # EN-23 OB-5: multi-window burn-rate rules.
+    RULE = {
+        "id": "slo-x-fast", "title": "x", "sev": 1, "type": "burn", "for_min": 0,
+        "total": 'sum(increase(req_count[$W]))', "bad": 'sum(increase(req_count{status="5xx"}[$W]))',
+        "objective": 0.999, "long": "1h", "short": "5m", "factor": 14.4, "min_total": 100,
+    }
+
+    def test_query_has_both_windows_threshold_and_guard(self):
+        q = oncall.burn_query(self.RULE)
+        self.assertIn('req_count{status="5xx"}[1h]', q)
+        self.assertIn('req_count{status="5xx"}[5m]', q)
+        self.assertIn("> 0.0144", q)
+        self.assertIn("sum(increase(req_count[1h])) >= 100", q)
+        self.assertNotIn("$W", q)
+
+    def test_good_template_is_inverted(self):
+        r = dict(self.RULE, good='sum(increase(ok[$W]))')
+        r.pop("bad")
+        self.assertIn("(1 - (sum(increase(ok[1h])))", oncall.burn_query(r))
+
+    def test_check_rejects_bad_burn_rules(self):
+        r = dict(self.RULE, long="1 hour", objective=1)
+        errs = oncall.check_burn(r)
+        self.assertTrue(any("long" in e for e in errs))
+        self.assertTrue(any("objective" in e for e in errs))
+        self.assertEqual(oncall.check_burn(self.RULE), [])
+
+
 if __name__ == "__main__":
     unittest.main()

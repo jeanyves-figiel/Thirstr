@@ -45,7 +45,7 @@ EMERGENCY_EXPIRE_S = 3600  # ... for up to 1 h, until acknowledged
 ESCALATE_AFTER_MIN = 15
 HEARTBEAT_WEEKDAY = 0  # Monday
 HEARTBEAT_HOUR_UTC = 7
-TYPES = {"promql", "http", "cert", "meta"}
+TYPES = {"promql", "burn", "http", "cert", "meta"}
 
 
 # ---------------------------------------------------------------- rules
@@ -88,6 +88,8 @@ def check(rules: dict, anchors: set[str]) -> list[str]:
             errors.append(f"{rid}: for_min must be >= 0")
         if r.get("type") == "promql" and not r.get("query"):
             errors.append(f"{rid}: query missing")
+        if r.get("type") == "burn":
+            errors.extend(f"{rid}: {e}" for e in check_burn(r))
         if r.get("type") == "http" and not str(r.get("url", "")).startswith("https://"):
             errors.append(f"{rid}: url must be https")
         if r.get("type") == "cert" and not r.get("hosts"):
@@ -95,6 +97,61 @@ def check(rules: dict, anchors: set[str]) -> list[str]:
         if rid not in anchors:
             errors.append(f"{rid}: no '## {rid}' section in docs/runbooks/alerts.md")
     return errors
+
+
+# ---------------------------------------------------------------- SLO burn rate (EN-23 OB-5)
+#
+# Multi-window, multi-burn-rate (Google SRE workbook; docs/spec/slos.md › 3). A rule gives
+# `bad` (or `good`) and `total` PromQL templates where `$W` is the window, the `objective`,
+# `long`/`short` windows, a `factor` and `min_total` (events in the long window, so one failure
+# at night never pages). Fires when the error ratio is above factor × budget in both windows.
+
+
+def check_burn(r: dict) -> list[str]:
+    errs = []
+    if not r.get("total") or "$W" not in r["total"]:
+        errs.append("total must be a PromQL template with $W")
+    if bool(r.get("bad")) == bool(r.get("good")):
+        errs.append("give exactly one of bad / good")
+    elif "$W" not in (r.get("bad") or r.get("good")):
+        errs.append("bad / good must contain $W")
+    if not (0 < r.get("objective", 0) < 1):
+        errs.append("objective must be between 0 and 1")
+    for k in ("long", "short"):
+        if not re.fullmatch(r"\d+[mhd]", str(r.get(k, ""))):
+            errs.append(f"{k} must be a window like 5m, 1h, 3d")
+    if not isinstance(r.get("factor"), (int, float)) or r["factor"] <= 0:
+        errs.append("factor must be > 0")
+    return errs
+
+
+def err_ratio(r: dict, w: str) -> str:
+    total = r["total"].replace("$W", w)
+    if r.get("bad"):
+        return f"(({r['bad'].replace('$W', w)}) or on() vector(0)) / ({total})"
+    return f"(1 - ({r['good'].replace('$W', w)}) / ({total}))"
+
+
+def burn_query(r: dict) -> str:
+    """Error ratio over the long window, returned only when the rule fires."""
+    limit = r["factor"] * (1 - r["objective"])
+    q = f"({err_ratio(r, r['long'])} > {limit:.6g}) and on() ({err_ratio(r, r['short'])} > {limit:.6g})"
+    if r.get("min_total"):
+        q += f" and on() ({r['total'].replace('$W', r['long'])} >= {r['min_total']})"
+    return q
+
+
+def eval_burn(rule: dict, prom: str, token: str | None) -> tuple[bool, str]:
+    firing, _ = eval_promql({"query": burn_query(rule), "unit": "ratio"}, prom, token)
+    if not firing:
+        return False, ""
+    # detail: burn rate over the long window, e.g. "29× budget (1h)"
+    _, v = eval_promql({"query": err_ratio(rule, rule["long"]), "unit": ""}, prom, token)
+    try:
+        rate = float(v) / (1 - rule["objective"])
+        return True, f"{rate:.0f}× budget ({rule['long']})"
+    except ValueError:
+        return True, ""
 
 
 # ---------------------------------------------------------------- probes
@@ -308,6 +365,8 @@ def evaluate(rules: dict, state: dict, pager: Pager, now: float, token: str | No
         try:
             if rule["type"] == "promql":
                 firing, detail = eval_promql(rule, rules["prometheus"], token)
+            elif rule["type"] == "burn":
+                firing, detail = eval_burn(rule, rules["prometheus"], token)
             elif rule["type"] == "http":
                 firing, detail = eval_http(rule)
             elif rule["type"] == "cert":

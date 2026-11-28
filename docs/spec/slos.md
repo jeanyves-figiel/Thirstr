@@ -15,6 +15,10 @@ Status: specified 2026-11-21 · Targets come from [`enterprise-readiness.md`](en
 | SLO-3 | Messages delivered fast | message relay requests (`route="/v1/mls/messages"`: send + pull) answered < 500 ms / all | 95 % (p95 < 500 ms) | 5 % slow |
 | SLO-4 | Map and grid load fast | Explore reads (`/v1/explore/{grid,map,tray,summary}`) answered < 300 ms / all | 95 % (p95 < 300 ms) | 5 % slow |
 | SLO-5 | App doesn't crash | sessions without a fatal report / sessions (`thirstr_client_session_count`, `thirstr_client_error_count{fatal="true"}`, EN-05) | 99.5 % | 0.5 % of sessions |
+| SLO-7 | Messages arrive fast when the recipient is online (EN-23) | envelopes acked ≤ 1 s after storing / all, recipient had a live socket (`thirstr_chat_delivery_duration_ms{recipient="online"}`) | 99 % | 1 % slow |
+| SLO-8 | Chat works end to end (EN-23, from PR B) | synthetic chat probe runs with every step ok / runs (prod) | 99.5 % | ≈ 40 failed runs |
+| SLO-9 | No message lost or skipped (EN-23) | `thirstr_chat_skipped_count` + `thirstr_chat_stuck_online` | 0 per day | none: any breach is an incident |
+| SLO-10 | App feels fast (EN-23, from PR C) | RUM `send_ack` ≤ 1 s and `explore_first` ≤ 2.5 s | 95 % each | 5 % slow |
 | SLO-6 | Nothing kept too long | retention probes at 0 (`thirstr_retention_overdue`, EN-17) | 100 % of 5-min probes over 1 h | none: any breach is an incident |
 
 Not SLOs (alerts only, monitoring.md): push retries, job queues, backups, DB size, memory.
@@ -37,14 +41,16 @@ Latency buckets (ms, `ThirstrWeb.Telemetry`): 5, 10, 25, 50, 100, 250, **300**, 
 
 **Which app:** the SLOs and alerts are defined on `thirstr-api-prod`. During the closed beta the TestFlight app talks to **staging**, so prod only sees probes and smoke tests; the weekly report shows both `prod` and `staging` (staging = where testers really are) until the store app points at prod.
 
-## 3. Burn-rate alerts (Grafana, monitoring.md)
+## 3. Burn-rate alerts (on-call runner, `infra/alerts/rules.json` type `burn`, EN-23 OB-5)
 Multi-window, multi-burn-rate (Google SRE workbook). `B` = budget ratio (1 − objective).
 
 | Severity | Condition (both windows) | Budget used if it lasts | Action |
 |---|---|---|---|
 | Page | error ratio > 14.4 × B over 1 h **and** 5 m | 2 % in 1 h | phone push to owner; incident-response.md |
 | Page | > 6 × B over 6 h **and** 30 m | 5 % in 6 h | phone push |
-| Ticket | > 1 × B over 3 d **and** 6 h | 10 % in 3 d | email; review at the weekly SLO review |
+| Ticket | > 1 × B over 3 d **and** 6 h | 10 % in 3 d | SEV3 (job summary); review at the weekly SLO review |
+
+Implemented 2026-11-28 (#343) for SLO-1/3/4/5/7 (`slo-<n>-fast|slow|drain`) and SLO-7 on staging (`slo-7-fast-staging`). Closed beta: SLO-1 pages (SEV1), the others push (SEV2). SLO-9 = threshold rules `messages-stuck-online` (SEV1) and `messages-skipped` (SEV2).
 
 Low traffic guard: alerts need ≥ 100 requests in the long window (closed beta has a few hundred requests an hour), so one failed request at 03:00 never pages.
 

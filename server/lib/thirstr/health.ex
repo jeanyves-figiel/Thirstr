@@ -91,7 +91,7 @@ defmodule Thirstr.Health do
     end
   end
 
-  # {key, {:instant, promql} | {:range, promql}}
+  # {key (atom, or string for generated ones), {:instant, promql} | {:range, promql}}
   @doc false
   def queries(app, range) do
     a = ~s(app="#{app}")
@@ -127,12 +127,12 @@ defmodule Thirstr.Health do
     sends =
       for r <- ~w(stored repeat dropped limited rejected),
           into: %{},
-          do: {:"send_#{r}", {:instant, inc.(~s|thirstr_chat_send_count{#{a},result="#{r}"}|)}}
+          do: {"send_#{r}", {:instant, inc.(~s|thirstr_chat_send_count{#{a},result="#{r}"}|)}}
 
     push =
       for o <- ~w(ok retry gone skipped),
           into: %{},
-          do: {:"push_#{o}", {:instant, inc.(~s|thirstr_push_send_count{#{a},outcome="#{o}"}|)}}
+          do: {"push_#{o}", {:instant, inc.(~s|thirstr_push_send_count{#{a},outcome="#{o}"}|)}}
 
     api =
       for {name, re} <- @groups, into: %{} do
@@ -141,14 +141,14 @@ defmodule Thirstr.Health do
             do: ~s|#{a},route!~"/v1/(mls\|explore\|me\|profiles\|auth\|media).*"|,
             else: ~s|#{a},route=~"#{re}"|
 
-        {:"api_#{name}",
+        {"api_#{name}",
          {:instant,
           ~s|histogram_quantile(0.95, sum by (le) (rate(phoenix_router_dispatch_stop_duration_bucket{#{sel}}[#{w}])))|}}
       end
 
     slos =
       for {id, s} <- slos(a), {suffix, win} <- [{"28d", "28d"}, {"1h", "1h"}], into: %{} do
-        {:"slo_#{id}_#{suffix}", {:instant, s.(win)}}
+        {"slo_#{id}_#{suffix}", {:instant, s.(win)}}
       end
 
     base |> Map.merge(sends) |> Map.merge(push) |> Map.merge(api) |> Map.merge(slos)

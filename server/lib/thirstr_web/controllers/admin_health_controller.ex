@@ -185,7 +185,7 @@ defmodule ThirstrWeb.AdminHealthController do
   defp slo_table(v) do
     rows =
       Enum.map_join(Health.slo_list(), "", fn {id, name, target, obj} ->
-        now = clamp(v[:"slo_#{id}_28d"])
+        now = clamp(v["slo_#{id}_28d"])
         b = burn(v, id)
         budget = if now, do: max(0.0, 1 - (1 - now) / (1 - obj)), else: nil
 
@@ -217,7 +217,7 @@ defmodule ThirstrWeb.AdminHealthController do
   defp burn(v, id) do
     obj = Enum.find_value(Health.slo_list(), fn {i, _, _, o} -> if i == id, do: o end)
 
-    case clamp(v[:"slo_#{id}_1h"]) do
+    case clamp(v["slo_#{id}_1h"]) do
       nil -> 0.0
       good -> (1 - good) / (1 - obj)
     end
@@ -302,10 +302,10 @@ defmodule ThirstrWeb.AdminHealthController do
 
   defp counts(v, range) do
     items = [
-      {"Sent", v[:send_stored], ""},
-      {"Duplicates caught", v[:send_repeat], ""},
-      {"Dropped (blocked / gone)", v[:send_dropped], ""},
-      {"Rate limited", v[:send_limited], ""},
+      {"Sent", v["send_stored"], ""},
+      {"Duplicates caught", v["send_repeat"], ""},
+      {"Dropped (blocked / gone)", v["send_dropped"], ""},
+      {"Rate limited", v["send_limited"], ""},
       {"Skipped", v[:skipped], if((v[:skipped] || 0) > 0, do: "bad", else: "")},
       {"Stuck online (max)", v[:stuck_max], if((v[:stuck_max] || 0) > 0, do: "bad", else: "")},
       {"Lost (30 d sweep)", v[:lost], if((v[:lost] || 0) > 0, do: "bad", else: "")},
@@ -322,10 +322,10 @@ defmodule ThirstrWeb.AdminHealthController do
 
   defp notif(v, range) do
     rows = [
-      {"Accepted", v[:push_ok], "var(--violet)"},
-      {"Retrying", v[:push_retry], "var(--sun)"},
-      {"Token gone", v[:push_gone], "var(--muted)"},
-      {"Turned off / unknown", v[:push_skipped], "var(--line2)"}
+      {"Accepted", v["push_ok"], "var(--violet)"},
+      {"Retrying", v["push_retry"], "var(--sun)"},
+      {"Token gone", v["push_gone"], "var(--muted)"},
+      {"Turned off / unknown", v["push_skipped"], "var(--line2)"}
     ]
 
     bars(
@@ -338,7 +338,7 @@ defmodule ThirstrWeb.AdminHealthController do
   defp api(v, range) do
     rows =
       Enum.map(Health.groups(), fn g ->
-        ms = v[:"api_#{g}"]
+        ms = v["api_#{g}"]
 
         c =
           cond do

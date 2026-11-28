@@ -58,8 +58,51 @@ Common commands (`-a thirstr-api-prod` unless noted):
 
 ## db-filling
 **Meaning:** database over 2.2 GB on a 3 GB volume.
-1. Extend the volume, no downtime: `fly volumes extend <id> -s 6 -a thirstr-db-prod`.
+1. Extend the volume, no downtime: `fly volumes extend <id> -s 6 -a thirstr-db-prod`. After DB-09 (`scripts/ops/db-hardening.sh`) the volume also grows by itself at 80 % (+2 GB, cap 50 GB); raise the alert threshold with the volume.
 2. Look for a table growing too fast (`docs/runbooks/capacity.md`); retention sweeps running? ([retention-overdue](#retention-overdue)).
+
+## db-corruption
+**Meaning:** Postgres read a page whose checksum is wrong, or the nightly index check (amcheck) failed. Data on disk is damaged. Spec: `docs/spec/db-integrity.md`.
+1. Which index: `select detail from db_maint_status where key = 'amcheck'`. Checksums: `select datname, checksum_failures, checksum_last_failure from pg_stat_database`.
+2. Index only (heap fine): `REINDEX INDEX CONCURRENTLY <name>`, then rerun the check: `Thirstr.Jobs.DbMaintenance.run(heapallindexed: true)` (remote console).
+3. Table pages damaged: stop writes to that feature (kill switch, `flags.md`), restore to a new machine from backup before the first failure time (`db-backups.md` › Restore), compare, switch over. Never run `zero_damaged_pages` on the live DB.
+4. Open an incident (`incident-response.md`); find the cause (volume / host) with Fly support.
+
+## db-archive-failing
+**Meaning:** WAL segments are not reaching the backup bucket (failure or last archive > 15 min). Point-in-time restore loses everything after the last archived segment, and `pg_wal` fills the volume.
+1. `fly logs -a thirstr-db-prod | grep -i archive`. Usual causes: Tigris credentials rotated, bucket policy, disk full.
+2. Fix credentials: `fly secrets set --stage PGBACKREST_REPO1_S3_KEY=… -a thirstr-db-prod`, then restart the machine. Check `pgbackrest check` (`db-backups.md`).
+3. After recovery take a full backup (`db-backups.md` › Manual backup).
+
+## db-backup-old
+**Meaning:** no good base backup in 30 h, or the weekly `pgbackrest verify` failed or did not run for 8 days.
+1. `select * from db_maint_status where key in ('backup','verify')`; `fly logs -a thirstr-db-prod | grep backup-loop`.
+2. Backup failing: same causes as [db-archive-failing](#db-archive-failing). Verify failing: a backup file is damaged → take a new full backup at once; keep the old set until the new one verifies.
+
+## db-xid-age
+**Meaning:** the oldest unfrozen transaction ID is over 500 M. At 2.1 B Postgres stops accepting writes to prevent wraparound.
+1. Blocker? A long transaction ([db-long-xact](#db-long-xact)), an abandoned prepared transaction (`select * from pg_prepared_xacts`) or replication slot (`select * from pg_replication_slots`).
+2. `select relname, age(relfrozenxid) from pg_class where relkind = 'r' order by 2 desc limit 10`, then `VACUUM (FREEZE, VERBOSE) <table>` on the top ones.
+
+## db-long-xact
+**Meaning:** a transaction has been open over 10 min. It blocks vacuum (bloat) and may hold locks.
+1. `select pid, now() - xact_start, state, left(query, 120) from pg_stat_activity where xact_start is not null order by 2 desc`.
+2. Not a known long job (migration, restore): `select pg_cancel_backend(<pid>)`, then `pg_terminate_backend` if needed. Idle-in-transaction sessions are cut after 5 min automatically.
+
+## db-connections
+**Meaning:** over 80 % of `max_connections` are in use. New connections soon fail.
+1. Who: `select usename, application_name, state, count(*) from pg_stat_activity group by 1, 2, 3 order by 4 desc`.
+2. API machines × `POOL_SIZE` too high after a scale-out: add PgBouncer per `scale-out-1m.md` §5, or raise `PG_MAX_CONNECTIONS` on the DB machine (restart).
+
+## db-maintenance-stale
+**Meaning:** the nightly `Thirstr.Jobs.DbMaintenance` (04:40 UTC) failed or has not run for 30 h. No push.
+1. `select detail from db_maint_status where key = 'maintenance'`; `oban_job_exception_count{worker="Thirstr.Jobs.DbMaintenance"}`.
+2. Rerun from a remote console: `Thirstr.Jobs.DbMaintenance.run()`.
+
+## db-dead-tuples
+**Meaning:** a table over 10 000 rows has had more than 20 % dead rows for 2 h: autovacuum can't keep up. No push.
+1. Blocked by a long transaction? ([db-long-xact](#db-long-xact)). Otherwise `VACUUM (ANALYZE, VERBOSE) <table>`.
+2. Repeats daily on `mls_messages` / `location_cells`: that is the partitioning trigger in `scale-out-1m.md` §2–3.
 
 ## machine-memory
 **Meaning:** an API machine uses over 400 MB of its 512 MB for 10 min. OOM restart likely.

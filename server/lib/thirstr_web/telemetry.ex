@@ -21,6 +21,14 @@ defmodule ThirstrWeb.Telemetry do
            name: :thirstr_retention_poller},
           id: :thirstr_retention_poller
         ),
+        # DB-06 (#333): Postgres health gauges, every 60 s
+        Supervisor.child_spec(
+          {:telemetry_poller,
+           measurements: [{Thirstr.DbHealth, :measure, []}],
+           period: 60_000,
+           name: :thirstr_db_health_poller},
+          id: :thirstr_db_health_poller
+        ),
         {TelemetryMetricsPrometheus.Core, metrics: prometheus_metrics()}
       ] ++ metrics_server()
 
@@ -148,7 +156,19 @@ defmodule ThirstrWeb.Telemetry do
       counter("thirstr.client.session.count", tags: [:platform]),
       counter("thirstr.valkey.fallback.count"),
       last_value("thirstr.db.size_bytes"),
-      last_value("thirstr.retention.overdue", tags: [:rule])
+      last_value("thirstr.retention.overdue", tags: [:rule]),
+      # DB-06 (#333): docs/spec/db-integrity.md › 3
+      last_value("thirstr.db_health.xid_age"),
+      last_value("thirstr.db_health.longest_xact_s"),
+      last_value("thirstr.db_health.connections_ratio"),
+      last_value("thirstr.db_health.invalid_indexes"),
+      last_value("thirstr.db_health.checksum_failures"),
+      last_value("thirstr.db_health.checksums_on"),
+      last_value("thirstr.db_health.archive_age_s"),
+      last_value("thirstr.db_health.archive_failing"),
+      last_value("thirstr.db_health.dead_ratio", tags: [:table]),
+      last_value("thirstr.db_maint.age_s", tags: [:key]),
+      last_value("thirstr.db_maint.ok", tags: [:key])
     ]
   end
 

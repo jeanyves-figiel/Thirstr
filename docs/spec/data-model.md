@@ -4,6 +4,8 @@ Principle: store the minimum; anything audience-restricted is E2EE or coarse-fla
 
 ## Postgres
 
+### db_maint_status (key, ok, at, detail) — DB-05/07 (#333): one row per upkeep task (`backup`, `verify` from the DB machine's backup-loop; `amcheck`, `maintenance` from `Thirstr.Jobs.DbMaintenance`). No user data; read by `Thirstr.DbHealth` for alerts ([db-integrity.md](db-integrity.md)). Churn tables (`location_cells`, `mls_messages`, `oban_jobs`, `now_status`, `taps`, `mls_send_keys`, `refresh_tokens`, `spent_tokens`) carry per-table autovacuum settings (DB-02).
+
 ### accounts
 | Column | Type | Notes |
 |---|---|---|

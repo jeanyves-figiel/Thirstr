@@ -15,7 +15,10 @@ default_db =
 config :thirstr, Thirstr.Repo,
   url: env.("DATABASE_URL", default_db),
   pool_size: String.to_integer(env.("POOL_SIZE", "10")),
-  socket_options: if(env.("ECTO_IPV6", "false") in ~w(true 1), do: [:inet6], else: [])
+  socket_options: if(env.("ECTO_IPV6", "false") in ~w(true 1), do: [:inet6], else: []),
+  # DB-03 (#333): a runaway query can't hold a pool slot forever. Migrations (Thirstr.Release)
+  # and Thirstr.Jobs.DbMaintenance lift it on their own connections.
+  parameters: [statement_timeout: env.("DB_STATEMENT_TIMEOUT", "60s")]
 
 app_url = env.("APP_URL", "https://localhost:7443")
 

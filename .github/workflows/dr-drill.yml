@@ -1,12 +1,12 @@
 # EN-17 (#176) disaster-recovery drill: restore the database into ANOTHER EU region from backups only,
-# measure RTO/RPO, dry-run the migrations of the image live on staging, then destroy everything.
+# measure RTO/RPO, check the copy for corruption (amcheck, DB-08), dry-run the migrations of the image live on staging, then destroy everything.
 # Runbook: docs/runbooks/db-backups.md › Automated drill. Result → run summary + comment on the "DR drill log" issue.
 # Cost: temporary shared-cpu-1x machines + volume for ~5–10 min per run (a few cents).
 name: DR drill
 
 on:
   schedule:
-    - cron: "17 4 1 1,4,7,10 *" # quarterly, 1st of Jan/Apr/Jul/Oct 04:17 UTC (quiet hour)
+    - cron: "17 4 1 * *" # monthly (ops.md, DB-08 #333), 1st of the month 04:17 UTC (quiet hour)
   workflow_dispatch:
     inputs:
       env:
@@ -59,10 +59,10 @@ jobs:
           r=$(cat result.json 2>/dev/null || echo '{}')
           ok=$([[ "$OUTCOME" == "success" ]] && echo "✔" || echo "✘ failed")
           row=$(jq -r --arg ok "$ok" --arg run "$RUN_URL" '
-            "| \(.at // (now|todate)) | \(.env // env.DRILL_ENV) | \(.region // env.DRILL_REGION) | \($ok) | \(.rto_s // "–") s | \(.rpo_s // "–") s | \(.accounts // "–") | \(.migrate // "–") | [run](\($run)) |"' <<<"$r")
-          { echo "| Date | Env | Region | Result | RTO (usable DB) | RPO (WAL lag) | accounts | migrations | |"; echo "|---|---|---|---|---|---|---|---|---|"; echo "$row"; } >> "$GITHUB_STEP_SUMMARY"
+            "| \(.at // (now|todate)) | \(.env // env.DRILL_ENV) | \(.region // env.DRILL_REGION) | \($ok) | \(.rto_s // "–") s | \(.rpo_s // "–") s | \(.accounts // "–") | \(.amcheck // "–") | \(.migrate // "–") | [run](\($run)) |"' <<<"$r")
+          { echo "| Date | Env | Region | Result | RTO (usable DB) | RPO (WAL lag) | accounts | amcheck | migrations | |"; echo "|---|---|---|---|---|---|---|---|---|---|"; echo "$row"; } >> "$GITHUB_STEP_SUMMARY"
           gh label create dr-drill --repo "$GITHUB_REPOSITORY" --color 3DD6C3 --description "DR drill log (EN-17)" --force >/dev/null
           n=$(gh issue list --repo "$GITHUB_REPOSITORY" --label dr-drill --state open --json number --jq '.[0].number // empty')
           [[ -n "$n" ]] || n=$(gh issue create --repo "$GITHUB_REPOSITORY" --label dr-drill --title "DR drill log" \
             --body "Automated disaster-recovery drills (EN-17, #176). One comment per run. Runbook: docs/runbooks/db-backups.md › Automated drill. Targets: enterprise-readiness.md › 1 (RTO 4 h, RPO 5 min in closed beta)." | grep -o '[0-9]*$')
-          gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "$(printf '| Date | Env | Region | Result | RTO | RPO | accounts | migrations | |\n|---|---|---|---|---|---|---|---|---|\n%s' "$row")"
+          gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "$(printf '| Date | Env | Region | Result | RTO | RPO | accounts | amcheck | migrations | |\n|---|---|---|---|---|---|---|---|---|---|\n%s' "$row")"

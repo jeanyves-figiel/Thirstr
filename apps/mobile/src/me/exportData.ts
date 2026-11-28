@@ -6,6 +6,7 @@
 // Streamed: one file in memory at a time, written to the zip as it goes (energy and RAM stay flat
 // for big albums). Web builds the zip in memory and downloads it.
 import { gcm } from '@noble/ciphers/aes.js';
+import * as Refill from '../refill/refill';
 import { Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import { Platform, Share } from 'react-native';
 import type { File, FileHandle } from 'expo-file-system';
@@ -113,7 +114,7 @@ export async function collect(put: (path: string, data: Uint8Array, compress: bo
     ...server,
     note: 'Photos and album files are in this archive. Chats, private notes, favorites, friends and trusted-contact names come from this phone only.',
     data,
-    device: { chats, private_notes: notes, favorites: (await kv.get('favs')) ?? {}, friends: (await kv.get('friends')) ?? {}, trusted_contacts: contacts, private_albums: albumIndex },
+    device: { chats, private_notes: notes, favorites: (await kv.get('favs')) ?? {}, friends: (await kv.get('friends')) ?? {}, refill: await Refill.loadRefill().then(Refill.exportRefill), trusted_contacts: contacts, private_albums: albumIndex },
   };
   check();
   progress({ stage: 'zip', done: 0, total: 1 });

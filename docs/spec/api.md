@@ -134,8 +134,10 @@ Trip: `{id, city:{id, name, country, lat, lng}, first_day, last_day, show_days, 
 
 `trip_id` (own, unexpired trip) on `GET /explore/grid|map|tray|summary|visitors` and `GET /profiles/:id`: the viewer point becomes the trip city's centre (R-20.15); no Exact pins; locals with `show_to_remote` off or in Safe Mode are left out (R-20.17). Unknown or foreign trip → 404. `GET /explore/grid` interleaves visitors (R-20.10) unless `visitors=false`; `GET /profiles/:id` adds `trip` when the viewer point is in the trip city's area (R-20.7).
 
+F-25 (#339): Explore cards and `GET /profiles/:id` carry `resurface` (bool): the profile's `resurface_ok` setting, false while he is in Safe Mode and on one's own profile. `GET /profiles/:id?purpose=refill` (the app checking one past contact before a Refill card) must never count as a profile view (F-23 Views).
+
 ### Settings & Safe Mode (F-17, F-14)
-| GET · PATCH | /me/settings | server-enforced settings (hide_from_*, show_in_*, show_to_remote (F-20, default true), show_distance, online_visible, read_receipts, who_can_message, explicit_from_strangers, disappearing_default, push, quiet_hours) |
+| GET · PATCH | /me/settings | server-enforced settings (hide_from_*, show_in_*, show_to_remote (F-20, default true), resurface_ok (F-25, default false), show_distance, online_visible, read_receipts, who_can_message, explicit_from_strangers, disappearing_default, push, quiet_hours) |
 | PUT | /me/safe_mode | {setting: auto\|on\|off, active: bool} → Me (country detection stays on device) |
 | GET | /safe-mode/countries | public, `cache-control: public, max-age=21600` → {version, source, countries: [ISO alpha-2]}; same body for every caller (R-14.1a) |
 

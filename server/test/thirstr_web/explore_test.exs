@@ -659,4 +659,35 @@ defmodule ThirstrWeb.ExploreTest do
     own = v.c |> recycle_authed() |> get("/v1/profiles/#{v.pid}") |> json_response(200)
     assert own["online"] == false
   end
+
+  # F-25 R-25.1 / R-25.3 (#339): the only Refill bit the server shares.
+  test "cards and profile view carry resurface: off by default, on when allowed, off in Safe Mode",
+       %{viewer: v, other: o} do
+    card = fn -> Enum.find(grid(v.c)["items"], &(&1["id"] == o.pid)) end
+    view = fn -> v.c |> recycle_authed() |> get("/v1/profiles/#{o.pid}") |> json_response(200) end
+    assert card.()["resurface"] == false
+    assert view.()["resurface"] == false
+
+    o.c
+    |> recycle_authed()
+    |> patch("/v1/me/settings", %{resurface_ok: true})
+    |> json_response(200)
+    assert card.()["resurface"] == true
+    assert view.()["resurface"] == true
+
+    o.c
+    |> recycle_authed()
+    |> patch("/v1/me/settings", %{resurface_ok: "yes"})
+    |> json_response(422)
+
+    Thirstr.Repo.query!(
+      "UPDATE accounts SET safe_mode_active = true WHERE id = (SELECT account_id FROM profiles WHERE id = $1)",
+      [Ecto.UUID.dump!(o.pid)]
+    )
+
+    assert view.()["resurface"] == false
+
+    own = v.c |> recycle_authed() |> get("/v1/profiles/#{v.pid}") |> json_response(200)
+    assert own["resurface"] == false
+  end
 end

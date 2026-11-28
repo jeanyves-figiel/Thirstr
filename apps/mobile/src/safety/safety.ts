@@ -1,6 +1,7 @@
 // F-13 trusted contacts + meet check-in + panic (F13-safety.md › Beta implementation).
 // Contacts (label, relay id, rid, key) are device-only; the server relays AES-GCM envelopes.
 import { Platform } from 'react-native';
+import { markMet } from '../refill/refill';
 import { api } from '../api/client';
 import { fromB64, fromB64url, fromUtf8, rand, toB64, toB64url, utf8 } from '../chat/bytes';
 import { kv } from '../chat/kv';
@@ -181,6 +182,8 @@ export async function okCheckin() {
   const oks = await envs(await accepted(), { k: 'ok', from: a.name });
   await api('POST', `/checkin/${a.token}/ok`, { oks }).catch(() => {});
   await clearActive();
+  // F-25 concept C (#339): a date with him ended well → remember it and ask "Again?" (device-only).
+  if (a.peer) await markMet(a.peer).catch(() => {});
 }
 
 /** SOS / duress: release now with the current location (R-13.8, R-13.9). */

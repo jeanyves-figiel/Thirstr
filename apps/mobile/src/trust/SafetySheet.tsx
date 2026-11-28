@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { mute as muteRefill } from '../refill/refill';
 import { Pressable, Text, View } from 'react-native';
 import { api, ApiError } from '../api/client';
 import { mod } from '../i18n/mod';
@@ -61,6 +62,8 @@ export function SafetySheet({ visible, target, onClose, onReport, onGone, onRest
     setBusy(true);
     try {
       await api('POST', `/profiles/${t.id}/hide`);
+      // F-25 R-25.3: hidden people are never brought back by Refill.
+      await muteRefill(t.id, true).catch(() => {});
       buzz();
       close();
       onGone?.('hide', t);
@@ -68,7 +71,10 @@ export function SafetySheet({ visible, target, onClose, onReport, onGone, onRest
         label: mod.undo,
         on: () =>
           api('DELETE', `/profiles/${t.id}/hide`).then(
-            () => onRestored?.(t),
+            () => {
+              muteRefill(t.id, false).catch(() => {});
+              onRestored?.(t);
+            },
             () => {},
           ),
       });

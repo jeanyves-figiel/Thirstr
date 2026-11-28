@@ -19,7 +19,7 @@ defmodule Thirstr.Social do
            Repo.query!(
              """
              SELECT p.id::text, p.kind, p.display_name, p.age, p.gender, p.gender_other, p.fields,
-                    p.visibility_map, a.id::text, a.verified_at, a.inserted_at, a.settings, a.status,
+                    p.visibility_map, a.id::text, a.verified_at, a.inserted_at, #{Settings.settings_sql()}, a.status,
                     p.seeded, p.public_updated_at, p.show_in
              FROM profiles p JOIN accounts a ON a.id = p.account_id
              WHERE p.id = $1
@@ -135,6 +135,8 @@ defmodule Thirstr.Social do
          updated_at: t.updated_at,
          # F-21 R-21.9: ring on the profile photo
          moments: Thirstr.Moments.summary(viewer, t.id, lens),
+         # F-25 R-25.1 (#339)
+         resurface: t.account_id != viewer.id and Settings.resurface?(t.settings),
          self: t.account_id == viewer.id
        }}
     end

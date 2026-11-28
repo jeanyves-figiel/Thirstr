@@ -21,6 +21,9 @@ defmodule Thirstr.Settings do
     "show_in_venues" => true,
     # F-20 R-17.14 (#188): travellers looking around from afar can see me
     "show_to_remote" => true,
+    # F-25 R-25.2 (#339, D-26): people I've met can be brought back to me by Refill. Off until the
+    # app's one-time intro card asks.
+    "resurface_ok" => false,
     # exact (a rounded number, #197) | range (buckets only) | none
     "show_distance" => "exact",
     # #197 R-05.13 "Show closer distance" (Area at ~50 m), asked in onboarding
@@ -49,6 +52,21 @@ defmodule Thirstr.Settings do
   }
 
   def defaults, do: @defaults
+
+  @doc """
+  F-25 R-25.1 / R-25.3: the only Refill bit the server shares. `settings` may carry `"_sm"`
+  (Safe Mode on or active, added by the profile and Explore queries): then never.
+  """
+  def resurface?(settings) when is_map(settings),
+    do: settings["resurface_ok"] == true and settings["_sm"] != true
+
+  def resurface?(_), do: false
+
+  @doc "SQL for `a.settings` with the Safe Mode bit `_sm` added (for `resurface?/1`)."
+  def settings_sql(a \\ "a") do
+    "COALESCE(#{a}.settings, '{}'::jsonb) || " <>
+      "jsonb_build_object('_sm', (#{a}.safe_mode = 'on' OR #{a}.safe_mode_active))"
+  end
 
   def get(%Account{settings: s}), do: Map.merge(@defaults, s || %{})
   def get(%Account{} = a, key), do: Map.get(get(a), key)

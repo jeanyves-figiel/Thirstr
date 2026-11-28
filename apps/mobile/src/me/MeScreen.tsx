@@ -1,4 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
+import * as Refill from '../refill/refill';
+import { rfx } from '../i18n/refill';
+import { isPlus } from '../plus/plus';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +39,7 @@ const LENSES_SHIPPED = Date.parse('2026-11-19T00:00:00Z');
 // "Show me in" lens tiles, Yours (albums, date check-in). Settings behind the gear.
 export function MeScreen({ navigation }: { navigation: Nav }) {
   const { me, refresh, setMode } = useSession();
+  Refill.useRefill();
   const insets = useSafeAreaInsets();
   const p: MyProfile | undefined = me.profile ?? me.profiles?.[0];
   const showIn: Mode[] = p?.show_in ?? ['hookup'];
@@ -228,6 +232,19 @@ export function MeScreen({ navigation }: { navigation: Nav }) {
               {trips.length ? <Text style={rowValue}>{trips.length}</Text> : null}
               <Icon.Next />
             </Row>
+            {/* F-25 (#339): Me › Refill, the people I'd see again (Plus, device-only). */}
+            {isPlus(me) ? (
+              <Row testID="me-refill" onPress={() => navigation.navigate('RefillBook')} label={rfx.meRow}>
+                <IconTile tone={color.personal}>
+                  <Icon.Refill size={18} c={color.personal} />
+                </IconTile>
+                <View style={{ flex: 1 }}>
+                  <Text style={rowTitle}>{rfx.meRow}</Text>
+                  <Text style={rowSub} numberOfLines={1}>{rfx.meSub(Refill.book('yes').length)}</Text>
+                </View>
+                <Icon.Next />
+              </Row>
+            ) : null}
             {/* F-21 R-21.14 (#212): Moments, live count; tap = own viewer, or post the first one */}
             <Row
               testID="me-moments"

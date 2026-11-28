@@ -25,6 +25,7 @@ Status: draft v0.1 · 2026-11-17 · Source of truth before any code. Product rat
 | — | [Scalability, message reliability & phone cache (review 2026-11-21)](scalability-and-reliability.md) |
 | — | [Scale-out design for 1M users (EN-03, #162)](scale-out-1m.md) |
 | — | [Database integrity & maintenance (DB-01…DB-11, #333–#336)](db-integrity.md) |
+| — | [Message delivery & latency monitoring (EN-23, OB-1…OB-7, #343)](delivery-latency-monitoring.md) |
 | — | [Enterprise readiness: plan, roadmap & costs](enterprise-readiness.md) |
 | — | [Test strategy](testing.md) |
 | — | [Admin & moderation console](admin-console.md) |

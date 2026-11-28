@@ -9,6 +9,8 @@ defmodule Thirstr.Application do
     Thirstr.Nearby.init_cache()
     Thirstr.Flags.init_cache()
     Thirstr.Explore.init_cache()
+    # EN-23 OB-6: console Health page cache (60 s)
+    Thirstr.Health.init_cache()
     # R-AD.18 (#326): count SES recipients for the cost page
     Thirstr.Costs.attach_mail_meter()
 

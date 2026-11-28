@@ -166,6 +166,8 @@ defmodule ThirstrWeb.Router do
     post "/support/:id/status", AdminSupportController, :status
     get "/audit", AdminController, :audit_log
     get "/delivery", AdminController, :delivery
+    # EN-23 OB-6 (#343): A-12 Health
+    get "/health", AdminHealthController, :index
     get "/places", AdminController, :places
     post "/places/import", AdminController, :places_import
     post "/places/venues/:id/:action", AdminController, :venue_hidden

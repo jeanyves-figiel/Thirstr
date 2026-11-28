@@ -81,6 +81,13 @@ defmodule Thirstr.Probe do
     failed = if r["failed"] in @steps, do: r["failed"], else: if(ok, do: "none", else: "other")
     result = if ok, do: "ok", else: "fail"
     :telemetry.execute([:thirstr, :probe, :run], %{count: 1}, %{result: result, failed: failed})
+
+    Thirstr.Health.put_probe(%{
+      "ok" => ok,
+      "failed" => if(ok, do: nil, else: failed),
+      "steps" => Map.new(for {k, v} <- steps, k in @steps, do: {k, if(is_number(v), do: v)})
+    })
+
     :ok
   end
 

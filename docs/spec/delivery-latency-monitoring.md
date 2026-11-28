@@ -97,8 +97,8 @@ SLO-3 stays as is (send + pull share the route template; no method label, to kee
 - New threshold rules: `probe-failing` (2 consecutive failed probe runs, sev 1, PR B), `messages-skipped` (> 0 in 15 min, sev 2), `messages-stuck-online` (> 0 for 10 min, sev 1; staging copy sev 2), `messages-lost` (sev 3), `push-slow-provider` (p95 > 2 s, sev 2), `socket-flapping` (reconnects per live socket > 1/min over 10 min, sev 2), `traffic-cliff` (sends in the last hour < 20 % of same hour last week with ≥ 50 then, sev 2: silent failure).
 - Each rule gets a section in `alerts.md` (CI-checked) and the console page links to it.
 
-### OB-6 Console page A-12 "Health" (`/admin/health`, replaces `/admin/delivery`)
-Mockup first (high design bar). Server queries Fly Prometheus with the read-only token already used by Costs (`FLY_COST_TOKEN`), cached 60 s; falls back to `chat_delivery_stats` when Prometheus is unreachable (banner).
+### OB-6 Console page A-12 "Health" (`/admin/health`; `/admin/delivery` stays as "Delivery by day")
+Mockup approved 2026-11-28; built (admin-console.md R-AD.19–21). Server queries Fly Prometheus with the read-only token already used by Costs (`FLY_COST_TOKEN`), cached 60 s; falls back to `chat_delivery_stats` when Prometheus is unreachable (banner).
 - Top: overall state (OK / degraded / incident) + last probe (time, send → receive ms, all steps).
 - Tiles: online delivery p95 (SLO-7), probe success 24 h, messages lost/skipped 24 h, duplicates caught 24 h, push wake p95, live sockets, API p95.
 - SLO table: objective, 28-day value, budget left bar, burn now (1 h), status.

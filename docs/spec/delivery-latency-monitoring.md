@@ -50,13 +50,13 @@ Pushes are alert-only (no background handler in the app), so wake time is mostly
 
 ### OB-2 Synthetic end-to-end chat probe
 - Two **probe accounts** per environment (`probe_a`, `probe_b`), flag `accounts.probe = true`: verified, onboarded, Hidden, never in Explore, search, counts, KPIs, Testbot lists or moderation queues; may message only each other (server enforces; any other target = 403). Allowed in prod (unlike Testbot). Created by `mix thirstr.probe.ensure` / release task; sessions bound to a `PROBE_KEY` secret (≥ 32 bytes) like Testbot's service key.
-- Runner: `scripts/ops/chat-probe.mjs` (Node 22, reuses `apps/testbot` MLS client, keys kept in the Actions cache, encrypted with `PROBE_STATE_KEY`). Every 5 min inside `oncall.yml` (no extra workflow minutes beyond ~30 s/run) for **prod and staging**:
+- Runner: `apps/testbot/src/probe.ts` → `dist/probe.mjs` (Node 22, the app's own `mls.ts`). Fresh devices every run (`POST /v1/probe/session`, `devices: 2` for B), so no MLS state is kept between runs. Every 5 min inside `oncall.yml` (no extra workflow minutes beyond ~30 s/run) for **prod and staging**:
   1. B connects the socket (`env: true`). A sends one real MLS app message (payload = random 16-byte nonce, nothing else).
   2. Measure: send HTTP time, **send → B receives on socket**, B acks, B replies, **round trip**.
   3. Pull path: B (second probe device, offline) pulls via REST and acks → pull path checked.
   4. Duplicate check: A resends with the same `client_id` → must return `repeat` and B must not receive a second envelope within 10 s.
-  5. Push path: B's probe device has an FCM token for a dry run: server sends with `validate_only: true` (FCM accepts it, nothing is shown) → provider reachability + auth. APNs has no dry run: covered by `push-failing` + OB-1 wake metrics.
-- Results POSTed to `POST /v1/ops/probe` (HMAC with `PROBE_KEY`) → `thirstr_probe_duration_ms{env_check, step}` and `thirstr_probe_result_count{step, result}`; also the job summary and the console page. Failure of the POST itself is treated by the rule as a failed probe.
+  5. Push path (later): FCM `validate_only` dry run for provider reachability + auth. APNs has no dry run: covered by `push-failing` + `push-slow-provider`.
+- Results POSTed to `POST /v1/probe/report` (`x-probe-key`) → `thirstr_probe_step_duration_ms{step}` and `thirstr_probe_run_count{result, failed}`; also the job summary and the console page. The on-call rule reads the runner's result file directly, so a probe that cannot reach the API still pages.
 - Status page: the **Chat** component uses the probe result (send → receive) instead of the bare socket handshake; tile "Message delivery p95" uses OB-1 online delivery.
 
 ### OB-3 Client RUM (real user monitoring), privacy first

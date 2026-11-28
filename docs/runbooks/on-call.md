@@ -35,6 +35,11 @@ No SMS: Pushover emergency pushes repeat every 2 min until acknowledged and bypa
    - `FLY_METRICS_TOKEN` (repo secret) = read-only Fly token (`fly tokens create readonly -o thirstr`). Required since the org move (#168): app deploy tokens cannot read org metrics, so on-call, the SLO report and the canary's metric gates need it.
 5. Actions › **On-call alerts** › Run workflow › tick *Send a test push*. Expect "Thirstr on-call test" and "Thirstr on-call connected" within a minute.
 
+6. **Chat probe (EN-23 OB-2)**: one random key per environment (`openssl rand -hex 32`), set on the API app **and** as a repo secret:
+   - `fly secrets set --stage PROBE_KEY=<staging key> -a thirstr-api-staging` and repo secret `PROBE_KEY_STAGING`
+   - `fly secrets set --stage PROBE_KEY=<prod key> -a thirstr-api-prod` and repo secret `PROBE_KEY_PROD` (takes effect with the next promote)
+   The two probe accounts are created on the first run. Without the keys the probe rules show "not run".
+
 Never paste the keys in issues, chats or commits. Rotate: Pushover › app › regenerate token, then update the secret.
 
 ## Responding

@@ -89,6 +89,7 @@ defmodule Thirstr.Chat do
   def claim_key_packages(%Account{} = a, from_pid, to_pid, context \\ nil) do
     with {:ok, _} <- own_profile(a, from_pid),
          {:ok, t} <- Social.target(a, to_pid),
+         :ok <- probe_fence(a, to_pid),
          :ok <-
            if(from_pid == to_pid or Thirstr.Groups.together?(context, from_pid, to_pid),
              do: :ok,
@@ -392,7 +393,17 @@ defmodule Thirstr.Chat do
   # AC-15.1 shadow quarantine: the sender sees a normal 200, nothing is stored or delivered.
   defp deliver(%Account{status: "quarantined"}, _d, _f, _t, _g, _e, _n, _p), do: {:ok, nil}
 
-  defp deliver(a, _device_id, from, to, group, envs, now, params) do
+  # EN-23 OB-2: a probe account's envelopes only go to the other probe account.
+  defp deliver(%Account{probe: true} = a, device_id, from, to, group, envs, now, params) do
+    if Thirstr.Probe.probe_profile?(to),
+      do: deliver_ok(a, device_id, from, to, group, envs, now, params),
+      else: :dropped
+  end
+
+  defp deliver(a, device_id, from, to, group, envs, now, params),
+    do: deliver_ok(a, device_id, from, to, group, envs, now, params)
+
+  defp deliver_ok(a, _device_id, from, to, group, envs, now, params) do
     case Social.target(a, to) do
       {:ok, t} ->
         # Party / activity / club chats (F-10, F-11): members may write to each other freely.
@@ -432,6 +443,13 @@ defmodule Thirstr.Chat do
       _ ->
         :dropped
     end
+  end
+
+  # EN-23 OB-2: probe accounts only reach each other (no key packages either way).
+  defp probe_fence(a, to_pid) do
+    if Thirstr.Probe.probe?(a) == Thirstr.Probe.probe_profile?(to_pid),
+      do: :ok,
+      else: {:error, {:unavailable, "This profile can't receive messages yet"}}
   end
 
   # R-07.2 + api.md rate limit: new contacts 30/h, unverified 0 (unless replying).

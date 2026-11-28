@@ -398,6 +398,36 @@
       "for_min": 0
     },
     {
+      "id": "probe-failing",
+      "title": "Chat probe failing: a test message did not go through end to end",
+      "sev": 1,
+      "type": "probe",
+      "file": "probe-prod.json",
+      "for_min": 5
+    },
+    {
+      "id": "probe-failing-staging",
+      "title": "Staging chat probe failing (testers)",
+      "sev": 2,
+      "type": "probe",
+      "file": "probe-staging.json",
+      "for_min": 5
+    },
+    {
+      "id": "slo-8-fast",
+      "title": "SLO-8 fast burn: chat probe failing often",
+      "sev": 2,
+      "type": "burn",
+      "total": "sum(increase(thirstr_probe_run_count{app=\"thirstr-api-prod\"}[$W]))",
+      "bad": "sum(increase(thirstr_probe_run_count{app=\"thirstr-api-prod\",result=\"fail\"}[$W]))",
+      "objective": 0.995,
+      "long": "6h",
+      "short": "30m",
+      "factor": 6,
+      "min_total": 50,
+      "for_min": 0
+    },
+    {
       "id": "messages-stuck-online",
       "title": "Messages waiting over 2 min while the phone is connected",
       "sev": 1,

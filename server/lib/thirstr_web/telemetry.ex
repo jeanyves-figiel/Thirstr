@@ -216,7 +216,13 @@ defmodule ThirstrWeb.Telemetry do
         tags: [:platform],
         reporter_options: [buckets: @wake_buckets]
       ),
-      counter("thirstr.push.wake_result.count", tags: [:platform, :result])
+      counter("thirstr.push.wake_result.count", tags: [:platform, :result]),
+      # EN-23 OB-2: synthetic chat probe (one run every 5 min from outside Fly)
+      counter("thirstr.probe.run.count", tags: [:result, :failed]),
+      distribution("thirstr.probe.step.duration_ms",
+        tags: [:step],
+        reporter_options: [buckets: @ms_buckets]
+      )
     ]
   end
 

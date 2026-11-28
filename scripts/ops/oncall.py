@@ -45,7 +45,7 @@ EMERGENCY_EXPIRE_S = 3600  # ... for up to 1 h, until acknowledged
 ESCALATE_AFTER_MIN = 15
 HEARTBEAT_WEEKDAY = 0  # Monday
 HEARTBEAT_HOUR_UTC = 7
-TYPES = {"promql", "burn", "http", "cert", "meta"}
+TYPES = {"promql", "burn", "probe", "http", "cert", "meta"}
 
 
 # ---------------------------------------------------------------- rules
@@ -90,6 +90,8 @@ def check(rules: dict, anchors: set[str]) -> list[str]:
             errors.append(f"{rid}: query missing")
         if r.get("type") == "burn":
             errors.extend(f"{rid}: {e}" for e in check_burn(r))
+        if r.get("type") == "probe" and not re.fullmatch(r"probe-[a-z]+\.json", str(r.get("file", ""))):
+            errors.append(f"{rid}: file must be probe-<env>.json")
         if r.get("type") == "http" and not str(r.get("url", "")).startswith("https://"):
             errors.append(f"{rid}: url must be https")
         if r.get("type") == "cert" and not r.get("hosts"):
@@ -152,6 +154,23 @@ def eval_burn(rule: dict, prom: str, token: str | None) -> tuple[bool, str]:
         return True, f"{rate:.0f}× budget ({rule['long']})"
     except ValueError:
         return True, ""
+
+
+# ---------------------------------------------------------------- chat probe (EN-23 OB-2)
+
+
+def eval_probe(rule: dict, root: str = ".") -> tuple[bool, str]:
+    """Result of apps/testbot dist/probe.mjs written by the workflow step before this one.
+    No file (key not set, or the step was skipped) = not run: neither fires nor resolves."""
+    path = os.path.join(root, rule["file"])
+    if not os.path.exists(path):
+        return False, "not run"
+    with open(path, encoding="utf-8") as f:
+        r = json.load(f)
+    if r.get("ok"):
+        s = r.get("steps", {})
+        return False, f"socket {s.get('socket', '?')} ms, total {s.get('total', '?')} ms"
+    return True, f"step {r.get('failed') or '?'}: {str(r.get('error', ''))[:120]}"
 
 
 # ---------------------------------------------------------------- probes
@@ -365,6 +384,8 @@ def evaluate(rules: dict, state: dict, pager: Pager, now: float, token: str | No
         try:
             if rule["type"] == "promql":
                 firing, detail = eval_promql(rule, rules["prometheus"], token)
+            elif rule["type"] == "probe":
+                firing, detail = eval_probe(rule)
             elif rule["type"] == "burn":
                 firing, detail = eval_burn(rule, rules["prometheus"], token)
             elif rule["type"] == "http":

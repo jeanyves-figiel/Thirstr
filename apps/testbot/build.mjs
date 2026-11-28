@@ -35,4 +35,6 @@ const opts = {
 await build({ ...opts, entryPoints: [path.join(here, 'src/main.ts')], outfile: path.join(here, 'dist/bot.mjs') });
 // test peer (a second client for the end-to-end test)
 await build({ ...opts, entryPoints: [path.join(here, 'test/peer.ts')], outfile: path.join(here, 'dist/peer.mjs') });
-console.log('built dist/bot.mjs, dist/peer.mjs');
+// EN-23 OB-2: synthetic chat probe (scripts/ops, on-call workflow)
+await build({ ...opts, entryPoints: [path.join(here, 'src/probe.ts')], outfile: path.join(here, 'dist/probe.mjs') });
+console.log('built dist/bot.mjs, dist/peer.mjs, dist/probe.mjs');

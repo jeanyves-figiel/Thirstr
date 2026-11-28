@@ -141,5 +141,28 @@ class BurnTest(unittest.TestCase):
         self.assertEqual(oncall.check_burn(self.RULE), [])
 
 
+class ProbeTest(unittest.TestCase):
+    # EN-23 OB-2: result file written by apps/testbot dist/probe.mjs.
+    RULE = {"id": "probe-failing", "file": "probe-prod.json"}
+
+    def test_missing_file_is_not_run(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(oncall.eval_probe(self.RULE, d), (False, "not run"))
+
+    def test_ok_and_failed(self):
+        import json, tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "probe-prod.json")
+            with open(path, "w") as f:
+                json.dump({"ok": True, "steps": {"socket": 22, "total": 3500}}, f)
+            self.assertEqual(oncall.eval_probe(self.RULE, d), (False, "socket 22 ms, total 3500 ms"))
+            with open(path, "w") as f:
+                json.dump({"ok": False, "failed": "socket", "error": "socket: not received"}, f)
+            firing, detail = oncall.eval_probe(self.RULE, d)
+            self.assertTrue(firing)
+            self.assertIn("step socket", detail)
+
+
 if __name__ == "__main__":
     unittest.main()

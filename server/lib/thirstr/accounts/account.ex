@@ -33,6 +33,8 @@ defmodule Thirstr.Accounts.Account do
     field :safe_mode_active, :boolean, default: false
     # testing.md › Chat test bot: staging-only automated account (never in prod)
     field :test_bot, :boolean, default: false
+    # EN-23 OB-2: synthetic chat probe account (Thirstr.Probe)
+    field :probe, :boolean, default: false
     field :test_bot_handle, :string
     has_many :passkeys, Thirstr.Accounts.Passkey
     has_many :devices, Thirstr.Accounts.Device

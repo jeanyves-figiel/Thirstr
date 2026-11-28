@@ -188,6 +188,21 @@ Burn rules compare the error ratio with the SLO budget (`docs/spec/slos.md`) ove
 ### slo-7-fast-staging
 **Meaning:** as [slo-7-fast](#slo-7-fast) on `thirstr-api-staging`, where TestFlight testers are during the closed beta. Use `-a thirstr-api-staging`.
 
+## probe-failing
+**Meaning:** the synthetic chat probe (EN-23 OB-2) failed on prod for 2 runs in a row: two hidden probe accounts could not get one encrypted message through end to end. The push says which step failed:
+- `send`: POST `/v1/mls/messages` failed → API / DB down? see [api-down](#api-down), [api-errors](#api-errors).
+- `socket`: stored but never reached the live socket → PubSub / cluster, `UserChannel` errors, [messages-stuck-online](#messages-stuck-online).
+- `ack` / `reply`: acks or the answer path broken → `/mls/messages/ack`, channel `ack` handler.
+- `duplicate`: idempotency broken (`mls_send_keys`) → **members may get double messages**; roll back.
+- `pull`: REST pull for an offline device misses the message → `Chat.pull`.
+Logs of the run: Actions › On-call alerts › latest run › "Chat probe". Probe accounts: `Thirstr.Probe` (they can only message each other).
+
+## probe-failing-staging
+**Meaning:** as [probe-failing](#probe-failing) on staging (TestFlight testers). Often a staging deploy in progress; if it lasts, same steps with `-a thirstr-api-staging`.
+
+## slo-8-fast
+**Meaning:** the chat probe fails often enough over 6 h to burn the 99.5 % SLO-8 budget 6× too fast, even if never twice in a row (flaky delivery). Check `thirstr_probe_run_count` by `failed` step and `thirstr_probe_step_duration_ms` for slow steps.
+
 ## messages-stuck-online
 **Meaning:** envelopes have waited over 2 min for a phone that has a live socket right now (SLO-9: should never happen). The phone is connected but does not get or ack them.
 1. `fly logs` for `UserChannel` errors; PubSub across machines (a message stored on machine A, socket on machine B: is the cluster connected? `Node.list()` via rpc).

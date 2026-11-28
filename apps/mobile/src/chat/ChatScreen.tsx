@@ -1,4 +1,8 @@
 import { a11yLabel, daysUntil, rangeLabel, shortLabel, TravelLabel } from '../travel/travel';
+import * as Refill from '../refill/refill';
+import { MatchRow } from '../refill/RefillUI';
+import { isPlus } from '../plus/plus';
+import { rfx } from '../i18n/refill';
 import { usePeerTrip } from '../travel/peerTrips';
 import { tr } from '../i18n/travel';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -130,6 +134,7 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
   const [hitAt, setHitAt] = useState(0);
   const listRef = useRef<FlatList<{ m: E.Msg; r: string[]; mineR: string }>>(null);
   P.usePeople();
+  Refill.useRefill();
   V.useVc();
   // F-18 R-18.8–R-18.14 (#159) video check: request sheet, recorder, viewer.
   const [vcAsk, setVcAsk] = useState(false);
@@ -500,6 +505,10 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
           if (m.p.t === 'vcheck') {
             if (group) return null;
             return <VcRow m={m} conv={conv} onRecord={(v) => setVcRec({ rid: v.rid, move: v.move })} onWatch={setVcWatch} />;
+          }
+          if (m.p.t === 'refill.match') {
+            // F-25 (#339): both said yes (local row, never sent).
+            return group ? null : <MatchRow />;
           }
           if (m.p.t === 'friend') {
             // R-07.36 friend request / accepted.
@@ -995,6 +1004,31 @@ export function ChatScreen({ navigation, route }: { navigation: Nav; route: { pa
                 </>
               ) : null}
               <SheetRow testID="menu-note" title={P.noteFor(conv.peer) ? ppl.editNote : ppl.addNote} onPress={() => { setMenu(false); setNoteOpen(true); }} />
+              {/* F-25 (#339, D-26): a sealed yes from the chat is free (so anyone can answer one); "Again?" is Plus. */}
+              {conv.iWrote && conv.theyWrote ? (
+                <SheetRow
+                  testID="menu-refill"
+                  title={Refill.sealed(conv.peer) ? rfx.menuUnseal : rfx.menuSeal}
+                  onPress={() => {
+                    setMenu(false);
+                    const on = !Refill.sealed(conv.peer);
+                    E.sendRefill(conv.id, on).then(
+                      (match) => !match && toast(on ? rfx.sealedToast(conv.name.split(',')[0]) : rfx.unsealedToast),
+                      () => toast(tx.common.error),
+                    );
+                  }}
+                />
+              ) : null}
+              {isPlus(me) && !(me.safe_mode === 'on' || me.safe_mode_active) ? (
+                <SheetRow
+                  testID="menu-met"
+                  title={rfx.menuMet}
+                  onPress={() => {
+                    setMenu(false);
+                    Refill.markMet(conv.peer, { name: conv.name, photo: conv.photo }, false).then(() => navigation.navigate('RefillAsk', { peer: conv.peer }));
+                  }}
+                />
+              ) : null}
               {V.menuShown({ available: vcAvailable, on: flag('video_check'), group: !!group }) ? (
                 // #159: always listed in 1:1 chats; when a new ask isn't possible the row says why
                 // (it used to disappear while a check was open or after 3 a day).

@@ -73,6 +73,10 @@ Tab bar (4): **Explore** S-10 · **Tonight** S-13 · **Chats** S-40 · **Me** S-
 | S-90 | Thirstr Plus [#318, built] | F-23 R-23.15 | — | Got it / ✕ → back; See Plus from limit cards and Settings › Plus | Free + billing on: "Plus opens with the public beta" until #321 |
 | S-90b | Settings › Plus [#318, built] | F-23 R-23.15, R-23.13 | — | Manage subscription → store page; See Plus → S-90 | grace: amber card |
 | S-91 | Views (who viewed me) [#319, spec] | F-23 R-23.20–23 | — | row → S-20; swipe → remove | Views Off / Hidden / Safe Mode |
+| S-95 | Refill match [#339] | F-25 R-25.5 | coral glow, both photos overlapping (3 pt coral rings), "You both want a refill", "‹name› said yes too.", coral **Say hi**, outline **Later** | Say hi → S-41 | — |
+| S-96 | Again with ‹name›? (sheet) [#339] | F-25 concept C | Yes / Maybe / No tiles, dashed sunflower private note, "Seal a yes" switch (Yes, chat exists), Skip / Save; No → "Hide or block" (S-51) | Save, Skip | Plus only |
+| S-97 | Me › Refill [#339] | F-25 R-25.8 | title, Yes · n / Maybe · n / No · n, rows (photo, name, "Met 2 Nov · note", Sealed / Both yes pill), teal lock line | row → sheet: Change answer, Write to him, Forget | empty: "Nobody here yet" |
+| S-98 | Settings › Privacy › Refill [#339] | F-25 R-25.2, R-17.14b | lead, Show me Refill (Plus), Let people I've met find me again, 6 trigger switches, Snooze Off / 1 week / 1 month, Not him again list (Allow again) | switches | Safe Mode: off + note; Free: Plus note |
 | S-51 | Check-in start sheet [v2, #112] | F-13 R-13.15 | bottom sheet: "Meeting ‹name›?", tiles 1 h / 2 h (default) / 3 h / Other with due times, contacts card + 2 toggles, Start · due HH:MM | start | no contacts → add contact first |
 | S-52 | Check-in due | F-13 | "All good?", I'm OK, +30 min | biometrics | duress path |
 | S-53 | Trusted contacts | F-13 | list, add, invite | add/remove | — |

@@ -58,6 +58,8 @@ export type Card = {
   trip?: VisitorTrip | null;
   /** F-21 R-21.27 (#212): ring data, null when he has no Moment I may see. */
   moments?: MomentsBadge;
+  /** F-25 R-25.1 (#339): he lets people he met find him again (Refill). */
+  resurface?: boolean;
 };
 
 /** F-20: what others see of a shown trip (never his position or other trips). */
@@ -129,6 +131,8 @@ export type ProfileView = {
   moments?: MomentsBadge;
   /** F-20 R-20.7: his shown trip to the viewer's area. */
   trip?: VisitorTrip | null;
+  /** F-25 R-25.1 (#339) */
+  resurface?: boolean;
 };
 
 export type Settings = {
@@ -143,6 +147,8 @@ export type Settings = {
   show_in_venues: boolean;
   /** F-20 R-17.14 */
   show_to_remote?: boolean;
+  /** F-25 R-25.2 (#339): people I've met can find me again with Refill. */
+  resurface_ok?: boolean;
   show_distance: 'exact' | 'range' | 'none';
   online_visible: boolean;
   read_receipts: boolean;

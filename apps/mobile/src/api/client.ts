@@ -80,6 +80,8 @@ export type PlusLimits = {
   chat_folders: number;
   extras: boolean;
   views_list: boolean;
+  /** F-25 (#339): Refill cards, after-date question, Me › Refill. */
+  refill?: boolean;
 };
 
 export type Photo = { id: string; slot: number; status: string; reject_reason: string | null; url: string | null; thumb_url?: string | null; main_ok?: boolean };

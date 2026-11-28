@@ -75,6 +75,9 @@ import { useSession } from './session';
 import { WhatsNewCard, WhatsNewScreen } from '../whatsnew/WhatsNew';
 import { ShareSheetScreen } from '../links/ShareSheet';
 import { LinkedAccountsScreen } from '../links/LinkedAccounts';
+import * as Refill from '../refill/refill';
+import { RefillAskScreen, RefillBookScreen, RefillMatchScreen, RefillSettingsScreen } from '../refill/RefillUI';
+import { isPlus } from '../plus/plus';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -428,6 +431,7 @@ export function Main() {
   const { claim } = useClaim();
   // #247: Show me to friends + friend-online alerts (foreground only).
   useFriendPerks();
+  useRefillEvents();
   // #119 R-13.20: Live Activity + app-icon quick actions + thirstr://safety/* links.
   useSafetyNative(nav);
   const kb = useKeyboardShown();
@@ -504,6 +508,11 @@ export function Main() {
           <Stack.Screen name="ShareSheet" component={ShareSheetScreen as React.ComponentType} options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="LinkedAccounts" component={LinkedAccountsScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="WhatsNew" component={WhatsNewScreen as React.ComponentType} options={sub} />
+          {/* F-25 Refill (#339) */}
+          <Stack.Screen name="RefillBook" component={RefillBookScreen as React.ComponentType} options={sub} />
+          <Stack.Screen name="RefillSettings" component={RefillSettingsScreen} options={sub} />
+          <Stack.Screen name="RefillAsk" component={RefillAskScreen as React.ComponentType} options={sheet} />
+          <Stack.Screen name="RefillMatch" component={RefillMatchScreen as React.ComponentType} options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'fade' }} />
         </Stack.Navigator>
         {!kb && !panel && !(top && NO_BAR.has(top.name)) ? <PillBar active={active} onPick={pick} /> : null}
         <PushPrompt />
@@ -520,4 +529,26 @@ export function Main() {
       </LockGate>
     </ModeContext.Provider>
   );
+}
+
+/** F-25 (#339): a mutual yes opens the match screen; an ended date asks "Again?" (Plus, not in Safe Mode). */
+function useRefillEvents() {
+  const { me } = useSession();
+  const meRef = React.useRef(me);
+  React.useEffect(() => {
+    meRef.current = me;
+  }, [me]);
+  React.useEffect(() => {
+    const a = Refill.onMatch((e) => {
+      if (AppState.currentState === 'active' && nav.isReady()) nav.navigate('RefillMatch', e);
+    });
+    const b = Refill.onAsk((peer) => {
+      const m = meRef.current;
+      if (isPlus(m) && !(m.safe_mode === 'on' || m.safe_mode_active) && nav.isReady()) nav.navigate('RefillAsk', { peer });
+    });
+    return () => {
+      a();
+      b();
+    };
+  }, []);
 }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { api, ApiError } from '../api/client';
 import { useSession } from '../app/session';
+import * as Refill from '../refill/feed';
 import * as E from '../chat/engine';
 import { kv } from '../chat/kv';
 import { distanceLabel, tx } from '../i18n/app';
@@ -49,6 +50,16 @@ export function PartyScreen({ navigation, route }: { navigation: Nav; route: { p
   useEffect(() => {
     load();
   }, [load]);
+  // F-25 (#339): a guest I've met is going too (I'm host or accepted). Device-only, ≤ 1 card a day.
+  const meRef = React.useRef(me);
+  React.useEffect(() => {
+    meRef.current = me;
+  }, [me]);
+  useEffect(() => {
+    if (!p || (p.my_state !== 'host' && p.my_state !== 'accepted')) return;
+    const guests = (p.requests ?? []).filter((r) => r.state === 'accepted').map((r) => r.profile);
+    Refill.fromPeople(meRef.current, 'place', p.my_state === 'host' ? guests : [p.host, ...guests], p.title);
+  }, [p]);
   const refresh = usePull(load); // F-19 G6
 
   if (!p) return err ? <Banner tone="danger" text={err} /> : <Loading />;

@@ -34,7 +34,9 @@ defmodule Thirstr.Plus do
     filter_presets: 0,
     chat_folders: 0,
     extras: false,
-    views_list: false
+    views_list: false,
+    # F-25 (#339, D-26): Refill cards, after-date rating, Me › Refill
+    refill: false
   }
 
   # nil = no Plus limit (the shared abuse caps still apply).
@@ -58,7 +60,8 @@ defmodule Thirstr.Plus do
     filter_presets: 10,
     chat_folders: 10,
     extras: true,
-    views_list: true
+    views_list: true,
+    refill: true
   }
 
   def free_limits, do: @free

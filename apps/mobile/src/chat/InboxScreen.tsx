@@ -22,6 +22,7 @@ import * as P from './people';
 import { SafetySheet, SheetRow } from '../trust/SafetySheet';
 import { RestoreCard } from '../me/settings/ChatBackupScreen';
 import { TransferCard } from '../me/TransferPanel';
+import { RefillCard } from '../refill/RefillUI';
 
 type Nav = { navigate: (s: string, p?: object) => void };
 type Tab = 'all' | 'unread' | 'fav' | 'friends';
@@ -193,6 +194,8 @@ export function InboxScreen({ navigation }: { navigation: Nav }) {
           <>
             {!q ? <TransferCard /> : null}
             {!q ? <RestoreCard /> : null}
+            {/* F-25 (#339): one private Refill card (intro, someone back, or my sealed yes). */}
+            {tab === 'all' && !q && !showArchived ? <RefillCard navigation={navigation} /> : null}
             {favStrip.length ? (
               <ScrollView keyboardDismissMode="on-drag" testID="fav-strip" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: space.l, paddingVertical: space.s }}>
                 {favStrip.map((f) => {

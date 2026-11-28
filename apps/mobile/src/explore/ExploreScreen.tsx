@@ -6,6 +6,7 @@ import { FlatList, Image, Pressable, RefreshControl, Text, View, AppState } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, ApiError } from '../api/client';
 import type { Card, ExploreSummary, MapData, Mode, Place } from '../api/types';
+import * as Refill from '../refill/feed';
 import { useSession } from '../app/session';
 import { distanceLabel, tx } from '../i18n/app';
 import { mod } from '../i18n/mod';
@@ -123,6 +124,11 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   // F-20 R-20.14: Look around a trip city (view point = its centre on the server).
   const look = useLookAround();
   const x = useMemo(() => ({ trip: look?.id ?? null }), [look?.id]);
+  // F-25: latest account for Refill without reloading Explore when it changes.
+  const meRef = useRef(me);
+  useEffect(() => {
+    meRef.current = me;
+  }, [me]);
   const [visiting, setVisiting] = useState<{ count: number; center: { lat: number; lng: number } | null; items: Card[] } | null>(null);
   const [homePlace, setHomePlace] = useState<string | null>(null);
   // Recentre when a trip city is picked (state-from-props, no effect).
@@ -240,6 +246,8 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
           setVisiting(vis);
           setErr(null);
           Moments.clearBadges(g.items.map((c) => c.id));
+          // F-25 (#339): past contacts back nearby / in the trip city (device-only, at most 1 card a day).
+          Refill.fromExplore(meRef.current, [...g.items, ...(vis?.items ?? [])], !!x.trip);
           setItems(g.items);
           setNext(g.next);
           setCapped(!!g.capped);

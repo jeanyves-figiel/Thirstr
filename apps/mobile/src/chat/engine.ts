@@ -16,6 +16,7 @@ import * as store from './store';
 import * as people from './people';
 import * as floc from './friendLoc';
 import * as vc from './vcheck';
+import * as refill from '../refill/refill';
 import { vcx } from '../i18n/vcheck';
 import { ppl } from '../i18n/people';
 import { getLocal } from '../me/localFields';
@@ -105,6 +106,10 @@ export type Payload =
   | floc.FriendLoc
   /** F-18 R-18.8–R-18.16 (#159): video check, only inside the 1:1 E2EE chat. */
   | vc.VcPayload
+  /** F-25 (#339): sealed yes, silent, never a row on its own. */
+  | refill.RefillPayload
+  /** F-25: local row when both said yes (never sent). */
+  | { t: 'refill.match' }
   | LinkPreview;
 
 export type Msg = {
@@ -268,6 +273,7 @@ export async function start(account: Me) {
   waiters.forEach((r) => r());
   waiters.clear();
   await people.loadPeople();
+  await refill.loadRefill();
   await vc.loadVc();
   await migrateStars();
   emit('convs');
@@ -317,6 +323,7 @@ export function stop() {
   online = false;
   me = null;
   people.resetPeople();
+  refill.resetRefill();
   vc.resetVc();
 }
 
@@ -717,6 +724,14 @@ async function receive(cid: string, w: Wire, serverAt: number, from?: string, ra
     if (!c.ctx && c.peer && !mine) await floc.receive(c.peer, p);
     return false;
   }
+  if (p.t === 'refill') {
+    // F-25 R-25.1: stored silently; only a mutual yes shows anything (match row + screen).
+    if (c.ctx || !c.peer) return false;
+    if (mine) await refill.sealMine(c.peer, p.op === 'yes', { name: c.name, photo: c.photo }).catch(() => {});
+    else await refill.receiveSeal(c.peer, p, { name: c.name, photo: c.photo }).catch(() => {});
+    return false;
+  }
+  if (p.t === 'refill.match') return false;
   if (p.t === 'vcheck') {
     // R-18.8–R-18.16: request, clip, confirm and screenshot show as rows; the rest is quiet.
     if (c.ctx || !c.peer) return false;
@@ -798,6 +813,8 @@ export function preview(p: Payload): string {
       return '🛡 ' + ppl.previewSafety;
     case 'party.invite':
       return '🎉 ' + p.title;
+    case 'refill.match':
+      return '↺';
     case 'vcheck':
       return '◉ ' + vcx.preview;
     case 'link.preview':
@@ -1055,6 +1072,8 @@ async function friendChanged(cid: string, peer: string, was: people.FriendState 
   if (now === was) return;
   if (now === 'yes') await floc.resend().catch(() => {});
   if (was === 'yes') {
+    // F-25 R-25.3: an ended friendship is never brought back by Refill.
+    if (!now) await refill.mute(peer).catch(() => {});
     await floc.forget(peer).catch(() => {});
     if (cid && convs[cid] && (await floc.mine())) await send(cid, { t: 'friend.loc', stop: true }, { silent: true }).catch(() => {});
   }
@@ -1118,6 +1137,8 @@ export async function stopLocShare() {
 
 /** Block / report (R-07.38): forget the friendship and let perks revoke what they gave. */
 export async function forgetFriend(peer: string) {
+  // F-25 R-25.3: never brought back by Refill either.
+  await refill.mute(peer).catch(() => {});
   const was = people.friendOf(peer);
   await people.forgetFriend(peer);
   await friendChanged(convWith(peer)?.id ?? '', peer, was);
@@ -1165,6 +1186,37 @@ export async function sendVc(cid: string, p: Omit<vc.VcPayload, 't'>) {
   await send(cid, body, { silent: !show || VC_QUIET.includes(p.op) });
 }
 
+// ------------------------------------------------------------------ Refill (F-25, #339)
+
+/** Seal a yes for the peer of this 1:1 chat (or take it back). Silent on both phones. */
+export async function sendRefill(cid: string, on: boolean) {
+  const c = convs[cid];
+  if (!c || c.ctx || !c.peer) return false;
+  const { p, match } = await refill.sealMine(c.peer, on, { name: c.name, photo: c.photo });
+  await send(cid, p, { silent: true });
+  return match;
+}
+
+// Both said yes: one coral row in the chat (local only) and, when Thirstr is in the background,
+// one content-free local notification (R-25.5: the only Refill push).
+refill.onMatch((e) => {
+  const c = convWith(e.peer);
+  if (c) {
+    const at = Date.now();
+    edit(c.id, (list) => (list.some((m) => m.p.t === 'refill.match' && at - m.at < refill.DAY) ? undefined : { put: [{ id: 'rf' + hex(rand(8)), from: 'me', at, p: { t: 'refill.match' } }] }))
+      .then(() => emit('incoming'))
+      .catch(() => {});
+  }
+  if (Platform.OS !== 'web' && AppState.currentState !== 'active') {
+    import('../i18n/refill')
+      .then(async ({ rfx }) => {
+        const N = await import('expo-notifications');
+        await N.scheduleNotificationAsync({ content: { title: 'Thirstr', body: rfx.push, sound: 'default', data: { refill: e.peer } }, trigger: null });
+      })
+      .catch(() => {});
+  }
+});
+
 /** The 1:1 chat with a peer, if any. */
 export const convWith = (peer: string) => Object.values(convs).find((c) => !c.ctx && c.peer === peer) ?? null;
 
@@ -1172,6 +1224,8 @@ export const convWith = (peer: string) => Object.values(convs).find((c) => !c.ct
 export async function deleteConv(id: string) {
   const c = convs[id];
   if (!c) return;
+  // F-25 R-25.3: a chat I deleted is never brought back by Refill.
+  if (!c.ctx && c.peer) await refill.mute(c.peer).catch(() => {});
   for (const g of c.groups) {
     await mls.forget(g);
     await kv.del('g2c:' + g);

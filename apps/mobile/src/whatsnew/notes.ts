@@ -16,6 +16,32 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 13,
+    date: '2026-11-28',
+    lines: [
+      {
+        tone: 'personal',
+        glyph: 'spark',
+        to: { route: 'RefillSettings' },
+        text: {
+          en: ['Refill', 'Bring back people you’ve met, both say yes.'],
+          fr: ['Refill', 'Revois ceux rencontrés, si vous dites oui.'],
+          de: ['Refill', 'Triff Leute wieder, wenn ihr beide wollt.'],
+        },
+      },
+      {
+        tone: 'trust',
+        glyph: 'shield',
+        to: { route: 'RefillSettings' },
+        text: {
+          en: ['On this phone only', 'Nobody learns who you met. You choose.'],
+          fr: ['Sur ce téléphone', 'Personne ne sait qui tu as vu. Tu choisis.'],
+          de: ['Nur auf diesem Handy', 'Niemand erfährt, wen du triffst.'],
+        },
+      },
+    ],
+  },
+  {
     id: 12,
     date: '2026-11-22',
     lines: [

@@ -25,6 +25,14 @@ Help people meet again someone they already met or chatted with, at a moment whe
 - R-25.7 **Data**: all Refill data is in "Download my data" (device part), never in reports, deleted with the chat's peer on block. "Forget" on a row deletes that person's Refill record.
 - R-25.8 **Plus** (D-26, F-23). Plus: trigger cards, the after-date rating, Me › Refill, the mutual-match screen and push. Free: chat ⋯ **Up for a refill?** (manual sealed yes with no trigger), so a free member can answer a Plus member's yes and the match still shows on both phones; nothing ever tells a free member that a yes is waiting (that would leak it). Always free: Not him again, Snooze, Refill off, `resurface_ok` opt-out, No → Hide / Block. No Plus prompt in the first 3 days; the Refill limit card sits in Me › Refill only, never in chat (F-23).
 
+## Implementation (beta build, #339)
+- App: `src/refill/refill.ts` (device store `refill` in the encrypted kv: people, prefs, current card; pure rules), `src/refill/feed.ts` (inputs), `src/refill/RefillUI.tsx` (Chats card on S-40, match screen S-95, after-date sheet S-96, Me › Refill S-97, Settings › Privacy › Refill S-98). Payload `{t: 'refill', op: 'yes' | 'withdraw', until}` (silent); local row `{t: 'refill.match'}` (never sent).
+- Inputs: Explore grid / visitors (`resurface` on the card; Look around = trip), party detail when I'm host or accepted, venue "here now" when I'm visible, Tonight board when I have a plan. For the last three the app reads at most 2 profile views (`purpose=refill`) and only when a card is due.
+- Server: setting `resurface_ok` (default false), Card / profile view `resurface`, Plus limit `refill`. Nothing else.
+- After-date question opens after **I'm OK** on a date check-in with a chat partner, or from chat ⋯ **We met · Again?** (Plus).
+- Matches: coral full-screen when the app is open; else one local notification "Someone you've met said yes too." (no name).
+- Hide, block, report, unfriend and deleting the chat set "Not him again" on this phone.
+
 ## Design
 Sunflower (`personal`) for private Refill surfaces (cards, after-date sheet, Me › Refill); coral only for the mutual moment. Copy en/fr/de; the brand name stays English.
 

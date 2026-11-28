@@ -26,6 +26,7 @@ export const PLUS_FALLBACK: PlusLimits = {
   chat_folders: 10,
   extras: true,
   views_list: true,
+  refill: true,
 };
 
 export const limits = (me: Pick<Me, 'limits'>): PlusLimits => me.limits ?? PLUS_FALLBACK;

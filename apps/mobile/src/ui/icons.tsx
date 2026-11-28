@@ -7,6 +7,13 @@ type P = { size?: number; c?: string; w?: number; fill?: string };
 const base = (c: string, w: number) => ({ fill: 'none', stroke: c, strokeWidth: w, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const });
 
 export const Icon = {
+  /** F-25 Refill (#339): a glass with a return arrow. */
+  Refill: ({ size = 22, c = color.fgPrimary, w = 2.1 }: P) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M6 4h12l-1.6 15.2a2 2 0 01-2 1.8H9.6a2 2 0 01-2-1.8L6 4z" {...base(c, w)} />
+      <Path d="M14.5 10.5a2.8 2.8 0 10.6 3.4M15 8.5v2.2h-2.2" {...base(c, w)} />
+    </Svg>
+  ),
   /** F-01 R-01.16 passkeys */
   Key: ({ size = 22, c = color.fgPrimary, w = 2.1 }: P) => (
     <Svg width={size} height={size} viewBox="0 0 24 24">

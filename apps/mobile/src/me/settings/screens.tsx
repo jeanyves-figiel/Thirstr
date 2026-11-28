@@ -1,6 +1,7 @@
 import { mod } from '../../i18n/mod';
 import { mx as momentsTx } from '../../i18n/moments';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { rfx } from '../../i18n/refill';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { api, ApiError, clearSession, Me } from '../../api/client';
@@ -41,6 +42,7 @@ const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 // S-67 Privacy & visibility (F-17 R-17.7, R-17.11; F-05 R-05.6).
 export function PrivacySettings() {
   const { me, setMe } = useSession();
+  const navigation = useNavigation();
   const { st, put, err, setErr } = useSettings();
   const [loc, setLoc] = useState(false);
   const [ageDraft, setAgeDraft] = useState<[number, number] | null>(null);
@@ -106,6 +108,10 @@ export function PrivacySettings() {
         <SwitchRow title={S.online} sub={S.onlineSub} value={st.online_visible} onChange={(v) => put({ online_visible: v })} />
         {/* F-21 R-21.17 (#212, D-21b C) */}
         <SwitchRow title={momentsTx.quietTitle} sub={momentsTx.quietSub} value={st.moments_quiet === true} onChange={(v) => put({ moments_quiet: v })} />
+      </Group>
+      {/* F-25 (#339): Refill (who can find me again, cards, triggers). */}
+      <Group>
+        <Row testID="privacy-refill" title={rfx.setTitle} sub={rfx.findMe} value={st.resurface_ok ? rfx.on : rfx.off} valueTone={color.personal} onPress={() => (navigation.navigate as (r: string) => void)('RefillSettings')} />
       </Group>
       <LocationSheet visible={loc} onClose={() => setLoc(false)} />
     </Page>

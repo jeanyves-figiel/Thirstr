@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { api, ApiError } from '../api/client';
 import { useSession } from '../app/session';
+import * as Refill from '../refill/feed';
 import { distanceLabel, tx } from '../i18n/app';
 import { color, space, type } from '../theme/tokens';
 import { Banner, Button, ErrorText, Field, Hero, Icon, ListRow, Loading, Section, Toggle } from '../ui';
@@ -16,6 +17,10 @@ type Nav = { navigate: (s: string, p?: object) => void; goBack: () => void };
 export function VenueScreen({ navigation, route }: { navigation: Nav; route: { params: { venue: Venue } } }) {
   const v = route.params.venue;
   const { me, mode } = useSession();
+  const meRef = useRef(me);
+  useEffect(() => {
+    meRef.current = me;
+  }, [me]);
   const [here, setHere] = useState<Here | null | undefined>(undefined);
   const [visible, setVisible] = useState(true);
   const [zone, setZone] = useState('');
@@ -29,6 +34,8 @@ export function VenueScreen({ navigation, route }: { navigation: Nav; route: { p
         (h) => {
           setHere(h);
           setVisible(h.me.visible);
+          // F-25 (#339): someone I've met is here too (device-only, at most 1 card a day).
+          if (h.me.visible) Refill.fromPeople(meRef.current, 'place', h.people.map((x) => x.profile), h.venue.name);
         },
         (e) => setHere(e instanceof ApiError && e.status === 403 ? null : (setErr(tx.common.error), null)),
       ),

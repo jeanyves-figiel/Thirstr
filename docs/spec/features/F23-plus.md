@@ -99,7 +99,7 @@ Pay for Thirstr without making the free app worse than a competitor's paid one. 
 - Server setting `plus_mode`: `beta_all` | `billing` (EN-13 flag table, row `plus_billing` on = billing).
 
 ## API
-- `GET /v1/me` adds `plus: {active, source, product?, renews_at?, ends_at?, grace_until?}` and `limits: {nearby, distance_km, party_per_week, party_capacity, party_cohosts, party_recurring, trips, look_around_any_city, tonight_active, moments_per_day, moments_live, moments_48h, album_bytes, video_seconds, translate, friend_alerts, filter_presets, chat_folders, extras, views_list}`. The app reads every limit from here.
+- `GET /v1/me` adds `plus: {active, source, product?, renews_at?, ends_at?, grace_until?}` and `limits: {nearby, distance_km, party_per_week, party_capacity, party_cohosts, party_recurring, trips, look_around_any_city, tonight_active, moments_per_day, moments_live, moments_48h, album_bytes, video_seconds, translate, friend_alerts, filter_presets, chat_folders, extras, views_list, refill}` (`refill`: F-25 cards, after-date question, Me › Refill; D-26). The app reads every limit from here.
 - `GET /v1/me/views` → `{count_7d, items?: [Card + {at}]}` (`items` only with Plus).
 - `POST /v1/profiles/:id/viewed` (R-23.21, idempotent per 24 h; 204 also when nothing is recorded, so the response tells nothing).
 - `DELETE /v1/me/views/:profile_id`.

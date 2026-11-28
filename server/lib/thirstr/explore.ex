@@ -567,7 +567,7 @@ defmodule Thirstr.Explore do
     WITH vp AS (SELECT point($1::float8, $2::float8) AS pt,
                        h3_lat_lng_to_cell(point($1::float8, $2::float8), 5) AS r5)
     SELECT p.id::text, p.display_name, p.age, p.gender, p.gender_other, p.fields, p.visibility_map,
-           p.seeded, a.id::text, a.verified_at, a.inserted_at, a.settings, lc.level, lc.display_res,
+           p.seeded, a.id::text, a.verified_at, a.inserted_at, #{Settings.settings_sql()}, lc.level, lc.display_res,
            d.dcell::text, (h3_cell_to_lat_lng(d.dcell))[1], (h3_cell_to_lat_lng(d.dcell))[0],
            h3_great_circle_distance(h3_cell_to_lat_lng(d.dcell), vp.pt, 'm'),
            ns.status, ns.text, ns.created_at, COALESCE(ph.thumb_key, ph.storage_key),
@@ -944,7 +944,9 @@ defmodule Thirstr.Explore do
       intents: intents_of(Map.get(r, :show_in)),
       # F-20 R-20.13
       visitor: Map.get(r, :visitor, false),
-      trip: Map.get(r, :trip)
+      trip: Map.get(r, :trip),
+      # F-25 R-25.1 (#339): he lets people he met find him again (Refill runs on the phone)
+      resurface: Settings.resurface?(Map.get(r, :settings))
     }
   end
 

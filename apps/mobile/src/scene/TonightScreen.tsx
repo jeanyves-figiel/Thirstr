@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, ApiError } from '../api/client';
 import { useOptions } from '../api/options';
 import { useSession } from '../app/session';
+import * as Refill from '../refill/feed';
 import { distanceLabel, opt, tx } from '../i18n/app';
 import { color, radius, space, type } from '../theme/tokens';
 import { Banner, Button, Chip, Chips, EmptyState, Icon, Loading, Photo, SectionLabel, Sheet, useAccent, VerifiedTick } from '../ui';
@@ -55,6 +56,10 @@ export { PartyCard };
 // S-13 Tonight (F-09). Sport mode shows the activities feed instead (R-09.10, F-11).
 export function TonightScreen({ navigation }: { navigation: Nav }) {
   const { me, mode } = useSession();
+  const meRef = useRef(me);
+  useEffect(() => {
+    meRef.current = me;
+  }, [me]);
   const insets = useSafeAreaInsets();
   const accent = useAccent();
   const options = useOptions();
@@ -93,6 +98,8 @@ export function TonightScreen({ navigation }: { navigation: Nav }) {
         ]);
         setPlans(t.plans);
         setMine(t.mine);
+        // F-25 (#339): we both posted a plan tonight (device-only, ≤ 1 card a day).
+        if (t.mine.length) Refill.fromPeople(meRef.current, 'tonight', t.plans.map((x) => x.profile));
         setParties(p.parties);
       }
     } catch (e) {

@@ -84,7 +84,7 @@ Outside `/v1`: `GET /.well-known/apple-app-site-association` → `{webcredential
 Blind signature (R-03.4, Chaum RSA-FDH): client picks random `token` and `r`, sends `FDH(token)·rᵉ mod n`, unblinds `s = s'·r⁻¹ mod n`. The issuer key is generated once and kept in `server_keys`. Credentials lapse after 12 months (daily sweep, R-03.7).
 
 ### Profiles (F-06)
-| GET | /profile-options | {options:{field:[values]}, defaults:{field:{visibility, kinds}}, health:[…]} (field catalogue) |
+| GET | /profile-options | {options:{field:[values]}, defaults:{field:{visibility, kinds}}, health:[…], interest_groups:[{id, interests}]} (field catalogue; `interests` F-24 R-24.10) |
 | GET | /me/profiles | {profiles:[MyProfile]} (always exactly one; MyProfile has `show_in`, photos have `main_ok`) |
 | PATCH | /me/profiles/{id} | {display_name?, fields?, visibility_map?, show_in?} (show_in ≥ 1 else 422 `show_in_empty`) → MyProfile. Values whose visibility is `chats`/`only_me` are dropped (kept on device, R-06.6); health fields can't be `public`; bio/text checked for contact details and links (R-06.10) |
 | POST | /me/profiles/{id}/photos | {slot, content_type} → {photo_id, put_url} |
@@ -132,7 +132,7 @@ Trip: `{id, city:{id, name, country, lat, lng}, first_day, last_day, show_days, 
 `trip_id` (own, unexpired trip) on `GET /explore/grid|map|tray|summary|visitors` and `GET /profiles/:id`: the viewer point becomes the trip city's centre (R-20.15); no Exact pins; locals with `show_to_remote` off or in Safe Mode are left out (R-20.17). Unknown or foreign trip → 404. `GET /explore/grid` interleaves visitors (R-20.10) unless `visitors=false`; `GET /profiles/:id` adds `trip` when the viewer point is in the trip city's area (R-20.7).
 
 ### Settings & Safe Mode (F-17, F-14)
-| GET · PATCH | /me/settings | server-enforced settings (hide_from_*, show_in_*, show_to_remote (F-20, default true), show_distance, online_visible, read_receipts, who_can_message, explicit_from_strangers, disappearing_default, push, quiet_hours) |
+| GET · PATCH | /me/settings | server-enforced settings (hide_from_*, show_in_*, show_to_remote (F-20, default true), show_distance, online_visible, read_receipts, who_can_message, explicit_from_strangers, disappearing_default, push, quiet_hours, fit_visible (F-24, default true)) |
 | PUT | /me/safe_mode | {setting: auto\|on\|off, active: bool} → Me (country detection stays on device) |
 | GET | /safe-mode/countries | public, `cache-control: public, max-age=21600` → {version, source, countries: [ISO alpha-2]}; same body for every caller (R-14.1a) |
 
@@ -255,6 +255,8 @@ Public page `GET /p/{slug}` (HTML, no scripts) — I-02.
 | DELETE | /moments/{id} | → 204 |
 | PUT · DELETE | /moments/mutes/{profile_id} | mute / unmute his Moments → 204 |
 Explore cards (`grid`, `tray`, `map` pins and avatars) and `GET /profiles/{id}` gain `moments: {live, unseen, thumb?} \| null`. `PATCH /me/settings` gains `moments_quiet`.
+
+F-24 Ask, Fit & Picks (#338): `limits` gains `ai_match` (bool) and `picks_per_day`. For viewers with `ai_match`, grid and tray cards gain `match {interests, tribes, sports, sport_level, schedule, looking_for, position, hosting, practices, limits}` (visible, lensed fields only; absent when the owner set `fit_visible: false`). `GET /profiles/{id}` gains `fit_ok`. Explore filter `interests` (any of). Scores are worked out on the phone and never sent.
 
 ## Realtime (Phoenix Channels, WSS)
 Connect: `wss://<api host>/socket/websocket?token=<access token>&vsn=2.0.0`, then join `user:me` (beta: one private topic per account; the server maps it).

@@ -138,6 +138,13 @@ export const Icon = {
       <Path d={d} {...base(c, w)} />
     </Svg>
   ),
+  /** F-24 Ask, Fit & Picks (#338): four-point spark. */
+  Spark: ({ size = 18, c = color.trust, fill }: P & { fill?: string }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5z" fill={fill ?? c} stroke={c} strokeWidth={1.2} strokeLinejoin="round" />
+      <Path d="M19 15.5c.25 1.6 1 2.35 2.5 2.5-1.5.25-2.25 1-2.5 2.5-.25-1.5-1-2.25-2.5-2.5 1.5-.15 2.25-.9 2.5-2.5z" fill={fill ?? c} />
+    </Svg>
+  ),
   Search: ({ size = 18, c = color.fgMuted, w = 2.2 }: P) => (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Circle cx={11} cy={11} r={6.5} {...base(c, w)} />

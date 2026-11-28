@@ -10,9 +10,14 @@ import { tr } from '../i18n/travel';
 import { TileRing } from '../moments/Ring';
 import { watchedAll } from '../moments/api';
 import { mx } from '../i18n/moments';
+import { mt } from '../i18n/match';
+import type { FitResult } from '../match/fit';
+import { FitChip } from '../match/ui';
 
 // R-04.5 grid card / R-04.4 tray card: photo, name, tick, online dot, distance, Now/Exact badge.
-export function ProfileTile({ card, onPress, onLongPress, tray, selected }: { card: Card; onPress: () => void; onLongPress?: () => void; tray?: boolean; selected?: boolean }) {
+export function ProfileTile({ card, onPress, onLongPress, tray, selected, fit }: { card: Card; onPress: () => void; onLongPress?: () => void; tray?: boolean; selected?: boolean; fit?: FitResult | null }) {
+  // F-24 R-24.13: "Fit" / "N ♥" chip, top right, carrying the online dot when shown.
+  const chip = fit && (fit.fit || fit.common > 0) ? fit : null;
   const accent = useAccent();
   const hot = !!card.now || card.exact;
   const precise = card.distance?.kind === 'area' && !!card.distance.precise;
@@ -22,7 +27,7 @@ export function ProfileTile({ card, onPress, onLongPress, tray, selected }: { ca
   // F-21 R-21.9 (#212): gradient ring = new Moment, grey = all seen.
   const moments = card.moments && card.moments.live > 0 ? card.moments : null;
   const unseen = !!moments?.unseen && !watchedAll(card.id);
-  const label = `${card.display_name}, ${card.age}${card.verified ? ', verified' : ''}, ${trip ? a11yLabel(trip) : distanceLabel(card.distance)}${card.now ? ', ' + tx.now[card.now.status] : ''}${moments ? ', ' + mx.openA11y('', moments.live, unseen).replace(/^: /, '') : ''}`;
+  const label = `${card.display_name}, ${card.age}${card.verified ? ', verified' : ''}, ${trip ? a11yLabel(trip) : distanceLabel(card.distance)}${card.now ? ', ' + tx.now[card.now.status] : ''}${moments ? ', ' + mx.openA11y('', moments.live, unseen).replace(/^: /, '') : ''}${chip ? ', ' + (chip.fit ? mt.fitA11y : mt.inCommon(chip.common)) : ''}`;
   return (
     <Pressable
       testID={`tile-${card.id}`}
@@ -43,7 +48,11 @@ export function ProfileTile({ card, onPress, onLongPress, tray, selected }: { ca
       <Scrim height="60%" max={tray ? 0.92 : 0.85} />
       {trip ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 18, borderWidth: 2.5, borderColor: color.travel }} /> : null}
       {moments && !trip ? <TileRing unseen={unseen} radius={tray ? radius.tray : 18} /> : null}
-      {card.online ? (
+      {chip ? (
+        <View style={{ position: 'absolute', top: 6, right: 6 }}>
+          <FitChip fit={chip} online={card.online} />
+        </View>
+      ) : card.online ? (
         <View accessible accessibilityLabel="Online" style={{ position: 'absolute', top: 8, right: 8, width: 12, height: 12, borderRadius: 6, backgroundColor: color.sport, borderWidth: 2, borderColor: color.bgBase }} />
       ) : null}
       {trip ? (

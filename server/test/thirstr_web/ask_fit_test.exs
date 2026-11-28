@@ -90,6 +90,8 @@ defmodule ThirstrWeb.AskFitTest do
     |> json_response(200)
 
     refute Map.has_key?(card(grid(v.c), o.pid), "match")
+    seen = v.c |> recycle_authed() |> get("/v1/profiles/#{o.pid}") |> json_response(200)
+    assert seen["fit_ok"] == false
   end
 
   test "interests is a free filter and respects visibility", %{viewer: v, other: o, conn: conn} do

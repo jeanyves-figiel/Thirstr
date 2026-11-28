@@ -1,3 +1,4 @@
+import { interestLabel } from './interests';
 import { getLocales } from 'expo-localization';
 import { inMiles } from '../me/prefs';
 import { de } from './de';
@@ -208,6 +209,7 @@ const en = {
       tribes: 'Tribes',
       looking_for: 'Looking for',
       relationship: 'Relationship',
+      interests: 'Interests',
       creator: 'I promote paid content (creator)',
       position: 'Position',
       practices: 'Into',
@@ -808,6 +810,7 @@ const OPT = OPTION_LABELS[getLocales()[0]?.languageCode ?? 'en'] ?? OPTION_LABEL
 /** Option label in the app language ("vers_top" → "Vers top" / "Plutôt actif"); languages show their own name. */
 export function opt(value: string, field?: string): string {
   if (field === 'languages') return LANGUAGE_NAMES[value] ?? value.toUpperCase();
+  if (field === 'interests') return interestLabel(value);
   if (OPT[value]) return OPT[value];
   const s = value.replace(/_/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);

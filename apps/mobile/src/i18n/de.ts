@@ -158,6 +158,7 @@ export const de: Partialize<AppStrings> = {
       tribes: 'Tribes',
       looking_for: 'Suche',
       relationship: 'Beziehung',
+      interests: 'Interessen',
       creator: 'Ich bewerbe bezahlte Inhalte (Creator)',
       position: 'Position',
       practices: 'Steh auf',

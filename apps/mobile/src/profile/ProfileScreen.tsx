@@ -12,6 +12,11 @@ import { v3 } from '../i18n/v3';
 import { AUDIENCES, allowedFor, cycle } from '../me/look';
 import { useNavSpace, Badge, Banner, Button, ErrorState, Icon, Loading, Photo, Scrim, useAccent, VerifiedTick } from '../ui';
 import { getLocal } from '../me/localFields';
+import { fitOf } from '../match/fit';
+import { recordSignal } from '../match/signals';
+import { useMatchState } from '../match/store';
+import { WhyFit } from '../match/ui';
+import { aiOn } from '../plus/plus';
 import { FieldList } from './FieldList';
 import { PrivateNote } from './PrivateNote';
 import { convWith, dropFriend, answerFriend, getConvs, requestFriend } from '../chat/engine';
@@ -76,6 +81,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
   const { id, preview } = route.params;
   const p0self = !!preview;
   const { me, mode: appMode } = useSession();
+  const { self: mine, prefs: aiPrefs } = useMatchState();
   // F-06 R-06.1b: others are seen through the current mode's lens.
   const mode = route.params.mode ?? appMode;
   const accent = useAccent();
@@ -212,6 +218,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
   const tapNow = () => {
     if (!cur || cur.self || preview || cur.tapped) return;
     feel('success');
+    recordSignal({ id: cur.id, age: cur.age, verified: cur.verified, online: cur.online, now: cur.now, distance: cur.distance, match: cur.fit_ok === false ? null : cur.fields }, 'tap', mode);
     act(() => api('POST', `/profiles/${cur.id}/tap`), () => {
       setP({ ...cur, tapped: true });
       toast(gx.tapSent);
@@ -361,6 +368,9 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
             ? [{ label: ppl.addFriend, icon: Icon.UserPlus, tint: color.friends, on: () => { setMenu(false); requestFriend(chat.id); } }]
             : [];
   const years = Math.floor((nowTs - new Date(p.member_since).getTime()) / (365.25 * 86400000));
+  // F-24 R-24.14 (#338): "Why you fit", worked out on this phone (Plus, Show Fit on, he didn't opt out).
+  const fitView = !p.self && !preview && p.fit_ok !== false && aiOn(me) && aiPrefs.fit && mine ? fitOf(mine, { ...p.fields, ...(getConvs().find((c) => c.peer === p.id)?.peerFields ?? {}) }, mode) : null;
+  const asPerson = { id: p.id, age: p.age, verified: p.verified, online: p.online, now: p.now, distance: p.distance, match: p.fit_ok === false ? null : p.fields };
 
   return (
     <GestureDetector gesture={profileSwipe}>
@@ -464,6 +474,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
           </View>
           <Elsewhere profileId={p.id} links={p.linked_accounts} self={!!p.self || !!preview} />
           {p.tapped && p.tapped_me ? <Banner tone="personal" text={tx.profile.mutual} /> : null}
+          {fitView ? <WhyFit fit={fitView} /> : null}
           <FieldList fields={{ ...p.fields, ...(getConvs().find((c) => c.peer === p.id)?.peerFields ?? {}) }} accent={accent} />
           {!p.self && !preview ? <PrivateNote profileId={p.id} /> : null}
         </View>
@@ -523,7 +534,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
             accessibilityRole="button"
             accessibilityLabel={p.tapped ? tx.profile.tapped : tx.profile.tap}
             accessibilityState={{ disabled: p.tapped, busy }}
-            onPress={p.tapped || busy ? undefined : () => act(() => api('POST', `/profiles/${p.id}/tap`), () => setP({ ...p, tapped: true }))}
+            onPress={p.tapped || busy ? undefined : () => (recordSignal(asPerson, 'tap', mode), act(() => api('POST', `/profiles/${p.id}/tap`), () => setP({ ...p, tapped: true })))}
             style={({ pressed }) => [{ width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', backgroundColor: p.tapped ? color.hookup : color.bgRaised }, pressed && { transform: [{ scale: 0.95 }] }]}
           >
             <Icon.Flame c={p.tapped ? color.onAccent : color.fgPrimary} fill={p.tapped ? color.onAccent : 'none'} />
@@ -533,7 +544,10 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
             accessibilityRole="button"
             accessibilityLabel={fav ? ppl.removeFav : ppl.addFav}
             accessibilityState={{ selected: fav }}
-            onPress={() => People.setFav(p.id, !fav, { name: p.display_name, photo: p.photos[0] ?? null })}
+            onPress={() => {
+              if (!fav) recordSignal(asPerson, 'favorite', mode);
+              People.setFav(p.id, !fav, { name: p.display_name, photo: p.photos[0] ?? null });
+            }}
             style={({ pressed }) => [{ width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', backgroundColor: fav ? color.personal : color.bgRaised }, pressed && { transform: [{ scale: 0.95 }] }]}
           >
             <Icon.Star c={fav ? color.onAccent : color.fgPrimary} fill={fav ? color.onAccent : 'none'} />
@@ -545,7 +559,7 @@ export function ProfileScreen({ route, navigation }: { route: { params: Params }
               fill={accent}
               onPress={() =>
                 me.verified
-                  ? navigation.navigate('Chat', { profileId: p.id, name: p.display_name })
+                  ? (recordSignal(asPerson, 'message', mode), navigation.navigate('Chat', { profileId: p.id, name: p.display_name }))
                   : // #124: solid toast above the bar instead of a see-through banner floating over the content.
                     toast(tx.explore.unverifiedMessage, { label: tx.me.verifyNow, on: () => navigation.navigate('Verify') })
               }

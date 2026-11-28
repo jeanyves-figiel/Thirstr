@@ -1,7 +1,7 @@
 // Client mirror of Thirstr.Profiles.Fields types (server validates; this drives inputs).
 export type FieldType = 'enum' | 'multi' | 'text' | 'int' | 'bool' | 'month';
 
-const MULTI = ['languages', 'tribes', 'looking_for', 'practices', 'limits', 'sports', 'schedule'];
+const MULTI = ['languages', 'tribes', 'looking_for', 'practices', 'limits', 'sports', 'schedule', 'interests'];
 const BOOL = ['creator', 'groups', 'clubs_visible'];
 const INT = ['height_cm', 'weight_kg'];
 const TEXT = ['pronouns', 'bio', 'prompt_a', 'boundaries', 'gym'];

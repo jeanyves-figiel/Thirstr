@@ -22,8 +22,8 @@ Owner ask (2026-11-28): something similar to Grindr Edge (AI that narrows a sear
 - R-24.7 **Plus.** Ask is a way to fill filters, not a filter: every filter stays free in the Filters sheet (pledge R-23.6 unchanged). Free: the Ask field shows with the `plus` "+" tag; tapping it opens S-90 at the Ask benefit (R-23.17). "Save as preset" reuses R-23.25.
 
 ## B · Fit (interests + compatibility)
-- R-24.10 **Interests field** (F-06): up to 12 tag IDs from a curated list (≈ 240 tags in 10 groups: Music & nights, Outdoors, Sport & body, Nerd & play, Food & home, Arts & culture, Travel, Pets, Wellness, Causes). No free text. Translated en/fr/de. Safe for all lenses. Default visibility Public; R-06.4 applies. Edit hub (S-74) section "Interests". Storage: `profiles.interests smallint[]` (expand-only migration). Completeness: not weighted in v1.
-- R-24.11 Cards (grid, tray, pins data) carry `interests` per R-06.4 visibility (≤ 24 bytes). No new endpoint.
+- R-24.10 **Interests field** (F-06): up to 12 tag IDs from a curated list (94 tags in 12 groups: music, nights, outdoors, play, screen, food, culture, mind, travel, home, wellness, causes; `GET /profile-options` returns `interest_groups`). No free text. Translated en/fr/de. Safe for all lenses. Default visibility Public; R-06.4 applies. Edit hub (S-74) section "Interests". Storage: the profile's `fields` map like every catalogue field (no migration). Completeness: not weighted in v1.
+- R-24.11 Grid cards carry `match` (the Fit inputs: interests, tribes, sports, sport_level, schedule, looking_for, position, hosting, practices, limits, each per R-06.4 visibility and the current lens) only for Plus viewers (`limits.ai_match`) and only when the owner's `fit_visible` setting is not false. Map pins never carry it. Profile view adds `fit_ok`. No new endpoint.
 - R-24.12 **Fit score**, computed on the viewer's phone from fields the viewer may already see in the current lens:
   - shared interests (count), shared sports (Sport lens or Hookup), shared tribes;
   - Hookup lens only, both verified: position compatibility table (top↔bottom/vers bottom, vers↔any, side↔side), hosting complement (can host ↔ can travel/either), shared `looking_for` time intent (now / tonight), no item of his `into` in the viewer's limits and vice versa (else Fit = none).
@@ -50,6 +50,13 @@ Owner ask (2026-11-28): something similar to Grindr Edge (AI that narrows a sear
 | A Ask | €0 | 0 | ≈ 2 weeks |
 | B Fit | €0 | +≈ 1.4 KB per 60-card grid page | ≈ 2 weeks |
 | C Picks | €0 | 0 | ≈ 2–3 weeks after B |
+
+## Build notes (v1, PR 340)
+
+- Ask ships engine (3), the phrase grammar, on every phone. Engines (1) and (2) need native modules and come later (#346). Dictation uses the keyboard's own on-device dictation; no custom mic button.
+- Suggestion chips from past asks (R-24.1) are not in v1.
+- Picks: `limits.picks_per_day` = 10 for Plus (5 per window), 0 for Free. Candidates exclude anyone with an existing chat on this phone. Model, cooldowns and window state live in the private store key `thirstr.picks.v1`.
+- Settings › Privacy › Ask, Fit & Picks: four switches (Ask, Fit, Picks, Learn from what I do), "Count me in others' Fit" (`fit_visible`, server setting), learned traits, Forget everything learned.
 
 ## Acceptance criteria (draft)
 - AC-24.1 Network capture during an ask shows no request containing the query text or audio.

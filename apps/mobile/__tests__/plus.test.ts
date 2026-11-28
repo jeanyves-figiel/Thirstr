@@ -12,7 +12,7 @@ describe('Plus copy', () => {
   const en = keys(plxEn).sort();
   it('fr covers every en key', () => expect(keys(plxFr).sort()).toEqual(en));
   it('de covers every en key', () => expect(keys(plxDe).sort()).toEqual(en));
-  it('six benefits in every language', () => [plxEn, plxFr, plxDe].forEach((l) => expect(l.benefits).toHaveLength(6)));
+  it('seven benefits in every language', () => [plxEn, plxFr, plxDe].forEach((l) => expect(l.benefits).toHaveLength(7)));
 });
 
 describe('Plus helpers', () => {

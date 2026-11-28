@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import type { Visibility } from '../api/types';
 import { opt, tx } from '../i18n/app';
+import { interestCount, interestGroupLabel } from '../i18n/interests';
 import { pe } from '../i18n/profileEdit';
 import { NAME_MAX } from '../onboarding/flow';
 import { fieldType, maxLen, optionKey } from '../profile/fieldMeta';
@@ -12,6 +13,7 @@ import { type SaveState, useProfileDraft } from './useProfileDraft';
 
 type Nav = { goBack: () => void; replace: (s: string, p?: object) => void };
 type Params = { id?: string; section: SectionId; focus?: string };
+const INTERESTS_MAX = 12;
 const VIS: Visibility[] = ['public', 'verified', 'chats', 'only_me'];
 
 // S-75 Edit section (#219, R-06.8b): one section's fields, each with its own "who sees this"
@@ -59,6 +61,26 @@ export function EditSectionScreen({ route, navigation }: { route: { params: Para
         return <Field bare label={label} value={(v as string) ?? ''} placeholder="2026-10" onChangeText={(x) => d.set(k, x)} error={error} />;
       case 'multi': {
         const cur = (v as string[]) ?? [];
+        if (k === 'interests' && options.interest_groups?.length) {
+          // F-24 R-24.9: grouped chips, at most 12 (the server caps it too).
+          const full = cur.length >= INTERESTS_MAX;
+          return (
+            <View style={{ gap: space.m }}>
+              <Text style={{ ...type.meta, color: color.fgSecondary }}>{interestCount(cur.length, INTERESTS_MAX)}</Text>
+              {options.interest_groups.map((g) => (
+                <View key={g.id} style={{ gap: space.s }}>
+                  <Text style={{ ...type.caption, fontFamily: font.bold, color: color.fgSecondary }}>{interestGroupLabel(g.id)}</Text>
+                  <Chips>
+                    {g.interests.map((c) => {
+                      const on = cur.includes(c);
+                      return <Chip key={c} label={opt(c, k)} on={on} fill={tone} disabled={!on && full} onPress={() => d.set(k, on ? cur.filter((x) => x !== c) : [...cur, c])} />;
+                    })}
+                  </Chips>
+                </View>
+              ))}
+            </View>
+          );
+        }
         return (
           <Chips>
             {choices.map((c) => (

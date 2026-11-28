@@ -26,9 +26,14 @@ export const PLUS_FALLBACK: PlusLimits = {
   chat_folders: 10,
   extras: true,
   views_list: true,
+  ai_match: true,
+  picks_per_day: 10,
 };
 
 export const limits = (me: Pick<Me, 'limits'>): PlusLimits => me.limits ?? PLUS_FALLBACK;
+/** F-24 (#338, D-27): Ask, Fit & Picks are Plus. */
+export const aiOn = (me: Pick<Me, 'limits'>): boolean => limits(me).ai_match ?? true;
+export const picksPerDay = (me: Pick<Me, 'limits'>): number => limits(me).picks_per_day ?? 10;
 export const isPlus = (me: Pick<Me, 'plus'>): boolean => me.plus?.active ?? true;
 
 /** R-23.7: no Plus prompt in the first 3 days after sign-up. */

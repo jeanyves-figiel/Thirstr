@@ -6,6 +6,9 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Added
+- **Ask, Fit & Picks** (server + app, #338, F-24, D-27, Plus): **Interests** profile field (94 tags in 12 groups, up to 12, grouped chips in Edit profile, free) and an `interests` Explore filter (free). **Ask**: type what you want under the Explore bar; a phrase grammar on the phone (en/fr/de) turns it into the existing filters with a live count, and refuses HIV/health, ethnicity, language and exclusion asks. **Fit**: chips on tiles (shared interests, fits), ✦ Best fit sort, "Why you fit" on profiles, all worked out on the phone from fields the viewer may already see; the server sends these inputs (`card.match`) only to Plus viewers and never if the owner turned off "Count me in others' Fit". **Picks**: up to 5 picks at 07:00 and 19:00 (refresh once an hour) ranked by a small model trained on the phone from taps, favourites and chats; Not for me / Less like this; nothing leaves the phone. New Settings › Privacy › Ask, Fit & Picks (four switches, what Picks learned, Forget everything learned). Plus screen gains a seventh benefit. What's new note 13.
+
 ### Specified
 - **F-24 Ask, Fit & Picks** (docs, #338, D-27, [mockup](https://claude.ai/artifact/UbsUPZs3DfVCDvw4NCfSPt)): three on-device concepts in answer to Grindr Edge: natural-language search parsed on the phone into existing filters (Ask), an Interests field with an explainable Fit score and hookup compatibility (Fit), and a few daily picks ranked on the phone (Picks). No AI provider, no query or score leaves the phone. All three are Thirstr Plus; every filter stays free in the Filters sheet. Owner picked all three (2026-11-28).
 

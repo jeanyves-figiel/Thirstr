@@ -16,6 +16,42 @@ const tab = (screen: string): Target => ({ route: 'Tabs', params: { screen } });
 
 export const NOTES: Note[] = [
   {
+    id: 13,
+    date: '2026-11-28',
+    lines: [
+      {
+        tone: 'trust',
+        glyph: 'spark',
+        to: tab('Explore'),
+        text: {
+          en: ['Ask in your words', 'Type what you want. Plus fills the filters.'],
+          fr: ['Demande avec tes mots', 'Écris ce que tu veux, Plus fait les filtres.'],
+          de: ['Frag in deinen Worten', 'Schreib, was du willst. Plus setzt Filter.'],
+        },
+      },
+      {
+        tone: 'friends',
+        glyph: 'check',
+        to: tab('Explore'),
+        text: {
+          en: ['See who fits', 'Fit chips and daily Picks, on your phone.'],
+          fr: ['Vois qui te correspond', 'Badges Match et Sélection, sur ton tél.'],
+          de: ['Sieh, wer passt', 'Passt-Chips und Tipps, nur auf dem Handy.'],
+        },
+      },
+      {
+        tone: 'personal',
+        glyph: 'pen',
+        to: { route: 'EditSection', params: { section: 'interests' } },
+        text: {
+          en: ['Add your interests', 'Up to 12, so people like you find you.'],
+          fr: ['Tes centres d’intérêt', 'Jusqu’à 12, pour qu’on te trouve.'],
+          de: ['Füg Interessen hinzu', 'Bis zu 12, damit Gleiche dich finden.'],
+        },
+      },
+    ],
+  },
+  {
     id: 12,
     date: '2026-11-22',
     lines: [

@@ -15,7 +15,7 @@ import { manageUrl } from './plus';
 // https://claude.ai/artifact/C2t81w4khbvFPRxPgXdNRn). Buying lands with billing (#321, open
 // beta): until then the Free state says when Plus opens; prices are never typed in the app (R-23.14).
 
-const TONES = [color.hookup, color.personal, color.friends, color.travel, color.sport, color.trust];
+const TONES = [color.hookup, color.personal, color.friends, color.travel, color.sport, color.friends, color.trust];
 
 function BenefitIcon({ i }: { i: number }) {
   const c = color.onAccent;
@@ -30,6 +30,8 @@ function BenefitIcon({ i }: { i: number }) {
       return <Plane size={16} c={c} />;
     case 4:
       return <Icon.Timer size={16} c={c} />;
+    case 5:
+      return <Icon.Spark size={16} c={c} />;
     default:
       return <Icon.Translate size={16} c={c} />;
   }

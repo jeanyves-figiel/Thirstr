@@ -75,6 +75,78 @@
       "for_min": 30
     },
     {
+      "id": "db-corruption",
+      "title": "Database corruption detected (page checksum or index check failed)",
+      "sev": 1,
+      "type": "promql",
+      "query": "max(thirstr_db_health_checksum_failures{app=\"thirstr-api-prod\"}) > 0 or min(thirstr_db_maint_ok{app=\"thirstr-api-prod\",key=\"amcheck\"}) == 0",
+      "unit": "count",
+      "for_min": 1
+    },
+    {
+      "id": "db-archive-failing",
+      "title": "WAL archive failing (point-in-time restore at risk)",
+      "sev": 1,
+      "type": "promql",
+      "query": "max(thirstr_db_health_archive_failing{app=\"thirstr-api-prod\"}) > 0 or max(thirstr_db_health_archive_age_s{app=\"thirstr-api-prod\"}) > 900",
+      "unit": "s",
+      "for_min": 10
+    },
+    {
+      "id": "db-backup-old",
+      "title": "Database backup older than 30 h or verify failing",
+      "sev": 2,
+      "type": "promql",
+      "query": "max(thirstr_db_maint_age_s{app=\"thirstr-api-prod\",key=\"backup\"}) > 108000 or max(thirstr_db_maint_age_s{app=\"thirstr-api-prod\",key=\"verify\"}) > 691200 or min(thirstr_db_maint_ok{app=\"thirstr-api-prod\",key=~\"backup|verify\"}) == 0",
+      "unit": "s",
+      "for_min": 30
+    },
+    {
+      "id": "db-xid-age",
+      "title": "Transaction ID age above 500 M (wraparound at 2.1 B)",
+      "sev": 2,
+      "type": "promql",
+      "query": "max(thirstr_db_health_xid_age{app=\"thirstr-api-prod\"}) > 5e8",
+      "unit": "xids",
+      "for_min": 30
+    },
+    {
+      "id": "db-long-xact",
+      "title": "A database transaction open over 10 min",
+      "sev": 2,
+      "type": "promql",
+      "query": "max(thirstr_db_health_longest_xact_s{app=\"thirstr-api-prod\"}) > 600",
+      "unit": "s",
+      "for_min": 5
+    },
+    {
+      "id": "db-connections",
+      "title": "Database connections above 80 %",
+      "sev": 2,
+      "type": "promql",
+      "query": "max(thirstr_db_health_connections_ratio{app=\"thirstr-api-prod\"}) > 0.8",
+      "unit": "ratio",
+      "for_min": 10
+    },
+    {
+      "id": "db-maintenance-stale",
+      "title": "Nightly DB maintenance failed or did not run",
+      "sev": 3,
+      "type": "promql",
+      "query": "max(thirstr_db_maint_age_s{app=\"thirstr-api-prod\",key=\"maintenance\"}) > 108000 or min(thirstr_db_maint_ok{app=\"thirstr-api-prod\",key=\"maintenance\"}) == 0",
+      "unit": "s",
+      "for_min": 30
+    },
+    {
+      "id": "db-dead-tuples",
+      "title": "A table has over 20 % dead rows (vacuum behind)",
+      "sev": 3,
+      "type": "promql",
+      "query": "max(thirstr_db_health_dead_ratio{app=\"thirstr-api-prod\"}) > 0.2",
+      "unit": "ratio",
+      "for_min": 120
+    },
+    {
       "id": "machine-memory",
       "title": "API machine memory above 400 MB",
       "sev": 2,
@@ -106,7 +178,10 @@
       "title": "TLS certificate expires in under 14 days",
       "sev": 2,
       "type": "cert",
-      "hosts": ["api.thirstr.fun", "thirstr.fun"],
+      "hosts": [
+        "api.thirstr.fun",
+        "thirstr.fun"
+      ],
       "min_days": 14,
       "for_min": 30
     },

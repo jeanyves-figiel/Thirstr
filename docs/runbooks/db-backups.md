@@ -9,6 +9,7 @@
 | WAL | `archive_mode=on`, `archive_timeout=300` → every change is off the machine within ≤ 5 min (RPO ≤ 5 min; ops.md target 15 min) |
 | Base backups | `backup-loop.sh` checks every 10 min: newest backup > 24 h old → take one; full if newest full > 7 d, else differential |
 | Retention | 5 fulls (≈ 5 weeks of point-in-time restore; ops.md asks ≥ 30 d). Old WAL is expired with them. |
+| Verify | weekly `pgbackrest verify` (checksum of every backup file, WAL continuity) by `backup-loop.sh` (DB-07, #333). `backup` / `verify` results → table `db_maint_status` → alert `db-backup-old` |
 | Also | Fly volume snapshots (daily, 5 d, same host provider) stay on as a second layer |
 
 Off when `PGBACKREST_REPO1_S3_BUCKET` is unset (DEV compose, CI) or the machine has env `BACKUPS=off` (restore drills).
@@ -55,10 +56,18 @@ Never restore over the running prod volume. Restore into a new machine + volume,
 - temporary volume (live size **+ 2 GB**: WAL replay needs room) + machine on `thirstr-db-<env>` in another EU region, `BACKUPS=off`, init `sleep`, metadata `purpose=dr-drill`;
 - `pgbackrest restore` (latest), then Postgres on **port 5499** with `archive_mode=off` and the pgBackRest env (the `restore_command` needs it), until recovery has promoted;
 - RTO = start → usable DB; RPO = how old the last archived WAL was on the live DB at drill time (worst-case loss); `accounts` count and newest message age as sanity checks;
+- amcheck on the copy: `bt_index_check(heapallindexed)` on every B-tree index + `verify_heapam` on every table; any failure fails the drill (`amcheck` field, DB-08 #333);
 - `--migrate-image`: a second temporary machine runs `/app/bin/migrate` of that image against the copy (one-time superuser `drill_migrator`, random password, only `fdaa::/16`);
 - always destroys machines (all with this run id) and the volume, even on failure.
 
-Workflow **DR drill** (`dr-drill.yml`): quarterly (1 Jan/Apr/Jul/Oct, 04:17 UTC) on prod into `ams`, or by hand (env, region). It dry-runs the image live on staging, writes the run summary and comments on the issue labelled `dr-drill` ("DR drill log"). Cost: two shared-cpu machines + a small volume for ~5–10 min.
+Workflow **DR drill** (`dr-drill.yml`): monthly (1st, 04:17 UTC; DB-08) on prod into `ams`, or by hand (env, region). It dry-runs the image live on staging, writes the run summary and comments on the issue labelled `dr-drill` ("DR drill log"). Cost: two shared-cpu machines + a small volume for ~5–10 min.
+
+## Hardening (DB-09, #334)
+`scripts/ops/db-hardening.sh <env> [--image <ref>] [--dry-run]`, workflow **DB hardening** (`db-hardening.yml`, manual, dry run by default). Run `infra-images.yml` first (it also runs on every main push touching `infra/postgres/`).
+1. Moves the live DB machine to the newest image (`:pg16-h3`): tuned config sized from the machine's RAM, `pg_stat_statements`, timeouts (DB-01/03/04).
+2. Checksums off → boots with init `sleep` (Postgres stopped cleanly), checks `pg_controldata` says `shut down`, runs `pg_checksums --enable`, boots normally. Already on → only step 1 and 3.
+3. Mount auto-extend: 80 % used → +2 GB, cap 50 GB.
+DB down ≈ 1–2 min (3 GB). **Prod only with the owner's OK**; staging first. Afterwards `show data_checksums` = `on`; `thirstr_db_health_checksums_on` = 1.
 
 ## Gotchas
 - A target time needs a commit **after** it in archived WAL, else recovery stops with "recovery ended before configured recovery target was reached". Force it with `SELECT pg_switch_wal()` (its own statement: `psql -c "a; b"` runs as one transaction) or wait ≤ `archive_timeout`.

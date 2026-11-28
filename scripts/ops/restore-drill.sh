@@ -5,12 +5,13 @@
 #
 # 1. Creates a temporary encrypted volume + machine on thirstr-db-<env> in <region> (same DB image, BACKUPS=off,
 #    archive_mode=off, init = sleep), restores the newest backup + WAL from Tigris with pgBackRest, starts Postgres
-#    on port 5499 (never 5432, so `thirstr-db-<env>.internal:5432` traffic can't reach it), checks row counts.
+#    on port 5499 (never 5432, so `thirstr-db-<env>.internal:5432` traffic can't reach it), checks row counts and
+#    runs amcheck (every B-tree index with heapallindexed) + verify_heapam on every table (DB-08, #333).
 # 2. --migrate-image: starts a second temporary machine from that API image and runs `/app/bin/migrate` against the
 #    restored copy (random one-time role + password). Fails if any migration fails.
 # 3. Always destroys both machines and the volume (trap), unless --keep.
 #
-# Prints one JSON line on stdout: {env, region, rto_s, restore_s, rpo_s, accounts, migrate, ...}. Progress → stderr.
+# Prints one JSON line on stdout: {env, region, rto_s, restore_s, rpo_s, accounts, amcheck, migrate, ...}. Progress → stderr.
 # Needs FLY_API_TOKEN (or FLY_TOKEN), curl, jq, openssl. Machines API only (no flyctl).
 set -euo pipefail
 
@@ -134,6 +135,46 @@ accounts=$(mexec "$drill_id" "gosu postgres psql -p 5499 -h localhost -d $db -At
 last_msg_age=$(mexec "$drill_id" "gosu postgres psql -p 5499 -h localhost -d $db -Atc \"select coalesce(extract(epoch from now() - max(created_at))::int, -1) from mls_messages\" 2>/dev/null || echo -1" | tr -d '[:space:]')
 log "usable after ${rto_s}s: db=$db accounts=$accounts newest message ${last_msg_age}s old"
 
+# DB-08 (#333): corruption check on the restored copy. Every valid B-tree index, heapallindexed (each heap
+# tuple must be found in the index), plus verify_heapam on every table (heap + TOAST pages; page checksum
+# failures surface here too). Throwaway copy: creating the extension here never touches the live DB.
+amcheck_sql=$(cat <<'SQL'
+CREATE EXTENSION IF NOT EXISTS amcheck;
+DO $$
+DECLARE r record; bad int := 0; n int := 0;
+BEGIN
+  FOR r IN SELECT c.oid::regclass AS idx FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+           JOIN pg_am am ON am.oid = c.relam JOIN pg_namespace ns ON ns.oid = c.relnamespace
+           WHERE am.amname = 'btree' AND i.indisvalid AND ns.nspname NOT IN ('pg_catalog','information_schema')
+             AND ns.nspname !~ '^pg_toast' AND c.relpersistence <> 't'
+  LOOP
+    n := n + 1;
+    BEGIN PERFORM bt_index_check(r.idx, true);
+    EXCEPTION WHEN OTHERS THEN bad := bad + 1; RAISE WARNING 'amcheck failed: % (%)', r.idx, SQLERRM; END;
+  END LOOP;
+  FOR r IN SELECT c.oid::regclass AS t FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace
+           WHERE c.relkind = 'r' AND ns.nspname = 'public'
+  LOOP
+    BEGIN
+      IF EXISTS (SELECT 1 FROM verify_heapam(r.t, check_toast => true)) THEN
+        bad := bad + 1; RAISE WARNING 'heap corrupt: %', r.t;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN bad := bad + 1; RAISE WARNING 'heap check failed: % (%)', r.t, SQLERRM; END;
+  END LOOP;
+  RAISE NOTICE 'amcheck: % indexes, % failures', n, bad;
+  IF bad > 0 THEN RAISE EXCEPTION 'corruption found: % failures', bad; END IF;
+END $$;
+SQL
+)
+mexec "$drill_id" "cat > /tmp/amcheck.sql <<'EOSQL'
+$amcheck_sql
+EOSQL
+chmod 644 /tmp/amcheck.sql
+setsid sh -c 'gosu postgres psql -X -v ON_ERROR_STOP=1 -p 5499 -h localhost -d $db -f /tmp/amcheck.sql > /tmp/amcheck.log 2>&1; echo \$? > /tmp/amcheck.rc' < /dev/null > /dev/null 2>&1 &" >/dev/null
+if bg_wait "$drill_id" amcheck 1800; then amcheck="ok"; else amcheck="failed"; fi
+mexec "$drill_id" "grep -E 'amcheck|failed|corruption' /tmp/amcheck.log | tail -n 20" >&2 || true
+log "amcheck on restored copy: $amcheck"
+
 migrate="skipped"; migrate_s=0
 if [[ -n "$migrate_image" ]]; then
   pw=$(openssl rand -hex 24)
@@ -157,9 +198,9 @@ if [[ -n "$migrate_image" ]]; then
   log "migration dry run: $migrate in ${migrate_s}s"
 fi
 
-jq -nc --arg env "$env" --arg region "$region" --arg image "$image" --arg db "$db" --arg migrate "$migrate" \
+jq -nc --arg env "$env" --arg region "$region" --arg image "$image" --arg db "$db" --arg migrate "$migrate" --arg amcheck "$amcheck" \
   --argjson rto "$rto_s" --argjson restore "$restore_s" --argjson rpo "${rpo_s:--1}" --argjson accounts "${accounts:-0}" \
   --argjson last "${last_msg_age:--1}" --argjson ms "$migrate_s" --arg at "$(date -u +%FT%TZ)" \
   '{at:$at, env:$env, region:$region, db_image:$image, db:$db, rto_s:$rto, restore_s:$restore, rpo_s:$rpo,
-    accounts:$accounts, newest_message_age_s:$last, migrate:$migrate, migrate_s:$ms}'
-[[ "$migrate" != "failed" ]]
+    accounts:$accounts, newest_message_age_s:$last, amcheck:$amcheck, migrate:$migrate, migrate_s:$ms}'
+[[ "$migrate" != "failed" && "$amcheck" == "ok" ]]

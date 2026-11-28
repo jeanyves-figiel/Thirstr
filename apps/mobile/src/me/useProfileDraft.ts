@@ -9,6 +9,7 @@ import { useSession } from '../app/session';
 import { resharePrivate } from '../chat/engine';
 import { tx } from '../i18n/app';
 import { getLocal, setLocal } from './localFields';
+import { setSelf } from '../match/store';
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const DEBOUNCE = 800;
@@ -80,6 +81,8 @@ export function useProfileDraft(profileId: string | undefined) {
       setFieldErr({});
       setState('saved');
       ok = true;
+      // F-24: Fit and Picks read my latest fields on this phone.
+      setSelf(v);
     } catch (e) {
       dirty.current = true;
       setState('error');

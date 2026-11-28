@@ -1,3 +1,4 @@
+import { AiSettingsScreen } from '../match/AiSettingsScreen';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useFriendPerks } from '../chat/friendPerks';
 import { createNavigationContainerRef, DarkTheme, NavigationContainer, StackActions, type NavigationState } from '@react-navigation/native';
@@ -453,6 +454,7 @@ export function Main() {
           <Stack.Screen name="EditSection" component={EditSectionScreen as React.ComponentType} options={(x) => ({ ...sub(x), ...edgeOnly })} />
           <Stack.Screen name="Settings" component={SettingsScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="PrivacySettings" component={PrivacySettings} options={sub} />
+          <Stack.Screen name="AiSettings" component={AiSettingsScreen as React.ComponentType} options={sub} />
           <Stack.Screen name="ChatSettings" component={ChatSettings} options={sub} />
           <Stack.Screen name="DataSaverSettings" component={DataSaverSettings} options={sub} />
           <Stack.Screen name="ChatBackupSettings" component={ChatBackupSettings as React.ComponentType} options={sub} />

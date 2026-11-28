@@ -75,6 +75,8 @@ defmodule Thirstr.Explore do
       hidden: a.hidden,
       safe_mode: Account.safe_mode_on?(a),
       settings: Settings.get(a),
+      # F-24 R-24.11: Fit inputs on cards only for Plus viewers (Ask, Fit & Picks are Plus).
+      ai: Thirstr.Plus.limit(a, :ai_match),
       point: Location.viewer_point(a),
       # #197 R-05.16: ranges only while the viewer jumps through too many cells.
       brake: Location.spoof_brake?(a),
@@ -461,13 +463,15 @@ defmodule Thirstr.Explore do
          cells: heat,
          pins:
            pins
-           |> Enum.map(&Map.merge(card(&1, v), %{lat: &1.pin.lat, lng: &1.pin.lng}))
+           |> Enum.map(
+             &Map.merge(Map.delete(card(&1, v), :match), %{lat: &1.pin.lat, lng: &1.pin.lng})
+           )
            |> Thirstr.Moments.annotate(v),
          avatars:
            avatars
            |> Enum.map(fn r ->
              {lat, lng} = stable_point(r.id, r.dcell_lat, r.dcell_lng, r.display_res)
-             Map.merge(card(r, v), %{lat: lat, lng: lng})
+             Map.merge(Map.delete(card(r, v), :match), %{lat: lat, lng: lng})
            end)
            |> Thirstr.Moments.annotate(v)
        }}
@@ -781,7 +785,9 @@ defmodule Thirstr.Explore do
     sport_level: {"sport_level", :enum},
     schedule: {"schedule", :multi},
     sport_intent: {"sport_intent", :enum},
-    orientation: {"orientation", :enum}
+    orientation: {"orientation", :enum},
+    # F-24 R-24.2: free filter (R-23.6), also what Ask fills in
+    interests: {"interests", :multi}
   }
   # hookup filters only for verified viewers (R-04.8) and only in the Hookup lens (R-06.1b)
   @verified_only ~w(position hosting)a
@@ -944,8 +950,21 @@ defmodule Thirstr.Explore do
       intents: intents_of(Map.get(r, :show_in)),
       # F-20 R-20.13
       visitor: Map.get(r, :visitor, false),
-      trip: Map.get(r, :trip)
+      trip: Map.get(r, :trip),
+      # F-24 R-24.11: what the viewer's phone needs for Fit and Picks, already filtered by
+      # visibility (R-06.4) and lens (R-06.1b). Never a score: the phone computes it.
+      match: match(fields, r, v)
     }
+    |> Map.reject(fn {k, val} -> k == :match and is_nil(val) end)
+  end
+
+  @match_keys ~w(interests tribes sports sport_level schedule looking_for position hosting practices limits)
+
+  defp match(fields, r, v) do
+    if Map.get(v, :ai, false) and Map.get(r.settings || %{}, "fit_visible", true) != false do
+      m = Map.take(fields, @match_keys)
+      if m == %{}, do: nil, else: m
+    end
   end
 
   # R-04.18: the card's lens is his first intent (hookup → friends → sport) among the selected.

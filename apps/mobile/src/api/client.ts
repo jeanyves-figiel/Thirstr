@@ -81,6 +81,9 @@ export type PlusLimits = {
   chat_folders: number;
   extras: boolean;
   views_list: boolean;
+  /** F-24 (#338): Ask, Fit & Picks. Absent on older servers (= Plus, the beta behaviour). */
+  ai_match?: boolean;
+  picks_per_day?: number;
 };
 
 export type Photo = { id: string; slot: number; status: string; reject_reason: string | null; url: string | null; thumb_url?: string | null; main_ok?: boolean };

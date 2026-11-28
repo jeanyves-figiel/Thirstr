@@ -16,7 +16,8 @@ defmodule ThirstrWeb.ProfileController do
           Map.new(Fields.catalogue(), fn {k, {_, v, kinds}} ->
             {k, %{visibility: v, kinds: kinds, lenses: lenses(kinds)}}
           end),
-        health: Fields.health()
+        health: Fields.health(),
+        interest_groups: Fields.interest_groups()
       })
 
   # F-06 R-06.1b: lenses that show a field.

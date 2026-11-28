@@ -34,7 +34,10 @@ defmodule Thirstr.Plus do
     filter_presets: 0,
     chat_folders: 0,
     extras: false,
-    views_list: false
+    views_list: false,
+    # F-24 (#338, D-27): Ask, Fit & Picks
+    ai_match: false,
+    picks_per_day: 0
   }
 
   # nil = no Plus limit (the shared abuse caps still apply).
@@ -58,7 +61,9 @@ defmodule Thirstr.Plus do
     filter_presets: 10,
     chat_folders: 10,
     extras: true,
-    views_list: true
+    views_list: true,
+    ai_match: true,
+    picks_per_day: 10
   }
 
   def free_limits, do: @free

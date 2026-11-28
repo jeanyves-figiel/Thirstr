@@ -58,6 +58,8 @@ export type Card = {
   trip?: VisitorTrip | null;
   /** F-21 R-21.27 (#212): ring data, null when he has no Moment I may see. */
   moments?: MomentsBadge;
+  /** F-24 R-24.11: fields my phone uses for Fit and Picks (Plus viewers; absent if he opted out). */
+  match?: Record<string, unknown> | null;
 };
 
 /** F-20: what others see of a shown trip (never his position or other trips). */
@@ -129,6 +131,8 @@ export type ProfileView = {
   moments?: MomentsBadge;
   /** F-20 R-20.7: his shown trip to the viewer's area. */
   trip?: VisitorTrip | null;
+  /** F-24 R-24.15: false when he opted out of others' Fit. */
+  fit_ok?: boolean;
 };
 
 export type Settings = {
@@ -148,6 +152,8 @@ export type Settings = {
   read_receipts: boolean;
   /** F-21 R-21.17 (#212): watch Moments quietly. */
   moments_quiet?: boolean;
+  /** F-24 R-24.15: count me in others' Fit (default on). */
+  fit_visible?: boolean;
   who_can_message: 'verified' | 'tapped' | 'filters';
   explicit_from_strangers: 'blur' | 'allow' | 'block';
   disappearing_default: '24h' | '7d' | 'never';
@@ -159,6 +165,8 @@ export type ProfileOptions = {
   options: Record<string, string[]>;
   defaults: Record<string, { visibility: Visibility; kinds: Kind[] | 'all'; lenses?: Mode[] }>;
   health: string[];
+  /** F-24 R-24.10: interests in display groups. */
+  interest_groups?: { id: string; interests: string[] }[];
 };
 
 export type Tap = { profile: { id: string; display_name: string; age: number; verified: boolean; photo: string | null }; at: string; seen: boolean; mutual: boolean; kind: Kind };

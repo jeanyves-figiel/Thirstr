@@ -44,6 +44,16 @@ import { useFriendLocs } from '../chat/friendLoc';
 import { ppl } from '../i18n/people';
 import { away, filterMap, keep, restoreShow, Show, SHOW_KEY, showIds, wantMore } from './show';
 import { readSnapshot, saveSnapshot, snapshotSig } from './snapshot';
+import { parseAsk, type AskResult } from '../match/ask';
+import { askSmart } from '../match/engine';
+import { bestFitOrder, fitOf, type FitResult } from '../match/fit';
+import { useMatchState } from '../match/store';
+import { usePicks } from '../match/usePicks';
+import { recordSignal } from '../match/signals';
+import { AskBar, AskSheet, PicksDone, PicksPlusCard, PicksRow, SortChips, type Order } from '../match/ui';
+import { mt } from '../i18n/match';
+import { useOptions } from '../api/options';
+import { aiOn, cardHidden, hideCard, picksPerDay, promptsAllowed } from '../plus/plus';
 
 const FILTER_KEY = (m: string) => 'thirstr.filters.' + m;
 // #113: one filter set for the merged map; chips and place layers saved on the device.
@@ -103,6 +113,11 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   const [showFilters, setShowFilters] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [quick, setQuick] = useState<Card | null>(null);
+  // F-24 (#338): Ask, Fit & Picks, worked out on this phone.
+  const [order, setOrder] = useState<Order>('near');
+  const [ask, setAsk] = useState<AskResult | null>(null);
+  const [askCount, setAskCount] = useState<number | null>(null);
+  const [picksHidden, setPicksHidden] = useState(true);
   const [holdSeen, setHoldSeen] = useState(true);
   useEffect(() => {
     AsyncStorage.getItem(HOLD_KEY).then(
@@ -455,7 +470,24 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   // #221 R-21.9: rings pushed over the socket win over the list's copy until the next load.
   const ringsV = Moments.useRings();
   const ringed = useMemo(() => (items ? Moments.withRings(items, ringsV) : items), [items, ringsV]);
-  const shown = useMemo(() => (ringed ? keep(ringed, ids) : ringed), [ringed, ids]);
+  const shownRaw = useMemo(() => (ringed ? keep(ringed, ids) : ringed), [ringed, ids]);
+  // F-24 R-24.12/R-24.13: Fit per card on this phone (Plus, "Show Fit" on); Best fit re-orders the
+  // people already loaded, nearest first on ties.
+  const ai = aiOn(me);
+  const { self: mine, prefs: aiPrefs } = useMatchState();
+  const fitOn = ai && aiPrefs.fit && !!mine;
+  const fits = useMemo(() => {
+    const m = new Map<string, FitResult>();
+    if (!fitOn || !mine) return m;
+    for (const c of items ?? []) if (c.match) m.set(c.id, fitOf(mine, c.match, intents.find((x) => (c.intents ?? ['hookup']).includes(x)) ?? intents[0]));
+    return m;
+  }, [fitOn, mine, items, intents]);
+  const shown = useMemo(() => (shownRaw && order === 'fit' && fitOn ? bestFitOrder(shownRaw, (c) => fits.get(c.id)?.score ?? 0) : shownRaw), [shownRaw, order, fitOn, fits]);
+  const picksOn = aiPrefs.picks && show === 'all' && !look;
+  const pk = usePicks(items, mine, picksPerDay(me), picksOn && ai);
+  useEffect(() => {
+    if (!ai && picksOn && promptsAllowed(me)) cardHidden('picks').then(setPicksHidden);
+  }, [ai, picksOn, me]);
   const watchKey = (items ?? []).slice(0, 60).map((c) => c.id).join(',');
   useEffect(() => {
     if (watchKey) watchMoments(watchKey.split(','), intents);
@@ -529,6 +561,45 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
   ) : safe ? (
     <Banner tone="personal" text={tx.explore.safeMode} />
   ) : null;
+  // F-24 Ask (R-24.1–R-24.6): parse on this phone, review, then apply as ordinary filters.
+  const profileOptions = useOptions();
+  const options = profileOptions?.options;
+  const askSeq = useRef(0);
+  const onAsk = useCallback((text: string) => {
+    setAskCount(null);
+    // Grammar answer at once; the on-device model (when the phone has one) refines it (R-24.3).
+    setAsk(parseAsk(text, options));
+    const n = ++askSeq.current;
+    askSmart(text, options).then((r) => {
+      if (askSeq.current === n) setAsk(r);
+    });
+  }, [options]);
+  const askFilters = useMemo(() => (ask ? { ...defaultFilters, ...ask.filters } as Filters : null), [ask]);
+  const askIntents = ask?.intents ?? intents;
+  useEffect(() => {
+    if (!askFilters) return;
+    let live = true;
+    const t = setTimeout(() => {
+      loadSummary(askIntents, askFilters)
+        .then((s) => live && setAskCount(s.total ?? askIntents.reduce((n, m) => n + (s.counts[m] ?? 0), 0)))
+        .catch(() => live && setAskCount(null));
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [askFilters, askIntents]);
+  const applyAsk = () => {
+    if (!askFilters) return;
+    if (ask?.intents) {
+      setIntents(ask.intents);
+      AsyncStorage.setItem(INTENTS_KEY, JSON.stringify(ask.intents));
+    }
+    setFilters(askFilters);
+    AsyncStorage.setItem(MERGED_FILTERS, JSON.stringify(askFilters));
+    setAsk(null);
+    feel('success');
+  };
   const header = (
     <LiveHeader
       me={me}
@@ -705,7 +776,7 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
           snap={snap}
           onSnap={changeSnap}
           title={sheetTitle}
-          right={items.length ? (look ? tr.fromCentre : tx.explore.nearestFirst) : undefined}
+          right={items.length ? (look ? tr.fromCentre : order === 'fit' && fitOn ? mt.bestFit : tx.explore.nearestFirst) : undefined}
           above={
             place ? (
               <View style={{ flex: 1 }}>
@@ -778,6 +849,53 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
                     />
                   ) : null}
                   {head}
+                  {picksOn && ai && pk.ready && items.length > 0 ? (
+                    <PicksRow
+                      title={mt.picksTitle[pk.windowStart.endsWith('T07') ? 'morning' : 'evening']}
+                      picks={pk.picks}
+                      pickedAt={pk.windowStart.endsWith('T07') ? '07:00' : '19:00'}
+                      onOpen={open}
+                      onMessage={(c) => {
+                        recordSignal(c, 'message', c.intents?.[0] ?? 'hookup');
+                        if (me.verified) navigation.navigate('Chat', { profileId: c.id, name: c.display_name });
+                        else open(c);
+                      }}
+                      onLess={(c) => {
+                        pk.drop(c, 'less');
+                        toast(mt.lessToast);
+                      }}
+                      onNotForMe={(c) => {
+                        pk.drop(c, 'not_for_me');
+                        toast(mt.notToast);
+                      }}
+                      footer={
+                        pk.picks.length ? null : (
+                          <PicksDone n={pk.total} next={pk.next.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} onRefresh={pk.canRefresh ? pk.refresh : undefined} refreshIn={pk.canRefresh ? null : pk.refreshInMin} />
+                        )
+                      }
+                    />
+                  ) : null}
+                  {picksOn && !ai && !picksHidden && items.length > 0 ? (
+                    <PicksPlusCard
+                      onPlus={() => navigation.navigate('Plus', { from: 'ai_match' })}
+                      onHide={() => {
+                        hideCard('picks');
+                        setPicksHidden(true);
+                      }}
+                    />
+                  ) : null}
+                  {aiPrefs.fit && items.length > 1 ? (
+                    <SortChips
+                      order={order}
+                      plus={ai}
+                      onOrder={(o) => {
+                        if (o === 'fit' && !ai) return navigation.navigate('Plus', { from: 'ai_match' });
+                        feel('tick');
+                        setOrder(o);
+                        list.current?.scrollToOffset({ offset: 0, animated: false });
+                      }}
+                    />
+                  ) : null}
                   {!holdSeen && items.length > 0 ? (
                     <Text testID="hold-hint" style={{ ...type.meta, fontFamily: type.headline.fontFamily, color: color.trust, marginBottom: space.s }}>
                       {mod.holdHint}
@@ -817,7 +935,7 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
             renderItem={({ item, index }) => (
               <View style={{ flex: 1 / cols }}>
                 {index === furtherFrom && !quiet ? <Text style={{ ...type.caption, color: color.fgSecondary, marginBottom: 4 }}>{tx.explore.further}</Text> : null}
-                <ProfileTile card={item} selected={item.id === selected} onPress={() => open(item)} onLongPress={() => hold(item)} />
+                <ProfileTile card={item} selected={item.id === selected} onPress={() => open(item)} onLongPress={() => hold(item)} fit={fits.get(item.id)} />
               </View>
             )}
           />
@@ -850,6 +968,11 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
       </View>
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0 }} onLayout={(e) => setHeaderH(Math.round(e.nativeEvent.layout.height))}>
         {header}
+        {aiPrefs.ask && !look ? (
+          <View pointerEvents="box-none" style={{ paddingHorizontal: space.m, paddingTop: space.s }}>
+            <AskBar plus={ai} onAsk={onAsk} onPlus={() => navigation.navigate('Plus', { from: 'ai_match' })} />
+          </View>
+        ) : null}
       </View>
       <FiltersSheet
         visible={showFilters}
@@ -862,6 +985,21 @@ export function ExploreScreen({ navigation }: { navigation: { navigate: (s: stri
           AsyncStorage.setItem(MERGED_FILTERS, JSON.stringify(f));
           setShowFilters(false);
         }}
+      />
+      <AskSheet
+        ask={ask}
+        onChange={(r) => {
+          setAskCount(null);
+          setAsk(r);
+        }}
+        count={askCount}
+        onApply={applyAsk}
+        onEdit={() => {
+          if (askFilters) setFilters(askFilters);
+          setAsk(null);
+          setShowFilters(true);
+        }}
+        onClose={() => setAsk(null)}
       />
       <NowSheet visible={showNow} onClose={() => setShowNow(false)} />
       <LocationSheet visible={showLocation} onClose={() => setShowLocation(false)} />

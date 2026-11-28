@@ -2,13 +2,15 @@
 import type { Mode } from '../api/types';
 import { GROUPS } from './fieldMeta';
 
-export type SectionId = 'basics' | 'about' | 'body' | 'hookup' | 'health' | 'sport';
+export type SectionId = 'basics' | 'about' | 'interests' | 'body' | 'hookup' | 'health' | 'sport';
 
 const group = (g: string) => GROUPS.find((x) => x.group === g)?.keys ?? [];
 
 export const SECTIONS: { id: SectionId; keys: string[]; lens?: Mode; group: string }[] = [
   { id: 'basics', keys: ['pronouns', 'orientation', 'languages'], group: 'about' },
   { id: 'about', keys: ['bio', 'prompt_q', 'prompt_a', 'looking_for', 'relationship'], group: 'about' },
+  // F-24 R-24.10 (#338): Interests, all lenses
+  { id: 'interests', keys: ['interests'], group: 'about' },
   { id: 'body', keys: group('body'), group: 'body' },
   { id: 'hookup', keys: group('hookup'), lens: 'hookup', group: 'hookup' },
   { id: 'health', keys: group('health'), group: 'health' },

@@ -6,6 +6,9 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Specified
+- **Message delivery & latency monitoring** (docs, #343, EN-23, [delivery-latency-monitoring.md](docs/spec/delivery-latency-monitoring.md)): audit of what exists, then OB-1 delivery metrics (send outcomes, online/offline delivery time, skipped, lost, stuck, duplicates, socket, push wake), OB-2 synthetic end-to-end chat probe every 5 min on prod and staging, OB-3 anonymous client RUM (fixed buckets, ≤ 2 KB/day, opt-out, off in Safe Mode), OB-4 SLO-7…10, OB-5 burn-rate paging in the on-call runner, OB-6 console Health page, OB-7 other areas (deploy gates, traffic cliff, media path, rate-limit hits, request id, logs, probe location, game days).
+
 ### Added
 - **Creates can't be stored twice** (server + app, #335, DB-10, api.md › Idempotency): POST creates (Tonight plans, trips, parties and join requests, activities and RSVPs, clubs, reports, support requests and messages, feedback, Moment publish, vouches, photo uploads) accept `Idempotency-Key`. A repeat with the same key gets the first answer back instead of a second row. The app sends a key on every POST and resends a create once with the same key when the answer was lost (network drop, timeout). Keys kept 24 h (new table `idempotency_keys`, swept, retention probe `idempotency_24h`).
 - **Database refuses impossible values** (server, #336, DB-11): CHECK constraints on account status and onboarding step, device platform, location level, photo status, support status, linked-account platform, report severity 1–6, party and activity capacity, counters. Added without a write lock (`NOT VALID`, then `VALIDATE`).

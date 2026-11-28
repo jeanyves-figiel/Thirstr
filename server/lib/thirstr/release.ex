@@ -4,6 +4,7 @@ defmodule Thirstr.Release do
 
   def migrate do
     load_app()
+    migration_timeouts()
 
     for repo <- repos(),
         do: {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
@@ -23,6 +24,16 @@ defmodule Thirstr.Release do
   def rollback(repo, version) do
     load_app()
     {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))
+  end
+
+  # DB-03 (#333): DDL may run long (no statement_timeout) but must not queue behind a long lock
+  # and stall every query behind it (lock_timeout 10 s: the migration fails, the deploy retries).
+  defp migration_timeouts do
+    for repo <- repos() do
+      cfg = Application.get_env(@app, repo, [])
+      params = Keyword.merge(cfg[:parameters] || [], statement_timeout: "0", lock_timeout: "10s")
+      Application.put_env(@app, repo, Keyword.put(cfg, :parameters, params))
+    end
   end
 
   defp repos, do: Application.fetch_env!(@app, :ecto_repos)

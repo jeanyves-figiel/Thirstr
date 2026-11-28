@@ -1,0 +1,44 @@
+# DB-09 (#334, docs/spec/db-integrity.md): move a DB machine to the newest DB image, turn on page checksums,
+# turn on volume auto-extend. DB down ~1–2 min. Manual only; prod needs the owner's explicit OK first.
+# Build the image first (infra-images.yml) so :pg16-h3 carries the tuned config. Runbook: docs/runbooks/db-backups.md › Hardening.
+name: DB hardening
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Which database"
+        type: choice
+        options: [staging, prod]
+        default: staging
+      dry_run:
+        description: "Only show what would change"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-hardening-${{ inputs.env }}
+  cancel-in-progress: false
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ inputs.env == 'prod' && 'production' || 'staging' }}
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
+      DB_ENV: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Harden
+        env:
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -o pipefail
+          args=()
+          [[ "$DRY" == "true" ]] && args+=(--dry-run)
+          ./scripts/ops/db-hardening.sh "$DB_ENV" "${args[@]}" | tee result.json
+          { echo '```json'; jq . result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

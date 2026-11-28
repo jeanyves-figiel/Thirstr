@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { clientHeaders, markUpgradeRequired } from '../app/config';
+import { newKey, retriable } from './idempotency';
 import type { MyProfile, NowStatus, Settings } from './types';
 
 // Web build is served by the API host (DEV: https://localhost:7443), so same-origin by default.
@@ -190,16 +191,26 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   if (access) headers.authorization = 'Bearer ' + access;
   Object.assign(headers, await resumeHeaders(path));
 
-  const ctl = timeoutMs ? new AbortController() : null;
-  const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
-  let res: Response;
-  try {
-    res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: ctl?.signal });
-  } catch (e) {
-    if (ctl?.signal.aborted) throw new TimeoutError();
-    throw e;
-  } finally {
-    if (timer) clearTimeout(timer);
+  // DB-10 (#335): a create whose answer was lost (network drop, timeout) is sent once more with the same
+  // key; the server answers with the first result instead of storing it twice.
+  const again = retriable(method, path);
+  if (again) headers['idempotency-key'] = newKey();
+  let res: Response | undefined;
+  for (let attempt = 0; !res; attempt++) {
+    const ctl = timeoutMs ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+    try {
+      res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: ctl?.signal });
+    } catch (e) {
+      if (again && attempt === 0) {
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      if (ctl?.signal.aborted) throw new TimeoutError();
+      throw e;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
   // #116: a parallel call may already have refreshed; only refresh if our token is still the stored one.
   if (res.status === 401 && retry && access && ((await secure.get(K.access)) !== access || (await refresh()))) return api<T>(method, path, body, false, timeoutMs);

@@ -130,3 +130,10 @@ Outputs, as a table for now, +3, +6, +12 months and the 10k / 100k / 1M mileston
 - AC-AD.5 Monthly total = Σ manual items (cadence rules) + Fly month to date, checked by a unit test with fixed data.
 - AC-AD.6 Alert sent once at 80 % and once at 100 %, not again the same month (automated).
 - AC-AD.7 Cost page and alert contain no account id, email (other than the alert recipient), IP or location (contract test).
+
+## Health (A-12, EN-23 OB-6, #343)
+Page `/admin/health` (rail: Platform › Health), [mockup approved 2026-11-28](https://claude.ai/artifact/6jPtmRtEF4AWjxZMLR5kQf). Spec: [`delivery-latency-monitoring.md`](delivery-latency-monitoring.md) › OB-6.
+- R-AD.19 Data from Fly Prometheus with the read-only `FLY_COST_TOKEN` (same as Costs), all queries in parallel, cached 60 s per environment and range (`Thirstr.Health`). Without the token: a banner, and the last probe still shows.
+- R-AD.20 Sections: overall state (probe failed / messages stuck / fast burn / all good), last chat probe step by step (kept 24 h in Valkey, own environment only), tiles (online delivery p95, probe success, lost or stuck, API p95 + live sockets), SLO table (28-day value, budget left, burn over 1 h, state), online delivery p50/p95/p99 chart with the 1 s target, message counts, notifications, in-app stats (from OB-3), API p95 by area, "needs attention" with runbook links.
+- R-AD.21 `?env=prod|staging` reads the other environment's metrics, `?range=24h|7d|28d`. Server-rendered SVG, no script, counts only. `/admin/delivery` (daily table) stays as "Delivery by day".
+

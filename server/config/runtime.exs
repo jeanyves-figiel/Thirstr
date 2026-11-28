@@ -85,9 +85,13 @@ config :thirstr,
   # testing.md › Chat test bot: shared key for the bot service; unset = feature off (404).
   # Never honoured when DEPLOY_ENV is prod/production (Thirstr.TestBot.enabled?/0).
   testbot_key: System.get_env("TESTBOT_KEY"),
+  # EN-23 OB-2 (#343): synthetic chat probe key (>= 32 bytes); unset = probe endpoints 404.
+  probe_key: System.get_env("PROBE_KEY"),
   # EN-21 (#180) admin Costs & capacity: read-only Fly org token (R-AD.13); unset = Fly typed in.
   # FLY_APP_NAME is set by Fly on every machine (thirstr-api-<env>); the DB app follows the naming.
   fly_cost_token: System.get_env("FLY_COST_TOKEN"),
+  # EN-23 OB-6: Fly Prometheus base for the Health page (default https://api.fly.io/prometheus/<org>)
+  fly_prom_url: System.get_env("FLY_PROM_URL"),
   # F-15 R-15.56 (#325): live photos sampled per day for the after-publish review (A-03).
   photo_sample_per_day: String.to_integer(env.("PHOTO_SAMPLE_PER_DAY", "20")),
   fly_org: env.("FLY_ORG", "thirstr"),

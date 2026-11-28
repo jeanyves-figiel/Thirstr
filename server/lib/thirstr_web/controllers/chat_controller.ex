@@ -35,6 +35,9 @@ defmodule ThirstrWeb.ChatController do
         _ -> 0
       end
 
+    # EN-23 OB-1: a pull after a push = the push woke the phone.
+    Thirstr.Delivery.device_seen(d(conn))
+
     json(conn, %{
       messages: Chat.pull(a(conn), d(conn), after_id),
       expired: Chat.take_expired(d(conn))

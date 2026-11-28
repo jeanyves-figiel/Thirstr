@@ -166,6 +166,8 @@ defmodule ThirstrWeb.Router do
     post "/support/:id/status", AdminSupportController, :status
     get "/audit", AdminController, :audit_log
     get "/delivery", AdminController, :delivery
+    # EN-23 OB-6 (#343): A-12 Health
+    get "/health", AdminHealthController, :index
     get "/places", AdminController, :places
     post "/places/import", AdminController, :places_import
     post "/places/venues/:id/:action", AdminController, :venue_hidden
@@ -477,6 +479,13 @@ defmodule ThirstrWeb.Router do
     scope "/testbot" do
       pipe_through :auth_limit
       post "/session", TestBotController, :session
+    end
+
+    # EN-23 OB-2: synthetic chat probe (x-probe-key; 404 without it).
+    scope "/probe" do
+      pipe_through :auth_limit
+      post "/session", ProbeController, :session
+      post "/report", ProbeController, :report
     end
 
     scope "/auth" do

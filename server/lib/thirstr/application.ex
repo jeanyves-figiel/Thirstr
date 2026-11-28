@@ -9,6 +9,8 @@ defmodule Thirstr.Application do
     Thirstr.Nearby.init_cache()
     Thirstr.Flags.init_cache()
     Thirstr.Explore.init_cache()
+    # EN-23 OB-6: console Health page cache (60 s)
+    Thirstr.Health.init_cache()
     # R-AD.18 (#326): count SES recipients for the cost page
     Thirstr.Costs.attach_mail_meter()
 
@@ -18,6 +20,8 @@ defmodule Thirstr.Application do
       Thirstr.Valkey,
       {DNSCluster, query: Application.get_env(:thirstr, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Thirstr.PubSub},
+      # EN-23 OB-1: cluster-wide live envelope sockets (:pg scope)
+      Thirstr.Delivery,
       {Finch, name: Thirstr.Finch},
       {Task.Supervisor, name: Thirstr.TaskSup},
       {Oban, Application.fetch_env!(:thirstr, Oban)},

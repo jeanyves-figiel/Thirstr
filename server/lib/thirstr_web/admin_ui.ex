@@ -26,7 +26,8 @@ defmodule ThirstrWeb.AdminUI do
     appeals: ~s(<path d="M4 12a8 8 0 0114-5.3M20 12a8 8 0 01-14 5.3M18 3v4h-4M6 21v-4h4"/>),
     support: ~s(<path d="M4 5h16v11H8l-4 4z"/>),
     costs: ~s(<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>),
-    delivery: ~s(<path d="M3 12h4l3-8 4 16 3-8h4"/>),
+    health: ~s(<path d="M3 12h4l3-8 4 16 3-8h4"/>),
+    delivery: ~s(<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>),
     places:
       ~s(<path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>),
     me: ~s(<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>),
@@ -48,7 +49,8 @@ defmodule ThirstrWeb.AdminUI do
     {"Platform",
      [
        {:costs, "Costs &amp; capacity", "Costs", "/admin/costs"},
-       {:delivery, "Message delivery", "Delivery", "/admin/delivery"},
+       {:health, "Health", "Health", "/admin/health"},
+       {:delivery, "Delivery by day", "Delivery", "/admin/delivery"},
        {:places, "Places", "Places", "/admin/places"}
      ]},
     {"You",

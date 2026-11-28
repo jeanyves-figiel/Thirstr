@@ -84,10 +84,10 @@ defmodule Thirstr.Push do
       safe = Account.safe_mode_on?(a)
 
       Repo.query!(
-        "SELECT push_token, push_platform FROM devices WHERE account_id = $1 AND push_token IS NOT NULL AND revoked_at IS NULL",
+        "SELECT push_token, push_platform, id::text FROM devices WHERE account_id = $1 AND push_token IS NOT NULL AND revoked_at IS NULL",
         [Ecto.UUID.dump!(account_id)]
       ).rows
-      |> Enum.map(fn [token, platform] -> send_one(platform, token, safe) end)
+      |> Enum.map(fn [token, platform, device] -> send_one(platform, token, safe, device) end)
       |> Enum.any?(&(&1 == :retry))
       |> if(do: {:error, :retry}, else: :ok)
     else
@@ -95,7 +95,9 @@ defmodule Thirstr.Push do
     end
   end
 
-  defp send_one(platform, token, safe) do
+  defp send_one(platform, token, safe, device) do
+    t0 = System.monotonic_time(:millisecond)
+
     outcome =
       case platform do
         "ios" -> send_apns(token, payload(safe))
@@ -103,11 +105,19 @@ defmodule Thirstr.Push do
         _ -> :skipped
       end
 
-    :telemetry.execute([:thirstr, :push, :send], %{count: 1}, %{
-      platform: platform,
-      outcome: outcome
-    })
+    meta = %{platform: platform, outcome: outcome}
+    :telemetry.execute([:thirstr, :push, :send], %{count: 1}, meta)
 
+    # EN-23 OB-1: provider call time; wake tracking once the provider accepted it.
+    if outcome != :skipped,
+      do:
+        :telemetry.execute(
+          [:thirstr, :push, :provider],
+          %{duration_ms: System.monotonic_time(:millisecond) - t0},
+          meta
+        )
+
+    if outcome == :ok, do: Thirstr.Delivery.push_sent(device, platform)
     outcome
   end
 
@@ -172,7 +182,7 @@ defmodule Thirstr.Push do
   # mint a new one on the retry.
   defp handle_apns({:ok, %{status: s}}, token) when s in [400, 410] do
     Repo.query!("UPDATE devices SET push_token = NULL WHERE push_token = $1", [token])
-    :ok
+    :gone
   end
 
   defp handle_apns({:ok, %{status: 403}}, _token) do
@@ -247,9 +257,10 @@ defmodule Thirstr.Push do
 
   defp handle_fcm(res, _), do: outcome(res)
 
+  # EN-23 OB-1: `gone` = provider says the token is dead (counted, not retried).
   defp forget(token) do
     Repo.query!("UPDATE devices SET push_token = NULL WHERE push_token = $1", [token])
-    :ok
+    :gone
   end
 
   # OAuth2 access token from the service account (JWT bearer grant), cached 50 min.

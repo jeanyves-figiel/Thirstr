@@ -133,3 +133,96 @@ Common commands (`-a thirstr-api-prod` unless noted):
 
 ## chat-backlog-old
 **Meaning (SEV3, not pushed):** ciphertext has waited 25 days for an offline device; the 30-day sweep will drop it. Normal for phones left off. If many: chat pull broken (check `/mls/messages` errors).
+
+## SLO burn rates (EN-23, #343)
+Burn rules compare the error ratio with the SLO budget (`docs/spec/slos.md`) over a long and a short window; both must be high, and the long window needs ≥ 100 events (50 on staging). **Fast** = 2 % of the 28-day budget gone in 1 h. **Slow** = 5 % in 6 h. **Drain** (SEV3) = 10 % in 3 days, read at the weekly SLO review. The push shows the burn as "N× budget". Budget policy: `slos.md` › 4.
+
+### slo-1-fast
+**Meaning:** 5xx share burning the 99.9 % availability budget 14× too fast. Same first steps as [api-errors](#api-errors): last deploy → roll back; `fly logs`; DB / Valkey state.
+
+### slo-1-slow
+**Meaning:** 5xx share 6× budget for 6 h. Usually one failing route: Grafana `phoenix_router_dispatch_stop_duration_count{status=~"5.."}` by `route`; fix or flag off.
+
+### slo-1-drain
+**Meaning (SEV3):** budget draining over 3 days. Weekly review: list top 5xx routes, open an issue.
+
+### slo-3-fast
+**Meaning:** chat relay (`/v1/mls/messages`, send + pull) over 500 ms far too often. Check `thirstr_repo_query_queue_time` (pool), DB CPU, `mls_messages` size (`thirstr_chat_backlog_count`). See [api-slow](#api-slow).
+
+### slo-3-slow
+**Meaning:** chat relay slow for hours. Same as [slo-3-fast](#slo-3-fast); look for a slow query in `pg_stat_statements` (`docs/spec/db-integrity.md`).
+
+### slo-3-drain
+**Meaning (SEV3):** relay latency budget draining. Weekly review.
+
+### slo-4-fast
+**Meaning:** Explore reads over 300 ms far too often. Nearby cache hit rate, `location_cells` bloat (`db-dead-tuples`), DB CPU. Flag off heavy Explore extras if needed (`flags.md`).
+
+### slo-4-slow
+**Meaning:** Explore slow for hours. As [slo-4-fast](#slo-4-fast).
+
+### slo-4-drain
+**Meaning (SEV3):** Explore latency budget draining. Weekly review.
+
+### slo-5-fast
+**Meaning:** crash reports per session far above 0.5 %. Usually a new build: see [app-crash-rate](#app-crash-rate); raise `min_build` or kill the feature.
+
+### slo-5-slow
+**Meaning:** crash rate high for hours. As [slo-5-fast](#slo-5-fast).
+
+### slo-5-drain
+**Meaning (SEV3):** crash budget draining. Weekly review of top errors.
+
+### slo-7-fast
+**Meaning:** messages to **online** phones take over 1 s far too often (stored → acked). Steps:
+1. `thirstr_chat_delivery_duration_ms` by `path`: `rest` only → sockets not receiving `message.env`; check `thirstr_socket_live`, [socket-flapping](#socket-flapping), PubSub between machines (`fly status`, DNS cluster).
+2. Both paths slow → DB (`/mls/messages/ack` latency, pool queue).
+3. A new app build? Compare by build in the console Health page; roll back the server if it started with a deploy.
+
+### slo-7-slow
+**Meaning:** online delivery slow for hours. As [slo-7-fast](#slo-7-fast).
+
+### slo-7-drain
+**Meaning (SEV3):** delivery budget draining. Weekly review.
+
+### slo-7-fast-staging
+**Meaning:** as [slo-7-fast](#slo-7-fast) on `thirstr-api-staging`, where TestFlight testers are during the closed beta. Use `-a thirstr-api-staging`.
+
+## probe-failing
+**Meaning:** the synthetic chat probe (EN-23 OB-2) failed on prod for 2 runs in a row: two hidden probe accounts could not get one encrypted message through end to end. The push says which step failed:
+- `send`: POST `/v1/mls/messages` failed → API / DB down? see [api-down](#api-down), [api-errors](#api-errors).
+- `socket`: stored but never reached the live socket → PubSub / cluster, `UserChannel` errors, [messages-stuck-online](#messages-stuck-online).
+- `ack` / `reply`: acks or the answer path broken → `/mls/messages/ack`, channel `ack` handler.
+- `duplicate`: idempotency broken (`mls_send_keys`) → **members may get double messages**; roll back.
+- `pull`: REST pull for an offline device misses the message → `Chat.pull`.
+Logs of the run: Actions › On-call alerts › latest run › "Chat probe". Probe accounts: `Thirstr.Probe` (they can only message each other).
+
+## probe-failing-staging
+**Meaning:** as [probe-failing](#probe-failing) on staging (TestFlight testers). Often a staging deploy in progress; if it lasts, same steps with `-a thirstr-api-staging`.
+
+## slo-8-fast
+**Meaning:** the chat probe fails often enough over 6 h to burn the 99.5 % SLO-8 budget 6× too fast, even if never twice in a row (flaky delivery). Check `thirstr_probe_run_count` by `failed` step and `thirstr_probe_step_duration_ms` for slow steps.
+
+## messages-stuck-online
+**Meaning:** envelopes have waited over 2 min for a phone that has a live socket right now (SLO-9: should never happen). The phone is connected but does not get or ack them.
+1. `fly logs` for `UserChannel` errors; PubSub across machines (a message stored on machine A, socket on machine B: is the cluster connected? `Node.list()` via rpc).
+2. A client bug that stops acking: check the latest build; `thirstr_chat_skipped_count`.
+3. Nothing is lost yet: envelopes stay until acked or 30 days. Fix, then the phone's next pull drains them.
+
+## messages-stuck-online-staging
+**Meaning:** as [messages-stuck-online](#messages-stuck-online) on staging (testers). Use `-a thirstr-api-staging`.
+
+## messages-skipped
+**Meaning:** a phone acked newer messages while older ones (> 5 min) for the same phone are still waiting. The app processed out of order or dropped some (decrypt error, crash mid-batch). Check recent client error reports (`Thirstr.ClientErrors.recent(20)`) and the latest build; SLO-9.
+
+## messages-lost
+**Meaning (SEV3):** chat messages were deleted unread by the 30-day sweep (`mls_expired`). Normal for phones left off a month; a rising count means phones never come back to pull, or pull is broken. Weekly review.
+
+## socket-flapping
+**Meaning:** more than one abnormal socket close per live socket per minute. Phones reconnect in loops (battery, data). Check deploy churn (machines restarting), Fly proxy status, `thirstr_socket_close_count` by `reason` (`timeout` = network or heartbeat, `error` = server crash in the channel → `fly logs`).
+
+## traffic-cliff
+**Meaning:** messages stored in the last hour are under 20 % of the same hour last week (with ≥ 50 then). A silent failure: the app may be unable to send without any server error (bad build, auth, attestation, rate limits). Check `thirstr_chat_send_count` by `result` (`limited`/`rejected` up?), `/v1/client/errors`, the latest TestFlight / store build, and the status page.
+
+## push-slow-provider
+**Meaning:** APNs / FCM calls p95 over 2 s for 15 min. Notifications arrive late. Check https://developer.apple.com/system-status/ and https://status.firebase.google.com; network from Fly (`fly logs` for timeouts). Push jobs retry on their own.

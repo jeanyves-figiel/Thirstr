@@ -22,6 +22,14 @@ defmodule ThirstrWeb.Telemetry do
           id: :thirstr_retention_poller
         ),
         # DB-06 (#333): Postgres health gauges, every 60 s
+        # EN-23 OB-1 (#343): live sockets + messages stuck for online devices, every 60 s
+        Supervisor.child_spec(
+          {:telemetry_poller,
+           measurements: [{Thirstr.Delivery, :measure, []}],
+           period: 60_000,
+           name: :thirstr_delivery_poller},
+          id: :thirstr_delivery_poller
+        ),
         Supervisor.child_spec(
           {:telemetry_poller,
            measurements: [{Thirstr.DbHealth, :measure, []}],
@@ -116,6 +124,21 @@ defmodule ThirstrWeb.Telemetry do
 
   # 300 and 500 are SLO thresholds (docs/spec/slos.md › SLO-3/4).
   @ms_buckets [5, 10, 25, 50, 100, 250, 300, 500, 1000, 2500, 5000, 10_000]
+  # EN-23: 1000 = SLO-7 threshold (online delivery); long tail = offline recipients.
+  @delivery_buckets [
+    100,
+    250,
+    500,
+    1000,
+    2500,
+    5000,
+    15_000,
+    60_000,
+    600_000,
+    3_600_000,
+    86_400_000
+  ]
+  @wake_buckets [1000, 2500, 5000, 10_000, 30_000, 60_000, 300_000, 900_000]
 
   @doc "Metrics exported to Prometheus (SR-07). Alert rules: docs/runbooks/monitoring.md."
   def prometheus_metrics do
@@ -168,7 +191,38 @@ defmodule ThirstrWeb.Telemetry do
       last_value("thirstr.db_health.archive_failing"),
       last_value("thirstr.db_health.dead_ratio", tags: [:table]),
       last_value("thirstr.db_maint.age_s", tags: [:key]),
-      last_value("thirstr.db_maint.ok", tags: [:key])
+      last_value("thirstr.db_maint.ok", tags: [:key]),
+      # EN-23 OB-1 (#343): docs/spec/delivery-latency-monitoring.md › OB-1
+      counter("thirstr.chat.send.count", tags: [:result]),
+      sum("thirstr.chat.envelope.count", tags: [:kind, :path]),
+      distribution("thirstr.chat.delivery.duration_ms",
+        tags: [:path, :recipient],
+        reporter_options: [buckets: @delivery_buckets]
+      ),
+      sum("thirstr.chat.skipped.count"),
+      sum("thirstr.chat.expired.count", tags: [:kind]),
+      last_value("thirstr.chat.stuck_online"),
+      last_value("thirstr.socket.live"),
+      distribution("thirstr.socket.join.duration_ms",
+        tags: [:env],
+        reporter_options: [buckets: @ms_buckets]
+      ),
+      counter("thirstr.socket.close.count", tags: [:reason]),
+      distribution("thirstr.push.provider.duration_ms",
+        tags: [:platform, :outcome],
+        reporter_options: [buckets: @ms_buckets]
+      ),
+      distribution("thirstr.push.wake.duration_ms",
+        tags: [:platform],
+        reporter_options: [buckets: @wake_buckets]
+      ),
+      counter("thirstr.push.wake_result.count", tags: [:platform, :result]),
+      # EN-23 OB-2: synthetic chat probe (one run every 5 min from outside Fly)
+      counter("thirstr.probe.run.count", tags: [:result, :failed]),
+      distribution("thirstr.probe.step.duration_ms",
+        tags: [:step],
+        reporter_options: [buckets: @ms_buckets]
+      )
     ]
   end
 

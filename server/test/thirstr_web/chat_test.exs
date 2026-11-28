@@ -393,6 +393,105 @@ defmodule ThirstrWeb.ChatTest do
     assert pull(b)["expired"] == []
   end
 
+  # EN-23 OB-1 (#343): content-free delivery metrics.
+  def forward(event, m, meta, pid), do: send(pid, {:tm, event, m, meta})
+
+  defp capture(events) do
+    id = "en23-#{System.unique_integer()}"
+    :telemetry.attach_many(id, events, &__MODULE__.forward/4, self())
+    on_exit(fn -> :telemetry.detach(id) end)
+  end
+
+  @tag ac: "EN-23 OB-1"
+  test "delivery metrics: online flag, socket ack time, repeat, skipped, lost, stuck",
+       %{alice: a, bob: b} do
+    capture([
+      [:thirstr, :chat, :send],
+      [:thirstr, :chat, :delivery],
+      [:thirstr, :chat, :envelope],
+      [:thirstr, :chat, :skipped],
+      [:thirstr, :chat, :expired],
+      [:thirstr, :chat],
+      [:thirstr, :socket, :join]
+    ])
+
+    # offline recipient: stored with live = false
+    send_msg(a, b) |> json_response(200)
+    assert_receive {:tm, [:thirstr, :chat, :send], _, %{result: "stored"}}
+    assert_receive {:tm, [:thirstr, :chat, :envelope], %{count: 1}, %{path: "pull_hint"}}
+    assert [[false]] = Thirstr.Repo.query!("SELECT live FROM mls_messages").rows
+
+    # online recipient
+    {:ok, b_access} = access_of(b)
+    {:ok, socket} = Phoenix.ChannelTest.connect(ThirstrWeb.UserSocket, %{"token" => b_access})
+    {:ok, _, ch} = subscribe_and_join(socket, ThirstrWeb.UserChannel, "user:me", %{"env" => true})
+    assert_receive {:tm, [:thirstr, :socket, :join], _, %{env: true}}
+    assert Thirstr.Delivery.live?(b.dev)
+
+    send_msg(a, b, "app", "live") |> json_response(200)
+    assert_push "message.env", %{messages: [m]}
+    assert_receive {:tm, [:thirstr, :chat, :envelope], _, %{kind: "app", path: "socket"}}
+
+    # stuck: the old offline message is now waiting for a connected phone
+    Thirstr.Repo.query!(
+      "UPDATE mls_messages SET created_at = now() - interval '10 minutes' WHERE id <> $1",
+      [m.id]
+    )
+
+    Thirstr.Delivery.measure()
+    assert_receive {:tm, [:thirstr, :chat], %{stuck_online: 1}, _}
+
+    # acking the newer one leaves an older one behind → skipped
+    ref = Phoenix.ChannelTest.push(ch, "ack", %{"ids" => [m.id]})
+    assert_reply ref, :ok, %{acked: 1}
+
+    assert_receive {:tm, [:thirstr, :chat, :delivery], %{duration_ms: ms},
+                    %{path: "socket", recipient: "online"}}
+
+    assert ms >= 0
+    assert_receive {:tm, [:thirstr, :chat, :skipped], %{count: 1}, _}
+
+    # duplicate caught
+    body = %{
+      client_id: "dup00000000000001",
+      from_profile_id: a.pid,
+      group_id: b64("g"),
+      envelopes: [env(b, "d")]
+    }
+
+    send_raw(a, body) |> json_response(200)
+    assert_receive {:tm, [:thirstr, :chat, :send], _, %{result: "stored"}}
+
+    assert send_raw(a, body) |> json_response(200) == %{
+             "delivered" => [b.pid],
+             "undelivered" => []
+           }
+
+    assert_receive {:tm, [:thirstr, :chat, :send], _, %{result: "repeat"}}
+
+    # lost: swept unread
+    Thirstr.Repo.query!("UPDATE mls_messages SET created_at = now() - interval '31 days'")
+    Thirstr.Chat.sweep()
+    assert_receive {:tm, [:thirstr, :chat, :expired], %{count: 2}, %{kind: "app"}}
+  end
+
+  @tag ac: "EN-23 OB-1"
+  test "push wake: provider-accepted push then a pull records the wake time", %{bob: b} do
+    capture([[:thirstr, :push, :wake], [:thirstr, :push, :wake_result]])
+
+    Thirstr.Repo.query!("UPDATE devices SET push_platform = 'ios' WHERE id = $1", [
+      Ecto.UUID.dump!(b.dev)
+    ])
+
+    Thirstr.Delivery.push_sent(b.dev, "ios")
+    pull(b)
+    assert_receive {:tm, [:thirstr, :push, :wake], %{duration_ms: _}, %{platform: "ios"}}
+    assert_receive {:tm, [:thirstr, :push, :wake_result], _, %{result: "woke"}}
+    # nothing pending → no second event
+    pull(b)
+    refute_receive {:tm, [:thirstr, :push, :wake_result], _, _}
+  end
+
   defp access_of(u) do
     [auth] = Plug.Conn.get_req_header(u.c, "authorization")
     {:ok, String.replace_prefix(auth, "Bearer ", "")}

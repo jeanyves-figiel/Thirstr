@@ -40,21 +40,23 @@ All counters/histograms carry only the labels listed; no ids, pairs, groups or s
 | `thirstr_socket_close_count` | `reason` = `normal` \| `timeout` \| `error` \| `shutdown` | disconnects |
 | `thirstr_push_send_duration_ms` | `platform`, `outcome` | provider call time (APNs / FCM) |
 | `thirstr_push_send_count` | add `outcome` = `gone` | token rejected by provider (forgotten) |
-| `thirstr_push_wake_duration_ms` | `platform` | push accepted by provider → that device's next pull or socket join (Valkey key `pw:<device>` with send time, TTL 15 min, deleted on use; never logged) |
-| `thirstr_push_wake_count` | `platform`, `result` = `woke` \| `none` | `none` counted when the key is found expired by the next push to the same device |
+| `thirstr_push_wake_duration_ms` | `platform` | push accepted by provider → that device's next pull or socket join (Valkey key `pw:<device>` with send time, 24 h, deleted on use; never logged) |
+| `thirstr_push_wake_result_count` | `platform`, `result` = `woke` \| `none` | `woke` ≤ 15 min; `none` = next push or contact finds an older key |
 
-- `online` is cheap: the device topic subscriber is tracked in a node-local ETS set on `user:me` join/terminate with `env: true` (cluster lookup via `:pg`). No DB write.
+Pushes are alert-only (no background handler in the app), so wake time is mostly "until the member opened the app": informative, **not alerted**. True push delivery receipts need a Notification Service Extension (iOS) / data-message handler (Android) that echoes the opaque `t` token: follow-up OB-7.11.
+
+- `online` is cheap: a `user:me` socket with `env: true` joins the `:pg` group of its device (cluster-wide, gone when the socket ends); stored in `mls_messages.live` at insert (expand-only column).
 - `chat_delivery_stats` (daily DB table, R-07.24) stays as the long-term record (Prometheus keeps 15 days on Fly).
 
 ### OB-2 Synthetic end-to-end chat probe
 - Two **probe accounts** per environment (`probe_a`, `probe_b`), flag `accounts.probe = true`: verified, onboarded, Hidden, never in Explore, search, counts, KPIs, Testbot lists or moderation queues; may message only each other (server enforces; any other target = 403). Allowed in prod (unlike Testbot). Created by `mix thirstr.probe.ensure` / release task; sessions bound to a `PROBE_KEY` secret (≥ 32 bytes) like Testbot's service key.
-- Runner: `scripts/ops/chat-probe.mjs` (Node 22, reuses `apps/testbot` MLS client, keys kept in the Actions cache, encrypted with `PROBE_STATE_KEY`). Every 5 min inside `oncall.yml` (no extra workflow minutes beyond ~30 s/run) for **prod and staging**:
+- Runner: `apps/testbot/src/probe.ts` → `dist/probe.mjs` (Node 22, the app's own `mls.ts`). Fresh devices every run (`POST /v1/probe/session`, `devices: 2` for B), so no MLS state is kept between runs. Every 5 min inside `oncall.yml` (no extra workflow minutes beyond ~30 s/run) for **prod and staging**:
   1. B connects the socket (`env: true`). A sends one real MLS app message (payload = random 16-byte nonce, nothing else).
   2. Measure: send HTTP time, **send → B receives on socket**, B acks, B replies, **round trip**.
   3. Pull path: B (second probe device, offline) pulls via REST and acks → pull path checked.
   4. Duplicate check: A resends with the same `client_id` → must return `repeat` and B must not receive a second envelope within 10 s.
-  5. Push path: B's probe device has an FCM token for a dry run: server sends with `validate_only: true` (FCM accepts it, nothing is shown) → provider reachability + auth. APNs has no dry run: covered by `push-failing` + OB-1 wake metrics.
-- Results POSTed to `POST /v1/ops/probe` (HMAC with `PROBE_KEY`) → `thirstr_probe_duration_ms{env_check, step}` and `thirstr_probe_result_count{step, result}`; also the job summary and the console page. Failure of the POST itself is treated by the rule as a failed probe.
+  5. Push path (later): FCM `validate_only` dry run for provider reachability + auth. APNs has no dry run: covered by `push-failing` + `push-slow-provider`.
+- Results POSTed to `POST /v1/probe/report` (`x-probe-key`) → `thirstr_probe_step_duration_ms{step}` and `thirstr_probe_run_count{result, failed}`; also the job summary and the console page. The on-call rule reads the runner's result file directly, so a probe that cannot reach the API still pages.
 - Status page: the **Chat** component uses the probe result (send → receive) instead of the bare socket handshake; tile "Message delivery p95" uses OB-1 online delivery.
 
 ### OB-3 Client RUM (real user monitoring), privacy first
@@ -87,16 +89,16 @@ All counters/histograms carry only the labels listed; no ids, pairs, groups or s
 | SLO-9 | No message lost or skipped | `skipped_count + stuck_online` events | 0 per day; any breach = incident |
 | SLO-10 | App feels fast | `send_ack` ≤ 1 s and `explore_first` ≤ 2.5 s (RUM, all networks) | 95 % each |
 
-SLO-3 is narrowed to `POST /v1/mls/messages` (send only); pull moves to SLO-7.
+SLO-3 stays as is (send + pull share the route template; no method label, to keep cardinality low). SLO-7 measures real delivery.
 
 ### OB-5 Burn-rate alerting, implemented
 - `oncall.py` gets rule type `burn`: `{slo, good_query, total_query, objective, windows: [[long, short, factor], …], min_total}`; fires when both windows exceed `factor × (1 − objective)` and the long window has ≥ `min_total` events. One rule per SLO and severity, from slos.md § 3: fast (1 h / 5 m × 14.4) and slow (6 h / 30 m × 6) page; drain (3 d / 6 h × 1) = sev 3 (job summary + weekly review).
 - Paging in closed beta: SLO-1, SLO-8, SLO-9 page (sev 1). SLO-3/4/7/10 sev 2 (normal push, quiet hours). Until the store app points at prod (slos.md "Which app"), staging copies of SLO-7/8/9 run at sev 2.
-- New threshold rules: `probe-failing` (2 consecutive failed probe runs, sev 1), `messages-skipped` (> 0 in 15 min, sev 2), `messages-stuck-online` (> 0 for 10 min, sev 1), `push-wake-low` (woke share < 80 % over 6 h with ≥ 20 pushes, sev 2), `socket-flapping` (reconnects per live socket > 1/min over 10 min, sev 2), `traffic-cliff` (sends in the last hour < 20 % of same hour last week with ≥ 50 then, sev 2: silent failure).
+- New threshold rules: `probe-failing` (2 consecutive failed probe runs, sev 1, PR B), `messages-skipped` (> 0 in 15 min, sev 2), `messages-stuck-online` (> 0 for 10 min, sev 1; staging copy sev 2), `messages-lost` (sev 3), `push-slow-provider` (p95 > 2 s, sev 2), `socket-flapping` (reconnects per live socket > 1/min over 10 min, sev 2), `traffic-cliff` (sends in the last hour < 20 % of same hour last week with ≥ 50 then, sev 2: silent failure).
 - Each rule gets a section in `alerts.md` (CI-checked) and the console page links to it.
 
-### OB-6 Console page A-12 "Health" (`/admin/health`, replaces `/admin/delivery`)
-Mockup first (high design bar). Server queries Fly Prometheus with the read-only token already used by Costs (`FLY_COST_TOKEN`), cached 60 s; falls back to `chat_delivery_stats` when Prometheus is unreachable (banner).
+### OB-6 Console page A-12 "Health" (`/admin/health`; `/admin/delivery` stays as "Delivery by day")
+Mockup approved 2026-11-28; built (admin-console.md R-AD.19–21). Server queries Fly Prometheus with the read-only token already used by Costs (`FLY_COST_TOKEN`), cached 60 s; falls back to `chat_delivery_stats` when Prometheus is unreachable (banner).
 - Top: overall state (OK / degraded / incident) + last probe (time, send → receive ms, all steps).
 - Tiles: online delivery p95 (SLO-7), probe success 24 h, messages lost/skipped 24 h, duplicates caught 24 h, push wake p95, live sockets, API p95.
 - SLO table: objective, 28-day value, budget left bar, burn now (1 h), status.
@@ -115,6 +117,7 @@ Mockup first (high design bar). Server queries Fly Prometheus with the read-only
 8. **Probe from outside GitHub**: GitHub runners are not in Asia/Americas consumer networks; when open beta goes worldwide, add a second probe location (decision later, likely cost).
 9. **Game day**: add "kill the API machine mid-send" and "block APNs" drills to `game-day.md` to prove OB-5 alerts fire and nothing is lost.
 10. **Privacy CI**: extend `metrics_test.exs` lint to every new metric and `/v1/client/perf` payload (AC-MX.1).
+11. **Push delivery receipts**: iOS Notification Service Extension + Android data handler post the opaque `t` back (no account token) → true "push reached the phone" rate and time. Native change, TestFlight window.
 
 ## 3. Delivery plan (PRs)
 1. **PR A (server + alerts)**: OB-1, OB-4 docs, OB-5 burn engine + rules + runbooks, OB-7.1/2/4/6. No UI.

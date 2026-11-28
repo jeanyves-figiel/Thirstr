@@ -8,7 +8,7 @@ defmodule Thirstr.Chat do
   blocks, verification for first contact (R-07.2), rate limits, retention (R-07.12).
   """
   import Ecto.Query
-  alias Thirstr.{Notify, Repo, Social, Storage}
+  alias Thirstr.{Delivery, Notify, Repo, Social, Storage}
   alias Thirstr.Accounts.Account
 
   @max_ct 256 * 1024
@@ -89,6 +89,7 @@ defmodule Thirstr.Chat do
   def claim_key_packages(%Account{} = a, from_pid, to_pid, context \\ nil) do
     with {:ok, _} <- own_profile(a, from_pid),
          {:ok, t} <- Social.target(a, to_pid),
+         :ok <- probe_fence(a, to_pid),
          :ok <-
            if(from_pid == to_pid or Thirstr.Groups.together?(context, from_pid, to_pid),
              do: :ok,
@@ -218,7 +219,7 @@ defmodule Thirstr.Chat do
       Repo.transaction(fn ->
         case claim_client_id(device_id, cid) do
           {:repeat, res} ->
-            {res, []}
+            {Map.put(res, :repeat, true), []}
 
           :new ->
             {res, events} = store_all(a, device_id, from, group, envs, params, cid)
@@ -230,13 +231,24 @@ defmodule Thirstr.Chat do
         {:ok, {res, events}} ->
           announce(events)
           link_fanout(a, params["lh"], events)
-          {:ok, res}
+          Delivery.send_result(send_result(res, events))
+          {:ok, Map.delete(res, :repeat)}
 
-        {:error, _} = e ->
+        {:error, reason} = e ->
+          Delivery.send_result(
+            if(match?({:rate_limited, _}, reason), do: "limited", else: "rejected")
+          )
+
           e
       end
     end
   end
+
+  # EN-23 OB-1: repeat = same client_id answered from the first result (duplicate caught).
+  defp send_result(%{repeat: true}, _), do: "repeat"
+  defp send_result(_, [_ | _]), do: "stored"
+  defp send_result(%{delivered: [_ | _]}, []), do: "stored"
+  defp send_result(_, []), do: "dropped"
 
   # I-01 R-I01.23: `lh` is an 8-byte HMAC of a shared link under a key only the sender's phone
   # has, so the server can count "same link to many people from this sender" without learning
@@ -275,13 +287,20 @@ defmodule Thirstr.Chat do
 
     for {_acc, stored} <- events, {device, rows} <- Enum.group_by(stored, & &1.to_device_id) do
       topic = device_topic(Ecto.UUID.cast!(device))
+      env? = Enum.reduce(rows, 0, &(byte_size(&1.ciphertext) + &2)) <= @socket_max
 
       msg =
-        if Enum.reduce(rows, 0, &(byte_size(&1.ciphertext) + &2)) <= @socket_max,
+        if env?,
           do: {:event, "message.env", %{messages: Enum.map(rows, &wire/1)}},
           else: {:event, "message.pull", %{}}
 
       Phoenix.PubSub.broadcast(Thirstr.PubSub, topic, msg)
+
+      path = if env? and Enum.any?(rows, & &1.live), do: "socket", else: "pull_hint"
+
+      rows
+      |> Enum.frequencies_by(&if(&1.kind == "app", do: "app", else: "handshake"))
+      |> Enum.each(fn {kind, n} -> Delivery.envelopes(kind, path, n) end)
     end
 
     :ok
@@ -374,7 +393,17 @@ defmodule Thirstr.Chat do
   # AC-15.1 shadow quarantine: the sender sees a normal 200, nothing is stored or delivered.
   defp deliver(%Account{status: "quarantined"}, _d, _f, _t, _g, _e, _n, _p), do: {:ok, nil}
 
-  defp deliver(a, _device_id, from, to, group, envs, now, params) do
+  # EN-23 OB-2: a probe account's envelopes only go to the other probe account.
+  defp deliver(%Account{probe: true} = a, device_id, from, to, group, envs, now, params) do
+    if Thirstr.Probe.probe_profile?(to),
+      do: deliver_ok(a, device_id, from, to, group, envs, now, params),
+      else: :dropped
+  end
+
+  defp deliver(a, device_id, from, to, group, envs, now, params),
+    do: deliver_ok(a, device_id, from, to, group, envs, now, params)
+
+  defp deliver_ok(a, _device_id, from, to, group, envs, now, params) do
     case Social.target(a, to) do
       {:ok, t} ->
         # Party / activity / club chats (F-10, F-11): members may write to each other freely.
@@ -394,13 +423,16 @@ defmodule Thirstr.Chat do
                 kind: e.kind,
                 key_package_id: e.key_package_id,
                 ciphertext: e.ciphertext,
-                created_at: now
+                created_at: now,
+                # EN-23 OB-1: recipient online when stored (live envelope socket)
+                live: Delivery.live?(e.to_device_id)
               }
             end)
 
           {_, stored} =
             Repo.insert_all("mls_messages", rows,
-              returning: [:id, :to_device_id, :to_profile_id, :from_profile_id] ++ @env_fields
+              returning:
+                [:id, :to_device_id, :to_profile_id, :from_profile_id, :live] ++ @env_fields
             )
 
           if app?, do: count_contact(from, to, now)
@@ -411,6 +443,13 @@ defmodule Thirstr.Chat do
       _ ->
         :dropped
     end
+  end
+
+  # EN-23 OB-2: probe accounts only reach each other (no key packages either way).
+  defp probe_fence(a, to_pid) do
+    if Thirstr.Probe.probe?(a) == Thirstr.Probe.probe_profile?(to_pid),
+      do: :ok,
+      else: {:error, {:unavailable, "This profile can't receive messages yet"}}
   end
 
   # R-07.2 + api.md rate limit: new contacts 30/h, unverified 0 (unless replying).
@@ -550,22 +589,57 @@ defmodule Thirstr.Chat do
     end)
   end
 
-  @doc "Device acknowledges processed messages; the server deletes them (R-07.12)."
-  def ack(%Account{}, device_id, ids) when is_list(ids) do
+  @doc """
+  Device acknowledges processed messages; the server deletes them (R-07.12). `path` = how the
+  ack came (`"socket"` or `"rest"`), for EN-23 OB-1 delivery metrics.
+  """
+  def ack(a, device_id, ids, path \\ "rest")
+
+  def ack(%Account{}, device_id, ids, path) when is_list(ids) do
     ids = Enum.filter(ids, &is_integer/1)
 
-    {n, ats} =
+    {n, rows} =
       from(m in "mls_messages",
         where: m.id in ^ids and m.to_device_id == type(^device_id, :binary_id),
-        select: m.created_at
+        select: {m.created_at, m.live}
       )
       |> Repo.delete_all()
 
-    record_latency(ats)
+    record_latency(Enum.map(rows, &elem(&1, 0)))
+    observe_delivery(rows, path)
+    if n > 0, do: count_skipped(device_id, Enum.min(ids))
     {:ok, n}
   end
 
-  def ack(_, _, _), do: {:error, {:validation, %{ids: ["must be a list"]}}}
+  def ack(_, _, _, _), do: {:error, {:validation, %{ids: ["must be a list"]}}}
+
+  defp observe_delivery(rows, path) do
+    now = DateTime.utc_now()
+
+    for {at, live} <- rows,
+        do:
+          Delivery.delivered(
+            path,
+            live,
+            DateTime.diff(now, Thirstr.Explore.utc_any(at), :millisecond)
+          )
+
+    :ok
+  end
+
+  # EN-23 OB-1: the device acked later messages but older ones (> 5 min) are still waiting.
+  defp count_skipped(device_id, min_id) do
+    %{rows: [[n]]} =
+      Repo.query!(
+        """
+        SELECT count(*) FROM mls_messages
+        WHERE to_device_id = $1 AND id < $2 AND created_at < now() - interval '5 minutes'
+        """,
+        [dump(device_id), min_id]
+      )
+
+    Delivery.skipped(n)
+  end
 
   # R-07.24: aggregate insert → ack histogram per day. Upper bounds in ms; last = slower.
   @buckets [250, 500, 1000, 5000, 60_000, 3_600_000]
@@ -768,18 +842,22 @@ defmodule Thirstr.Chat do
 
   @doc "Retention sweep (R-07.12, R-08.10)."
   def sweep do
+    # EN-23 OB-1: envelopes deleted unread = lost, counted per kind.
     Repo.query!(
       """
       WITH gone AS (
         DELETE FROM mls_messages WHERE created_at < now() - make_interval(days => $1)
         RETURNING to_device_id, group_id, kind
+      ), ins AS (
+        INSERT INTO mls_expired (to_device_id, group_id, count, created_at)
+        SELECT to_device_id, group_id, count(*), now() FROM gone WHERE kind = 'app'
+        GROUP BY to_device_id, group_id
       )
-      INSERT INTO mls_expired (to_device_id, group_id, count, created_at)
-      SELECT to_device_id, group_id, count(*), now() FROM gone WHERE kind = 'app'
-      GROUP BY to_device_id, group_id
+      SELECT CASE WHEN kind = 'app' THEN 'app' ELSE 'handshake' END, count(*) FROM gone GROUP BY 1
       """,
       [@retention_d]
-    )
+    ).rows
+    |> Enum.each(fn [kind, n] -> Delivery.expired(kind, n) end)
 
     Repo.query!("DELETE FROM mls_send_keys WHERE created_at < now() - interval '7 days'")
     Repo.query!("DELETE FROM mls_expired WHERE created_at < now() - interval '90 days'")

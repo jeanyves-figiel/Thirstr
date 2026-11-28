@@ -22,6 +22,15 @@
 | `thirstr_retention_overdue{rule}` | rows past their retention deadline + grace, per rule (EN-17; should be 0, probe every 5 min, capped at 10 000) |
 | `thirstr_client_session_count{platform}` | app starts (one ping per start, anonymous; EN-05) |
 | `thirstr_client_error_count{platform,fatal}` | app error reports; `fatal="true"` = crash (EN-05) |
+| `thirstr_chat_send_count{result}` | send requests: `stored`, `repeat` (duplicate caught by `client_id`), `dropped`, `limited`, `rejected` (EN-23) |
+| `thirstr_chat_envelope_count{kind,path}` | envelopes stored; `path` = `socket` (pushed live) or `pull_hint` |
+| `thirstr_chat_delivery_duration_ms{path,recipient}` | stored → device ack (ms); `recipient` = `online` when the device had a live socket at send (SLO-7) |
+| `thirstr_chat_skipped_count` | envelopes > 5 min old left behind when a later one was acked (SLO-9) |
+| `thirstr_chat_expired_count{kind}` | envelopes deleted unread by the 30-day sweep (lost) |
+| `thirstr_chat_stuck_online` | unacked envelopes > 2 min for devices with a live socket on the node (SLO-9, should be 0) |
+| `thirstr_socket_live`, `thirstr_socket_join_duration_ms{env}`, `thirstr_socket_close_count{reason}` | live envelope sockets per node, join time, disconnects |
+| `thirstr_push_provider_duration_ms{platform,outcome}` | APNs / FCM call time; `thirstr_push_send_count` also has `outcome="gone"` (dead token forgotten) |
+| `thirstr_push_wake_duration_ms{platform}`, `thirstr_push_wake_result_count{platform,result}` | push accepted → that phone's next pull / socket join (≤ 15 min = `woke`). Pushes are alert-only, so this is mostly "time until the member opened the app": informative, not alerted |
 
 ## Alert rules
 Paging runs from GitHub Actions to Pushover (EN-06): rules live in `infra/alerts/rules.json`, one runbook section each in `alerts.md`, setup in `on-call.md`. The table below is the original reference; `rules.json` wins where they differ. Backups stale is not paged yet (#276).
@@ -44,6 +53,7 @@ Paging runs from GitHub Actions to Pushover (EN-06): rules live in `infra/alerts
 Set up once per environment; staging alerts go to a muted contact point.
 
 ## SLO burn-rate alerts (EN-04, #163; spec `docs/spec/slos.md` › 3)
+**Implemented in the on-call runner since 2026-11-28 (EN-23, #343)**: rule type `burn` in `infra/alerts/rules.json`, runbook `alerts.md` › SLO burn rates. The Grafana table below is the original design.
 `ERR(W)` = `(sum(rate(phoenix_router_dispatch_stop_duration_count{app="thirstr-api-prod",status=~"5.."}[W])) or vector(0)) / sum(rate(phoenix_router_dispatch_stop_duration_count{app="thirstr-api-prod"}[W]))`. Budget `B` = 0.001 (99.9 %). Same shape for SLO-3/4 with the slow ratio (`le="500"` / `le="300"`) and `B` = 0.05, and SLO-5 with the crash ratio and `B` = 0.005.
 
 | Alert | Rule | Guard | Contact |

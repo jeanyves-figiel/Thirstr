@@ -8,10 +8,13 @@ defmodule ThirstrWeb.Router do
 
   pipeline :maybe_auth do
     plug ThirstrWeb.Plugs.Auth, optional: true
+    # DB-10 (#335): Idempotency-Key on allow-listed creates
+    plug ThirstrWeb.Plugs.Idempotency
   end
 
   pipeline :auth do
     plug ThirstrWeb.Plugs.Auth
+    plug ThirstrWeb.Plugs.Idempotency
   end
 
   pipeline :auth_limit do

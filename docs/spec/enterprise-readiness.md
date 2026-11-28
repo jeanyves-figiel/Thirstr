@@ -74,6 +74,7 @@ Goal: run Thirstr like a mature consumer platform: no lost messages, no lost dat
 
 ### K. Cost & capacity
 - **EN-21** (#180) Monthly cost dashboard (Fly, Tigris, egress, vendors), cost per MAU, budget alerts, capacity forecast from SR-12 numbers.
+- **EN-23** (#343) Message delivery & latency monitoring: delivery metrics, synthetic chat probe (prod + staging), privacy-first client RUM, SLO-7…10, burn-rate paging, console Health page. Spec [`delivery-latency-monitoring.md`](delivery-latency-monitoring.md).
 
 ### L. Team & process
 - **EN-22** (#181) Bus factor: second engineer with prod access, code owners, two-person review for infra/security changes, documented on-boarding/off-boarding, change log for prod (already: promote-prod workflow). ✔ Ready now (€0): `.github/CODEOWNERS`, `docs/team/two-person-rule.md`, `onboarding.md`, `offboarding.md`, `docs/runbooks/break-glass.md`. Second engineer + enforced two-person review at open beta.

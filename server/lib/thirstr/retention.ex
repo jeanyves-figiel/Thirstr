@@ -35,7 +35,9 @@ defmodule Thirstr.Retention do
      "status = 'solved' AND solved_at < now() - interval '91 days'"},
     {"feedback_30d", "feedback", "created_on < current_date - 31"},
     {"help_notes_90d", "help_notes", "created_at < now() - interval '91 days'"},
-    {"security_events_1y", "security_events", "at < now() - interval '1 year 1 day'"}
+    {"security_events_1y", "security_events", "at < now() - interval '1 year 1 day'"},
+    # DB-10 (#335)
+    {"idempotency_24h", "idempotency_keys", "created_at < now() - interval '25 hours'"}
   ]
 
   @queries for {rule, from, where} <- @rules,

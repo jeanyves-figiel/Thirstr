@@ -6,6 +6,9 @@ Errors: `{ "error": { "code": "rate_limited", "message": "...", "retry_after": 3
 
 ## REST
 
+### Idempotency (DB-10, #335)
+POST creates accept `Idempotency-Key: <8–64 of [A-Za-z0-9_-]>` (signed-in only): `/tonight`, `/trips`, `/parties`, `/parties/:id/request`, `/parties/:id/report`, `/activities`, `/activities/:id/rsvp`, `/clubs`, `/clubs/:id/join`, `/reports`, `/support/requests`, `/support/requests/:id/messages`, `/feedback`, `/moments/:id/publish`, `/profiles/:id/vouch`, `/me/profiles/:id/photos`. Same key + same path and body within 24 h → the first answer again (header `idempotent-replayed: true`), nothing stored twice. Same key + other path or body → 422 `idempotency_mismatch`. First call still running → 409 `idempotency_in_progress` (a claim with no answer after 2 min is taken over). 5xx answers are not kept. Never on auth, tokens, passkeys or recovery. The app sends a fresh key on every POST and resends a lost create once with the same key. Chat sends keep `client_id` (R-07.18).
+
 ### App config, flags, minimum build (EN-13 #172, EN-14 #173)
 - `GET /v1/config` (no account) → `{min_build: {ios, android}, upgrade_required, store_url: {ios, android}, flags: {name: bool}}`. Cached 60 s by the client, kept on the phone for offline use; fetched at start and on every foreground.
 - Every request may send `x-thirstr-platform` and `x-thirstr-build` (native build number). A native build below `min_build` gets **426** `upgrade_required` on every endpoint except `/v1/config` and `/v1/health`; the app then shows the forced-update screen (chats stay on the phone). Requests without a build number (older builds, web) pass.

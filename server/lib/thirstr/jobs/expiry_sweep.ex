@@ -38,6 +38,8 @@ defmodule Thirstr.Jobs.ExpirySweep do
     Thirstr.Feedback.sweep()
     Thirstr.Help.sweep()
     Thirstr.RecoveryClaims.sweep()
+    # DB-10 (#335): Idempotency-Key claims and stored answers 24 h
+    ThirstrWeb.Plugs.Idempotency.sweep()
     :ok
   end
 end

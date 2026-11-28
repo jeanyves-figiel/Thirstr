@@ -6,6 +6,16 @@ When a build brings something people can see or use, also add a 2–4 line note 
 
 ## [Unreleased]
 
+### Specified
+- **Message delivery & latency monitoring** (docs, #343, EN-23, [delivery-latency-monitoring.md](docs/spec/delivery-latency-monitoring.md)): audit of what exists, then OB-1 delivery metrics (send outcomes, online/offline delivery time, skipped, lost, stuck, duplicates, socket, push wake), OB-2 synthetic end-to-end chat probe every 5 min on prod and staging, OB-3 anonymous client RUM (fixed buckets, ≤ 2 KB/day, opt-out, off in Safe Mode), OB-4 SLO-7…10, OB-5 burn-rate paging in the on-call runner, OB-6 console Health page, OB-7 other areas (deploy gates, traffic cliff, media path, rate-limit hits, request id, logs, probe location, game days).
+
+### Added
+- **Creates can't be stored twice** (server + app, #335, DB-10, api.md › Idempotency): POST creates (Tonight plans, trips, parties and join requests, activities and RSVPs, clubs, reports, support requests and messages, feedback, Moment publish, vouches, photo uploads) accept `Idempotency-Key`. A repeat with the same key gets the first answer back instead of a second row. The app sends a key on every POST and resends a create once with the same key when the answer was lost (network drop, timeout). Keys kept 24 h (new table `idempotency_keys`, swept, retention probe `idempotency_24h`).
+- **Database refuses impossible values** (server, #336, DB-11): CHECK constraints on account status and onboarding step, device platform, location level, photo status, support status, linked-account platform, report severity 1–6, party and activity capacity, counters. Added without a write lock (`NOT VALID`, then `VALIDATE`).
+
+### Specified
+- **Growth path for more than one database** (docs, db-integrity.md §6): how unique keys and integrity hold with read replicas, partitions, per-domain databases and account sharding (partition key in every unique key, directory DB for global uniques, outbox + reconciliation across domains, one writer per row).
+
 ### Added
 - **Ask, Fit & Picks** (server + app, #338, F-24, D-27, Plus): **Interests** profile field (94 tags in 12 groups, up to 12, grouped chips in Edit profile, free) and an `interests` Explore filter (free). **Ask**: type what you want under the Explore bar; a phrase grammar on the phone (en/fr/de) turns it into the existing filters with a live count, and refuses HIV/health, ethnicity, language and exclusion asks. **Fit**: chips on tiles (shared interests, fits), ✦ Best fit sort, "Why you fit" on profiles, all worked out on the phone from fields the viewer may already see; the server sends these inputs (`card.match`) only to Plus viewers and never if the owner turned off "Count me in others' Fit". **Picks**: up to 5 picks at 07:00 and 19:00 (refresh once an hour) ranked by a small model trained on the phone from taps, favourites and chats; Not for me / Less like this; nothing leaves the phone. New Settings › Privacy › Ask, Fit & Picks (four switches, what Picks learned, Forget everything learned). Plus screen gains a seventh benefit. What's new note 13.
 

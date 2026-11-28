@@ -2,7 +2,7 @@
 
 **Status: proposed (#338), owner pick pending. Nothing is built until the owner picks.** Mockup: [Ask, Fit & Picks](https://claude.ai/artifact/UbsUPZs3DfVCDvw4NCfSPt) (`/mnt/project-files/ai-search/mockup.html`).
 
-Owner ask (2026-11-28): something similar to Grindr Edge (AI that narrows a search and matches people with the same interests), not a copy. Three stackable concepts: **A Ask** (natural-language search), **B Fit** (interests + compatibility), **C Picks** (a few chosen people a day). C needs B. Recommendation: A + B for the beta, C after it.
+Owner ask (2026-11-28): something similar to Grindr Edge (AI that narrows a search and matches people with the same interests), not a copy. Three stackable concepts: **A Ask** (natural-language search), **B Fit** (interests + compatibility), **C Picks** (a few chosen people a day). C needs B. **Plus split (owner, 2026-11-28): A Ask free; B Fit and C Picks are Plus** (R-24.16, R-24.25). Recommendation: A + B for the beta, C after it.
 
 ## Principles (all concepts)
 - P-1 **On device only.** No profile, chat, query or behaviour data is sent to any AI or LLM provider, ours or third-party. No server-side model. (Rejected: EU-hosted LLM fallback for Ask, est. ≈ €50 / 1 M asks: needs the query text on a server.)
@@ -31,15 +31,15 @@ Owner ask (2026-11-28): something similar to Grindr Edge (AI that narrows a sear
 - R-24.13 Tiles: teal chip "N ♥" when common ≥ 1; coral "Fit" chip when `fit`. Sheet sort chips: Nearest (default, R-04.4) · ✦ Best fit · Online. Best fit re-orders the people already loaded (within the Free 200 / Plus cap), ties by distance.
 - R-24.14 Profile (S-20): "Why you fit" card above tags: one line per reason (icon in lens colour), "worked out on your phone". Shared tags first, filled white.
 - R-24.15 A person with "Count me in others' Fit" off: no chips, no card, excluded from Best fit ordering boost (shown in distance order).
-- R-24.16 Free.
+- R-24.16 **Plus split** (owner 2026-11-28). Free: fill Interests (R-24.10), shared tags shown first on S-20, appear in others' Fit and Best fit. Plus: tile chips (R-24.13), Best fit sort, Why you fit card (R-24.14). Free tiles show no Fit chips and no placeholder. Tapping Best fit without Plus opens the limit card (R-23.16 rules). In the beta everyone is Plus (R-23.1). Not a filter, so the pledge (R-23.6) is not affected.
 
 ## C · Picks (later, needs B)
-- R-24.20 Two windows a day (07:00 and 19:00 local): up to 3 picks each (Plus 10 a day, refresh once an hour). Row of cards at the top of the grid sheet; dots pager.
+- R-24.20 **Plus only.** Two windows a day (07:00 and 19:00 local), up to 5 picks each; refresh once an hour. Free: no Picks row; appearing in others' Picks stays free. Row of cards at the top of the grid sheet; dots pager.
 - R-24.21 Candidates: only people in the viewer's last grid result (no extra request). Never people the viewer hid, blocked, chatted with in the last 30 days, or picked in the last 7 days.
 - R-24.22 Ranker on device: Fit features + learned weights (logistic regression, ≈ 40 weights) trained on the phone from the viewer's own taps, favourites, chats started and replies. Weights stored in the app's encrypted store, never synced to the server (E2EE device sync allowed).
 - R-24.23 Each pick shows up to 3 reasons, incl. learned ones in plain words ("Like guys you reply to: 35–45, bears"). Actions: Not for me (hide from Picks 30 days), Less like this (negative example), Message.
 - R-24.24 "See what Picks learned" lists the top learned traits; "Forget everything learned" wipes weights and history.
-- R-24.25 Limit card at the end of the free picks (R-23.16 rules). No paid boost into others' Picks, ever.
+- R-24.25 Free: one inline card at the top of the grid sheet at most once a week ("✦ Picks and Fit come with Plus", See Plus, ✕ hides 7 days), R-23.16 / R-23.7 rules (never in the first 3 days). No paid boost into others' Picks, ever. New rows in R-23.5: Fit (— / on), Picks (— / 10 a day).
 
 ## Settings
 - R-24.30 Settings › Privacy › **Ask, Fit & Picks**: Ask on Explore · Show Fit · Picks · Learn from what I do · Count me in others' Fit · See what Picks learned › · Forget everything learned (inline confirm). All on by default except Picks (on when built). Off = feature and its data gone from the phone.
